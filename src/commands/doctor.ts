@@ -381,7 +381,7 @@ export async function doctor(args: string[]): Promise<void> {
     diagnostics.push({
       check: 'hooks_registered',
       status: 'warning',
-      message: `Missing wm hooks in settings.json: ${hookCheck.missing.join(', ')}`,
+      message: `Missing kata hooks in settings.json: ${hookCheck.missing.join(', ')}`,
       fixable: true,
     })
     if (parsed.fix) {

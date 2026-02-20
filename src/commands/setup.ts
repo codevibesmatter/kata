@@ -11,23 +11,23 @@ import type { WmConfig } from '../config/wm-config.js'
 import { getPackageRoot, findClaudeProjectDir } from '../session/lookup.js'
 
 /**
- * Resolve the absolute path to the wm binary.
+ * Resolve the absolute path to the kata binary.
  *
- * Prefers `which wm` so hooks point to the bin symlink that npm/pnpm update on
- * upgrade (e.g. /usr/local/bin/wm). Falls back to the package-relative path for
- * workspace / pnpm-link scenarios where `wm` is not yet in PATH.
+ * Prefers `which kata` so hooks point to the bin symlink that npm/pnpm update on
+ * upgrade (e.g. /usr/local/bin/kata). Falls back to the package-relative path for
+ * workspace / pnpm-link scenarios where `kata` is not yet in PATH.
  */
 function resolveWmBin(): string {
   try {
-    const which = execSync('which wm 2>/dev/null || command -v wm 2>/dev/null', {
+    const which = execSync('which kata 2>/dev/null || command -v kata 2>/dev/null', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim()
     if (which) return which
   } catch {
-    // which failed or wm not in PATH — fall back to package-relative path
+    // which failed or kata not in PATH — fall back to package-relative path
   }
-  return join(getPackageRoot(), 'wm')
+  return join(getPackageRoot(), 'kata')
 }
 
 /**
@@ -276,7 +276,7 @@ function buildWmConfig(projectRoot: string, profile: SetupProfile): WmConfig {
     if (!existing || typeof existing !== 'object') {
       // Malformed YAML — warn and fall back to profile rather than silently overwriting
       process.stderr.write(
-        `wm setup: warning: existing wm.yaml is malformed; using auto-detected defaults\n`,
+        `kata setup: warning: existing wm.yaml is malformed; using auto-detected defaults\n`,
       )
       return fromProfile
     }
@@ -292,7 +292,7 @@ function buildWmConfig(projectRoot: string, profile: SetupProfile): WmConfig {
   } catch {
     // Parse error — warn and fall back to profile
     process.stderr.write(
-      `wm setup: warning: could not parse existing wm.yaml; using auto-detected defaults\n`,
+      `kata setup: warning: could not parse existing wm.yaml; using auto-detected defaults\n`,
     )
     return fromProfile
   }
@@ -411,7 +411,7 @@ export async function setup(args: string[]): Promise<void> {
       const { scaffoldBatteries } = await import('./scaffold-batteries.js')
       const result = scaffoldBatteries(projectRoot)
 
-      process.stdout.write('wm setup --batteries complete:\n')
+      process.stdout.write('kata setup --batteries complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
       process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
       process.stdout.write(`  Hooks: .claude/settings.json\n`)
@@ -439,7 +439,7 @@ export async function setup(args: string[]): Promise<void> {
       }
     } else {
       // Plain --yes summary
-      process.stdout.write('wm setup complete:\n')
+      process.stdout.write('kata setup complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
       process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
       process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
@@ -455,7 +455,7 @@ export async function setup(args: string[]): Promise<void> {
       }
     }
 
-    process.stdout.write('\nRun: wm doctor to verify setup\n')
+    process.stdout.write('\nRun: kata doctor to verify setup\n')
     return
   }
 
@@ -464,7 +464,7 @@ export async function setup(args: string[]): Promise<void> {
   // and writes the final config. This avoids locking in auto-detected defaults before
   // the user has a chance to confirm or override them.
   applySetupHooksOnly(parsed.cwd, parsed.strict, parsed.explicitCwd)
-  process.stdout.write('wm setup: hooks registered. Entering setup interview...\n')
+  process.stdout.write('kata setup: hooks registered. Entering setup interview...\n')
   const { enter } = await import('./enter.js')
   await enter(['setup'])
 }

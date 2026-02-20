@@ -41,12 +41,12 @@ export async function batteries(args: string[]): Promise<void> {
     result.githubTemplates.length
 
   if (total === 0 && result.skipped.length > 0) {
-    process.stdout.write('wm batteries: all files already present (nothing to copy)\n')
+    process.stdout.write('kata batteries: all files already present (nothing to copy)\n')
     process.stdout.write(`  Skipped: ${result.skipped.join(', ')}\n`)
     return
   }
 
-  process.stdout.write(`wm batteries: scaffolded ${total} files\n`)
+  process.stdout.write(`kata batteries: scaffolded ${total} files\n`)
 
   if (result.templates.length > 0) {
     process.stdout.write(`\nMode templates → .claude/workflows/templates/\n`)
@@ -63,12 +63,12 @@ export async function batteries(args: string[]): Promise<void> {
   if (result.githubTemplates.length > 0) {
     process.stdout.write(`\nGitHub → .github/\n`)
     for (const f of result.githubTemplates) process.stdout.write(`  ${f}\n`)
-    process.stdout.write(`\nNext: run 'wm enter setup' to create labels on GitHub\n`)
+    process.stdout.write(`\nNext: run 'kata enter setup' to create labels on GitHub\n`)
   }
 
   if (result.skipped.length > 0) {
     process.stdout.write(`\nSkipped (already exist): ${result.skipped.join(', ')}\n`)
   }
 
-  process.stdout.write('\nDone. Run: wm enter <mode> to get started\n')
+  process.stdout.write('\nDone. Run: kata enter <mode> to get started\n')
 }
