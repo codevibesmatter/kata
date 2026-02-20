@@ -25,6 +25,7 @@ import { setup } from './commands/setup.js'
 import { teardown } from './commands/teardown.js'
 import { hook } from './commands/hook.js'
 import { batteries } from './commands/batteries.js'
+import { modes } from './commands/modes.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPackageRoot } from './session/lookup.js'
@@ -133,6 +134,10 @@ async function main() {
 
       case 'batteries':
         await batteries(commandArgs)
+        break
+
+      case 'modes':
+        await modes(commandArgs)
         break
 
       case 'hook':
