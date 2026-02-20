@@ -3,7 +3,7 @@
 // When --yes is absent, enter setup mode with 6-phase interview template.
 // Hook registration uses 'wm hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getDefaultProfile, type SetupProfile } from '../config/setup-profile.js'
@@ -39,12 +39,14 @@ function parseArgs(args: string[]): {
   batteries: boolean
   cwd: string
   explicitCwd: boolean
+  session: string | undefined
 } {
   let yes = false
   let strict = false
   let batteries = false
   let cwd = process.cwd()
   let explicitCwd = false
+  let session: string | undefined
 
   for (const arg of args) {
     if (arg === '--yes' || arg === '-y') {
@@ -57,10 +59,12 @@ function parseArgs(args: string[]): {
     } else if (arg.startsWith('--cwd=')) {
       cwd = arg.slice('--cwd='.length)
       explicitCwd = true
+    } else if (arg.startsWith('--session=')) {
+      session = arg.slice('--session='.length)
     }
   }
 
-  return { yes, strict, batteries, cwd, explicitCwd }
+  return { yes, strict, batteries, cwd, explicitCwd, session }
 }
 
 /**
@@ -455,6 +459,9 @@ export async function setup(args: string[]): Promise<void> {
       }
     }
 
+    process.stdout.write('\nOptional: add shorthand to package.json scripts:\n')
+    process.stdout.write('  "kata": "kata"\n')
+    process.stdout.write('Then use: pnpm kata <cmd>  or  npm run kata <cmd>\n')
     process.stdout.write('\nRun: kata doctor to verify setup\n')
     return
   }
@@ -464,7 +471,22 @@ export async function setup(args: string[]): Promise<void> {
   // and writes the final config. This avoids locking in auto-detected defaults before
   // the user has a chance to confirm or override them.
   applySetupHooksOnly(parsed.cwd, parsed.strict, parsed.explicitCwd)
+
+  // Ensure the setup.md template is available in the project before enter() runs.
+  // resolveTemplatePath() only looks in the project's .claude/workflows/templates/ —
+  // not the package. In a fresh project the templates dir is empty, so we seed it
+  // with the bundled setup.md so the interview can start.
+  const setupTemplateSrc = join(getPackageRoot(), 'templates', 'setup.md')
+  const templatesDir = join(projectRoot, '.claude', 'workflows', 'templates')
+  const setupTemplateDest = join(templatesDir, 'setup.md')
+  if (existsSync(setupTemplateSrc) && !existsSync(setupTemplateDest)) {
+    mkdirSync(templatesDir, { recursive: true })
+    copyFileSync(setupTemplateSrc, setupTemplateDest)
+  }
+
   process.stdout.write('kata setup: hooks registered. Entering setup interview...\n')
   const { enter } = await import('./enter.js')
-  await enter(['setup'])
+  const enterArgs = ['setup']
+  if (parsed.session) enterArgs.push(`--session=${parsed.session}`)
+  await enter(enterArgs)
 }
