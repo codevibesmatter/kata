@@ -57,7 +57,7 @@ phases:
       - "Check gh CLI is installed (gh --version), guide install if missing"
       - "Check gh auth status, run gh auth login if not authenticated"
       - "Confirm .github/ISSUE_TEMPLATE/ files are in place (from batteries scaffold)"
-      - "If batteries was chosen: offer to create the 5 required labels via gh label create --force (feature, bug, epic, status:todo, status:in-progress)"
+      - "If batteries was chosen: create all 15 labels from .github/wm-labels.json via gh label create --force (see ## GitHub Setup Phase for exact commands)"
   - id: p5
     name: "Write Configuration"
     description: "Run the appropriate kata setup command based on collected answers, then patch wm.yaml for any custom values"
@@ -158,7 +158,7 @@ Follow the prompts — choose GitHub.com, HTTPS, browser authentication.
 
 ### 3. Create Labels (batteries only)
 
-If batteries was chosen during `mode-config`, offer to create the 5 labels required by the issue templates and workflow commands:
+If batteries was chosen, create all 15 labels from `.github/wm-labels.json`. Ask first:
 
 ```
 AskUserQuestion(questions=[{
@@ -171,13 +171,18 @@ AskUserQuestion(questions=[{
 }])
 ```
 
-If yes:
+If yes, read `.github/wm-labels.json` and create each label:
+
 ```bash
-# Read .github/wm-labels.json and create each label:
-gh label create "{name}" --color "{color}" --description "{description}" --force
+cat .github/wm-labels.json | node -e "
+  const labels = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+  labels.forEach(l => process.stdout.write(
+    \`gh label create \"\${l.name}\" --color \"\${l.color}\" --description \"\${l.description}\" --force\n\`
+  ));
+" | bash
 ```
 
-The `--force` flag updates existing labels, so this is safe to re-run.
+Or create them one at a time if the pipe fails. The `--force` flag updates existing labels — safe to re-run.
 
 ### 4. Issue Templates
 

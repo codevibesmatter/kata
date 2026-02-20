@@ -293,8 +293,8 @@ function buildCommand(
   const issueRequiredModes = ['planning', 'implementation', 'bugfix', 'feature-clarification']
   if (issueRequiredModes.includes(mode)) {
     const title = inferTitle(message)
-    const type = mode === 'bugfix' ? 'bug' : 'feature'
-    return `gh issue create --title="${title}" && kata enter ${mode} --issue=<NEW_ISSUE>`
+    const label = mode === 'bugfix' ? 'bug' : 'feature'
+    return `gh issue create --title="${title}" --label="${label}" && kata enter ${mode} --issue=<NEW_ISSUE>`
   }
 
   // Modes that don't need issues
