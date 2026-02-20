@@ -36,11 +36,13 @@ function resolveWmBin(): string {
 function parseArgs(args: string[]): {
   yes: boolean
   strict: boolean
+  batteries: boolean
   cwd: string
   explicitCwd: boolean
 } {
   let yes = false
   let strict = false
+  let batteries = false
   let cwd = process.cwd()
   let explicitCwd = false
 
@@ -49,13 +51,16 @@ function parseArgs(args: string[]): {
       yes = true
     } else if (arg === '--strict') {
       strict = true
+    } else if (arg === '--batteries' || arg === '-b') {
+      batteries = true
+      yes = true // --batteries implies --yes (skips interview)
     } else if (arg.startsWith('--cwd=')) {
       cwd = arg.slice('--cwd='.length)
       explicitCwd = true
     }
   }
 
-  return { yes, strict, cwd, explicitCwd }
+  return { yes, strict, batteries, cwd, explicitCwd }
 }
 
 /**
@@ -398,23 +403,58 @@ export async function setup(args: string[]): Promise<void> {
   profile.strict = parsed.strict
 
   if (parsed.yes) {
-    // --yes: write everything with auto-detected defaults and return
+    // --yes / --batteries: write everything with auto-detected defaults
     applySetup(parsed.cwd, profile, parsed.explicitCwd)
-    // Output summary
-    process.stdout.write('wm setup complete:\n')
-    process.stdout.write(`  Project: ${profile.project_name}\n`)
-    process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
-    process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
-    process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
-    process.stdout.write(`  Hooks: .claude/settings.json\n`)
-    process.stdout.write(`    - SessionStart\n`)
-    process.stdout.write(`    - UserPromptSubmit\n`)
-    process.stdout.write(`    - Stop\n`)
-    if (parsed.strict) {
-      process.stdout.write(`    - PreToolUse (mode-gate)\n`)
-      process.stdout.write(`    - PreToolUse (task-deps)\n`)
-      process.stdout.write(`    - PreToolUse (task-evidence)\n`)
+
+    // --batteries: scaffold full mode templates, agents, and spec templates
+    if (parsed.batteries) {
+      const { scaffoldBatteries } = await import('./scaffold-batteries.js')
+      const result = scaffoldBatteries(projectRoot)
+
+      process.stdout.write('wm setup --batteries complete:\n')
+      process.stdout.write(`  Project: ${profile.project_name}\n`)
+      process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
+      process.stdout.write(`  Hooks: .claude/settings.json\n`)
+      process.stdout.write('\nBatteries scaffolded:\n')
+      if (result.templates.length > 0) {
+        process.stdout.write(`  Mode templates (${result.templates.length}):\n`)
+        for (const t of result.templates) {
+          process.stdout.write(`    .claude/workflows/templates/${t}\n`)
+        }
+      }
+      if (result.agents.length > 0) {
+        process.stdout.write(`  Agents (${result.agents.length}):\n`)
+        for (const a of result.agents) {
+          process.stdout.write(`    .claude/agents/${a}\n`)
+        }
+      }
+      if (result.specTemplates.length > 0) {
+        process.stdout.write(`  Spec templates (${result.specTemplates.length}):\n`)
+        for (const s of result.specTemplates) {
+          process.stdout.write(`    planning/spec-templates/${s}\n`)
+        }
+      }
+      if (result.skipped.length > 0) {
+        process.stdout.write(`  Skipped (already exist): ${result.skipped.join(', ')}\n`)
+      }
+    } else {
+      // Plain --yes summary
+      process.stdout.write('wm setup complete:\n')
+      process.stdout.write(`  Project: ${profile.project_name}\n`)
+      process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
+      process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
+      process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
+      process.stdout.write(`  Hooks: .claude/settings.json\n`)
+      process.stdout.write(`    - SessionStart\n`)
+      process.stdout.write(`    - UserPromptSubmit\n`)
+      process.stdout.write(`    - Stop\n`)
+      if (parsed.strict) {
+        process.stdout.write(`    - PreToolUse (mode-gate)\n`)
+        process.stdout.write(`    - PreToolUse (task-deps)\n`)
+        process.stdout.write(`    - PreToolUse (task-evidence)\n`)
+      }
     }
+
     process.stdout.write('\nRun: wm doctor to verify setup\n')
     return
   }

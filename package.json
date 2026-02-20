@@ -23,7 +23,8 @@
     "dist/",
     "wm",
     "modes.yaml",
-    "templates/"
+    "templates/",
+    "batteries/"
   ],
   "scripts": {
     "build": "tsup",
