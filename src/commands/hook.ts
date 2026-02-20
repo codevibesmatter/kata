@@ -11,15 +11,21 @@ import type { SessionState } from '../state/schema.js'
 
 /**
  * Claude Code hook output format
+ *
+ * Decision hooks (PreToolUse, Stop): decision goes at TOP LEVEL, lowercase
+ * Context hooks (SessionStart, UserPromptSubmit): use hookSpecificOutput
  */
-interface HookOutput {
-  hookSpecificOutput?: {
-    hookEventName: string
-    additionalContext?: string
-    decision?: 'ALLOW' | 'BLOCK'
-    reason?: string
-  }
-}
+type HookOutput =
+  | {
+      decision: 'block' | 'allow'
+      reason?: string
+    }
+  | {
+      hookSpecificOutput: {
+        hookEventName: string
+        additionalContext?: string
+      }
+    }
 
 /**
  * Read stdin as JSON (for hook input)
@@ -223,12 +229,7 @@ async function handleModeGate(input: Record<string, unknown>): Promise<void> {
 
   if (!session) {
     // No session state — allow (don't block new projects)
-    outputJson({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        decision: 'ALLOW',
-      },
-    })
+    outputJson({ decision: 'allow' })
     return
   }
 
@@ -241,23 +242,14 @@ async function handleModeGate(input: Record<string, unknown>): Promise<void> {
     const writeTools = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit']
     if (writeTools.includes(toolName)) {
       outputJson({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          decision: 'BLOCK',
-          reason:
-            'Enter a mode first: wm enter <mode>. Write operations are blocked until a mode is active.',
-        },
+        decision: 'block',
+        reason: 'Enter a mode first: wm enter <mode>. Write operations are blocked until a mode is active.',
       })
       return
     }
   }
 
-  outputJson({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      decision: 'ALLOW',
-    },
-  })
+  outputJson({ decision: 'allow' })
 }
 
 // ── Handler: task-deps ──
@@ -269,19 +261,14 @@ async function handleTaskDeps(input: Record<string, unknown>): Promise<void> {
 
   // Only enforce deps when completing a task
   if (!taskId || newStatus !== 'completed') {
-    outputJson({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        decision: 'ALLOW',
-      },
-    })
+    outputJson({ decision: 'allow' })
     return
   }
 
   try {
     const session = await getSessionState()
     if (!session) {
-      outputJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', decision: 'ALLOW' } })
+      outputJson({ decision: 'allow' })
       return
     }
 
@@ -289,7 +276,7 @@ async function handleTaskDeps(input: Record<string, unknown>): Promise<void> {
     const task = tasks.find((t) => t.id === taskId)
 
     if (!task || !task.blockedBy?.length) {
-      outputJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', decision: 'ALLOW' } })
+      outputJson({ decision: 'allow' })
       return
     }
 
@@ -307,11 +294,8 @@ async function handleTaskDeps(input: Record<string, unknown>): Promise<void> {
         })
         .join(', ')
       outputJson({
-        hookSpecificOutput: {
-          hookEventName: 'PreToolUse',
-          decision: 'BLOCK',
-          reason: `Task [${taskId}] is blocked by incomplete task(s): ${depTasks}`,
-        },
+        decision: 'block',
+        reason: `Task [${taskId}] is blocked by incomplete task(s): ${depTasks}`,
       })
       return
     }
@@ -319,7 +303,7 @@ async function handleTaskDeps(input: Record<string, unknown>): Promise<void> {
     // On any error, allow — don't block on infra failures
   }
 
-  outputJson({ hookSpecificOutput: { hookEventName: 'PreToolUse', decision: 'ALLOW' } })
+  outputJson({ decision: 'allow' })
 }
 
 // ── Handler: task-evidence ──
@@ -357,11 +341,8 @@ async function handleTaskEvidence(_input: Record<string, unknown>): Promise<void
   }
 
   outputJson({
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      decision: 'ALLOW',
-      ...(additionalContext ? { additionalContext } : {}),
-    },
+    decision: 'allow',
+    ...(additionalContext ? { reason: additionalContext } : {}),
   })
 }
 
@@ -371,13 +352,7 @@ async function handleStopConditions(_input: Record<string, unknown>): Promise<vo
   const session = await getSessionState()
 
   if (!session) {
-    // No session — allow stop
-    outputJson({
-      hookSpecificOutput: {
-        hookEventName: 'Stop',
-        additionalContext: '',
-      },
-    })
+    // No session — allow stop (no output = allow)
     return
   }
 
@@ -389,12 +364,6 @@ async function handleStopConditions(_input: Record<string, unknown>): Promise<vo
     state.sessionType === 'qa' ||
     state.currentMode === 'default'
   ) {
-    outputJson({
-      hookSpecificOutput: {
-        hookEventName: 'Stop',
-        additionalContext: '',
-      },
-    })
     return
   }
 
@@ -404,7 +373,6 @@ async function handleStopConditions(_input: Record<string, unknown>): Promise<vo
   const exitOutput = await captureConsoleLog(() => canExit(['--json', `--session=${sessionId}`]))
   process.exitCode = origExitCode
 
-  let additionalContext = ''
   try {
     const result = JSON.parse(exitOutput) as {
       canExit: boolean
@@ -422,27 +390,16 @@ async function handleStopConditions(_input: Record<string, unknown>): Promise<vo
       if (result.guidance?.escapeHatch) {
         parts.push(result.guidance.escapeHatch)
       }
-      additionalContext = parts.join('\n')
+      // decision: "block" must be at the TOP LEVEL (not inside hookSpecificOutput)
       outputJson({
-        hookSpecificOutput: {
-          hookEventName: 'Stop',
-          decision: 'BLOCK',
-          reason: additionalContext,
-          additionalContext,
-        },
+        decision: 'block',
+        reason: parts.join('\n'),
       })
-      return
     }
+    // canExit === true: output nothing (allows stop)
   } catch {
-    // Could not parse exit output
+    // Could not parse exit output — allow stop
   }
-
-  outputJson({
-    hookSpecificOutput: {
-      hookEventName: 'Stop',
-      additionalContext,
-    },
-  })
 }
 
 // ── Hook name -> handler map ──
