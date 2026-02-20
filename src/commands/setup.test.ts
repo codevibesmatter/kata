@@ -198,13 +198,13 @@ describe('setup --yes', () => {
   })
 })
 
-describe('setup interactive template', () => {
-  it('setup template has 6 phases with AskUserQuestion steps', async () => {
-    // Read the setup template to verify it has the expected structure
+describe('onboard template', () => {
+  it('onboard template has 6 phases with AskUserQuestion steps', async () => {
+    // Read the onboard template to verify it has the expected structure
     const { parseYamlFrontmatter } = await import('../yaml/parser.js')
     const { getPackageRoot } = await import('../session/lookup.js')
 
-    const templatePath = join(getPackageRoot(), 'templates', 'setup.md')
+    const templatePath = join(getPackageRoot(), 'templates', 'onboard.md')
     const frontmatter = parseYamlFrontmatter<{
       phases: Array<{ id: string; tasks: string[] }>
     }>(templatePath)

@@ -131,7 +131,7 @@ export function getTemplatesDir(): string {
  * 1. Absolute path - use as-is
  * 2. Project-level template (.claude/workflows/templates/) - required
  *
- * Package templates are seeds for `wm setup` only.
+ * Package templates are seeds for `kata setup` only.
  * After setup, the project owns all templates — no package fallback at runtime.
  * @param templatePath - Template filename or path
  * @returns Absolute path to template
@@ -156,7 +156,7 @@ export function resolveTemplatePath(templatePath: string): string {
     throw new Error(
       `Template not found: ${templatePath}\n` +
         `Expected at: .claude/workflows/templates/${templatePath}\n` +
-        `Run 'wm setup' to initialize project templates.`,
+        `Run 'kata setup' to initialize project templates.`,
     )
   } catch (err) {
     if ((err as Error).message.includes('Template not found')) {
@@ -165,7 +165,7 @@ export function resolveTemplatePath(templatePath: string): string {
     // No Claude project dir found
     throw new Error(
       `Template not found: ${templatePath}\n` +
-        `Not in a Claude project. Run 'wm setup' to initialize.`,
+        `Not in a Claude project. Run 'kata setup' to initialize.`,
     )
   }
 }

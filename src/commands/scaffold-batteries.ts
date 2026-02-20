@@ -10,17 +10,21 @@ export interface BatteriesResult {
   specTemplates: string[]
   githubTemplates: string[]
   skipped: string[]
+  updated: string[]
 }
 
 /**
  * Copy all files from srcDir into destDir (one level deep).
- * Skips files that already exist in destDir (never overwrites).
+ * When update is true, overwrites existing files and reports them as updated.
+ * Otherwise skips existing files.
  */
 function copyDirectory(
   srcDir: string,
   destDir: string,
   copied: string[],
   skipped: string[],
+  updated: string[],
+  update = false,
 ): void {
   if (!existsSync(srcDir)) return
   mkdirSync(destDir, { recursive: true })
@@ -29,7 +33,12 @@ function copyDirectory(
     const src = join(srcDir, file)
     const dest = join(destDir, file)
     if (existsSync(dest)) {
-      skipped.push(file)
+      if (update) {
+        copyFileSync(src, dest)
+        updated.push(file)
+      } else {
+        skipped.push(file)
+      }
     } else {
       copyFileSync(src, dest)
       copied.push(file)
@@ -50,8 +59,9 @@ function copyDirectory(
  * Never overwrites existing files — safe to re-run.
  *
  * @param projectRoot - Absolute path to the project root
+ * @param update - When true, overwrite existing files instead of skipping them
  */
-export function scaffoldBatteries(projectRoot: string): BatteriesResult {
+export function scaffoldBatteries(projectRoot: string, update = false): BatteriesResult {
   const batteryRoot = join(getPackageRoot(), 'batteries')
   const result: BatteriesResult = {
     templates: [],
@@ -59,6 +69,7 @@ export function scaffoldBatteries(projectRoot: string): BatteriesResult {
     specTemplates: [],
     githubTemplates: [],
     skipped: [],
+    updated: [],
   }
 
   // Mode templates → .claude/workflows/templates/
@@ -67,6 +78,8 @@ export function scaffoldBatteries(projectRoot: string): BatteriesResult {
     join(projectRoot, '.claude', 'workflows', 'templates'),
     result.templates,
     result.skipped,
+    result.updated,
+    update,
   )
 
   // Agent definitions → .claude/agents/
@@ -75,6 +88,8 @@ export function scaffoldBatteries(projectRoot: string): BatteriesResult {
     join(projectRoot, '.claude', 'agents'),
     result.agents,
     result.skipped,
+    result.updated,
+    update,
   )
 
   // Spec templates → planning/spec-templates/
@@ -83,6 +98,8 @@ export function scaffoldBatteries(projectRoot: string): BatteriesResult {
     join(projectRoot, 'planning', 'spec-templates'),
     result.specTemplates,
     result.skipped,
+    result.updated,
+    update,
   )
 
   // GitHub issue templates → .github/ISSUE_TEMPLATE/
@@ -91,14 +108,21 @@ export function scaffoldBatteries(projectRoot: string): BatteriesResult {
     join(projectRoot, '.github', 'ISSUE_TEMPLATE'),
     result.githubTemplates,
     result.skipped,
+    result.updated,
+    update,
   )
 
-  // labels.json → .github/wm-labels.json (used by setup mode to create labels)
+  // labels.json → .github/wm-labels.json (used by onboard mode to create labels)
   const labelsSrc = join(batteryRoot, 'github', 'labels.json')
   const labelsDest = join(projectRoot, '.github', 'wm-labels.json')
   if (existsSync(labelsSrc)) {
     if (existsSync(labelsDest)) {
-      result.skipped.push('wm-labels.json')
+      if (update) {
+        copyFileSync(labelsSrc, labelsDest)
+        result.updated.push('wm-labels.json')
+      } else {
+        result.skipped.push('wm-labels.json')
+      }
     } else {
       mkdirSync(join(projectRoot, '.github'), { recursive: true })
       copyFileSync(labelsSrc, labelsDest)

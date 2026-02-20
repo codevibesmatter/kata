@@ -1,7 +1,7 @@
 ---
-id: setup
-name: "Project Setup Interview"
-description: "Configure wm for a new project via guided interview"
+id: onboard
+name: "Onboard"
+description: "Configure kata for a new project via guided interview"
 category: system
 phases:
   - id: p0
@@ -60,15 +60,14 @@ phases:
       - "If batteries was chosen: offer to create the 5 required labels via gh label create --force (feature, bug, epic, status:todo, status:in-progress)"
   - id: p5
     name: "Write Configuration"
-    description: "Write wm.yaml, register hooks, and scaffold batteries if chosen"
+    description: "Run the appropriate kata setup command based on collected answers, then patch wm.yaml for any custom values"
     task_config:
-      title: "P5: Write Configuration — wm.yaml, hooks, batteries"
+      title: "P5: Write Configuration — run setup command, patch wm.yaml"
       depends_on: [p4]
     tasks:
-      - "Write .claude/workflows/wm.yaml with collected answers"
-      - "Register hooks in .claude/settings.json"
-      - "Create .claude/sessions/ directory"
-      - "If batteries chosen: run 'kata batteries' to scaffold starter content"
+      - "Run the appropriate kata setup command (see ## Write Configuration Command below)"
+      - "If custom path: patch .claude/workflows/wm.yaml with any values that differ from auto-detected defaults"
+      - "Confirm hooks registered in .claude/settings.json"
   - id: p6
     name: "Verify Setup"
     description: "Run kata doctor to verify everything is configured correctly"
@@ -81,33 +80,14 @@ phases:
       - "Suggest next steps: kata enter <mode>"
 ---
 
-# Project Setup Interview
+# Project Configuration Mode
 
-This mode walks through configuring `wm` for your project.
+You are the agent running the kata setup interview. Ask questions, collect answers, then run the appropriate commands. Do not describe what you're about to do — just do it.
 
-## How It Works
+## Phase Flow
 
-The setup interview has 7 phases:
-
-1. **Bootstrap** — Verify prerequisites and create `.claude/` directory
-2. **Setup Style** — First question: batteries-included (quick) or custom interview?
-3. **Project Discovery** — Auto-detect project settings (custom path only)
-4. **Custom Configuration** — Review, paths, strict hooks (custom path only)
-5. **GitHub Setup** — Verify `gh` CLI, authenticate, confirm issue templates
-6. **Write Configuration** — Write `wm.yaml`, register hooks, scaffold if chosen
-7. **Verify** — Run `kata doctor` to confirm everything works
-
-**Quick path (batteries-included):** p0 → p1 (confirm name) → p4 → p5 → p6. Skips p2/p3.
+**Quick path (batteries):** p0 → p1 → p4 → p5 → p6. Skip p2 and p3.
 **Custom path:** p0 → p1 → p2 → p3 → p4 → p5 → p6.
-
-## Quick Setup
-
-Skip the interview and use auto-detected defaults:
-
-```bash
-wm setup --yes           # Minimal setup
-wm setup --batteries     # Setup + full starter content
-```
 
 ## What Gets Created
 
@@ -209,7 +189,7 @@ ls .github/ISSUE_TEMPLATE/
 
 If missing (batteries not yet run):
 ```bash
-wm batteries
+kata batteries
 ```
 
 ## The Setup Style Question (p1 — first question)
@@ -237,6 +217,24 @@ AskUserQuestion(questions=[{
 **If Quick:** skip p2 and p3. Just confirm the project name, then proceed to p4 (GitHub Setup). Use all defaults. Set batteries = true.
 
 **If Custom:** continue through p2 (Project Discovery) and p3 (Custom Configuration). At the end of p3, ask the batteries question to decide whether to install starter content.
+
+## Write Configuration Command
+
+After collecting answers through the interview, run **one** of these commands in p5 based on what the user chose:
+
+| Batteries? | Strict hooks? | Command |
+|-----------|--------------|---------|
+| Yes | Yes | `kata setup --yes --batteries --strict` |
+| Yes | No | `kata setup --yes --batteries` |
+| No | Yes | `kata setup --yes --strict` |
+| No | No | `kata setup --yes` |
+
+`--batteries` scaffolds mode templates, agents, spec templates, and GitHub issue templates.
+`--strict` installs the three `PreToolUse` hooks (mode-gate, task-deps, task-evidence).
+
+**Custom path only:** after running the command above, open `.claude/workflows/wm.yaml` and patch any values the user overrode during the interview (spec_path, research_path, test_command, verify_command, reviews, session_retention_days). The `kata setup --yes` command auto-detects sensible defaults; only write fields that differ.
+
+Then run `kata doctor` (p6) to verify everything is correct.
 
 ## Hooks Installed
 

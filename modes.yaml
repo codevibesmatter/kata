@@ -169,15 +169,19 @@ modes:
       ok_to_ask:
         - "Genuinely ambiguous request"
 
-  setup:
-    name: "Setup"
-    description: "Configure wm for a new project via guided interview"
+  onboard:
+    name: "Onboard"
+    description: "Configure kata for a new project via guided interview"
     intent_keywords:
-      - "setup wm"
-      - "configure wm"
-      - "initialize wm"
-      - "wm setup"
-    template: "setup.md"
+      - "onboard"
+      - "setup kata"
+      - "configure kata"
+      - "initialize kata"
+    strong_signals:
+      - "kata enter onboard"
+      - "onboard this project"
+      - "set up kata"
+    template: "onboard.md"
     category: system
 
   # --- Deprecated Redirects ---

@@ -1,7 +1,6 @@
-// wm setup - Initialize wm in a project
-// When --yes is passed, skip interview and use auto-detected defaults.
-// When --yes is absent, enter setup mode with 6-phase interview template.
-// Hook registration uses 'wm hook <name>' commands in .claude/settings.json.
+// kata setup - Configure kata in a project (pure config, flag-driven)
+// For the guided setup interview, use: kata enter onboard
+// Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -359,6 +358,17 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   // Ensure sessions directory exists
   mkdirSync(join(projectRoot, '.claude', 'sessions'), { recursive: true })
 
+  // Seed onboard.md so `kata enter onboard` works without --batteries
+  const templatesDir = join(projectRoot, '.claude', 'workflows', 'templates')
+  const onboardDest = join(templatesDir, 'onboard.md')
+  if (!existsSync(onboardDest)) {
+    const onboardSrc = join(getPackageRoot(), 'templates', 'onboard.md')
+    if (existsSync(onboardSrc)) {
+      mkdirSync(templatesDir, { recursive: true })
+      copyFileSync(onboardSrc, onboardDest)
+    }
+  }
+
   // Register hooks in settings.json using absolute wm binary path
   const wmBin = resolveWmBin()
   const settings = readSettings(projectRoot)
@@ -367,32 +377,12 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
 }
 
 /**
- * Initialize directory structure and register hooks for the interactive path.
- * Does NOT write wm.yaml — the setup interview collects answers and writes it.
- * This prevents auto-detected defaults from being the final config when users
- * complete the interview with different answers.
- */
-function applySetupHooksOnly(cwd: string, strict: boolean, explicitCwd: boolean): void {
-  const projectRoot = resolveProjectRoot(cwd, explicitCwd)
-
-  // Create directory structure so enter() can locate the project
-  mkdirSync(join(projectRoot, '.claude', 'sessions'), { recursive: true })
-  mkdirSync(join(projectRoot, '.claude', 'workflows'), { recursive: true })
-
-  // Register hooks immediately so they are active during the interview
-  const wmBin = resolveWmBin()
-  const settings = readSettings(projectRoot)
-  const wmHooks = buildHookEntries(strict, wmBin)
-  writeSettings(projectRoot, mergeHooksIntoSettings(settings, wmHooks))
-}
-
-/**
- * wm setup [--yes] [--strict] [--cwd=PATH]
+ * kata setup [--yes] [--strict] [--batteries] [--cwd=PATH]
  *
- * Initialize wm in a project:
- * - --yes: Skip interview, use auto-detected defaults
- * - --strict: Also install PreToolUse gate hooks
- * - Without --yes: Write defaults then enter setup mode (interview template)
+ * Pure configuration — writes wm.yaml, registers hooks, scaffolds content.
+ * Always flag-driven; never enters an interactive session.
+ *
+ * For the guided setup interview, use: kata enter onboard
  *
  * Installs hooks in PROJECT-LEVEL .claude/settings.json only.
  * Bypasses findClaudeProjectDir() since .claude/ may not exist yet.
@@ -466,27 +456,23 @@ export async function setup(args: string[]): Promise<void> {
     return
   }
 
-  // Interactive path: create directory structure and register hooks, then enter interview.
-  // wm.yaml is NOT written here — the interview's write-config phase collects answers
-  // and writes the final config. This avoids locking in auto-detected defaults before
-  // the user has a chance to confirm or override them.
-  applySetupHooksOnly(parsed.cwd, parsed.strict, parsed.explicitCwd)
+  // No flags — show setup help
+  process.stdout.write(`kata setup — configure kata in a project
 
-  // Ensure the setup.md template is available in the project before enter() runs.
-  // resolveTemplatePath() only looks in the project's .claude/workflows/templates/ —
-  // not the package. In a fresh project the templates dir is empty, so we seed it
-  // with the bundled setup.md so the interview can start.
-  const setupTemplateSrc = join(getPackageRoot(), 'templates', 'setup.md')
-  const templatesDir = join(projectRoot, '.claude', 'workflows', 'templates')
-  const setupTemplateDest = join(templatesDir, 'setup.md')
-  if (existsSync(setupTemplateSrc) && !existsSync(setupTemplateDest)) {
-    mkdirSync(templatesDir, { recursive: true })
-    copyFileSync(setupTemplateSrc, setupTemplateDest)
-  }
+Usage:
+  kata setup --yes                Quick setup with auto-detected defaults
+  kata setup --yes --strict       Setup + PreToolUse gate hooks
+  kata setup --batteries          Setup + scaffold batteries-included starter content
+  kata setup --batteries --strict Setup + batteries + strict hooks
 
-  process.stdout.write('kata setup: hooks registered. Entering setup interview...\n')
-  const { enter } = await import('./enter.js')
-  const enterArgs = ['setup']
-  if (parsed.session) enterArgs.push(`--session=${parsed.session}`)
-  await enter(enterArgs)
+Flags:
+  --yes         Write wm.yaml and register hooks using auto-detected defaults
+  --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
+                (implies --yes)
+  --strict      Also register PreToolUse hooks: mode-gate, task-deps, task-evidence
+  --cwd=PATH    Run setup in a different directory
+
+For the guided setup interview, run:
+  kata enter onboard
+`)
 }

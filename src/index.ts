@@ -173,91 +173,93 @@ async function main() {
 function showHelp() {
   // biome-ignore lint/suspicious/noConsole: intentional for CLI output
   console.log(`
-wm - Workflow Management CLI
+kata - Workflow kata CLI
 
 Usage:
-  wm enter <mode> [--session=SESSION_ID]       Enter a mode (creates native tasks)
-  wm enter --template=PATH [--dry-run]         Use custom template for one-off session
-  wm enter --template=PATH --tmp               One-off session (tracked, not registered)
-  wm status [--json] [--session=SESSION_ID]    Show current mode and phase
-  wm link [<issue>]                            Show linked issue (or link new issue)
-  wm link --show                               Show currently linked issue
-  wm link --clear                              Clear issue linkage
-  wm exit [--session=SESSION_ID]               Exit current mode
-  wm can-exit [--json] [--session=SESSION_ID]  Check if exit conditions met (native tasks)
-  wm prompt [--session=SESSION_ID]             Output current mode prompt
-  wm init [--session=SESSION_ID] [--source=S]  Initialize session state
-  wm prime [--session=ID] [--source=S]         Output context injection block
-  wm validate-spec --issue=N | path.md         Validate spec phases format
-  wm validate-template <path> [--json]         Validate a template file
-  wm init-template <path> [options]            Create a new template file
-  wm init-mode <name> [options]                Create new mode (template + modes.yaml)
-  wm register-mode <template-path> [options]   Register existing template as mode
-  wm suggest <message>                         Detect mode from message, output guidance
-  wm doctor [--fix] [--json]                   Diagnose and fix session state
-  wm setup [--yes] [--strict] [--batteries]    Setup wm in a project
-  wm batteries [--cwd=PATH]                    Scaffold batteries-included starter content
-  wm teardown [--yes] [--all] [--dry-run]      Remove wm from a project
-  wm hook <name>                               Dispatch hook event (for settings.json)
-  wm --version                                 Show version
-  wm help                                      Show this help
+  kata enter <mode> [--session=SESSION_ID]       Enter a mode (creates native tasks)
+  kata enter --template=PATH [--dry-run]         Use custom template for one-off session
+  kata enter --template=PATH --tmp               One-off session (tracked, not registered)
+  kata status [--json] [--session=SESSION_ID]    Show current mode and phase
+  kata link [<issue>]                            Show linked issue (or link new issue)
+  kata link --show                               Show currently linked issue
+  kata link --clear                              Clear issue linkage
+  kata exit [--session=SESSION_ID]               Exit current mode
+  kata can-exit [--json] [--session=SESSION_ID]  Check if exit conditions met (native tasks)
+  kata prompt [--session=SESSION_ID]             Output current mode prompt
+  kata init [--session=SESSION_ID] [--force]     Initialize session state
+  kata prime [--session=ID] [--hook-json]        Output context injection block
+  kata validate-spec --issue=N | path.md         Validate spec phases format
+  kata validate-template <path> [--json]         Validate a template file
+  kata init-template <path> [options]            Create a new template file
+  kata init-mode <name> [options]                Create new mode (template + modes.yaml)
+  kata register-mode <template-path> [options]   Register existing template as mode
+  kata suggest <message>                         Detect mode from message, output guidance
+  kata doctor [--fix] [--json]                   Diagnose and fix session state
+  kata setup [--yes] [--strict] [--batteries]    Setup kata in a project
+  kata batteries [--update] [--cwd=PATH]         Scaffold batteries-included starter content
+  kata teardown [--yes] [--all] [--dry-run]      Remove kata from a project
+  kata hook <name>                               Dispatch hook event (for settings.json)
+  kata --version                                 Show version
+  kata help                                      Show this help
 
 Hook Dispatch:
-  wm hook session-start         Initialize session + inject context (SessionStart)
-  wm hook user-prompt           Detect mode from user message (UserPromptSubmit)
-  wm hook mode-gate             Block writes without active mode (PreToolUse)
-  wm hook task-deps             Check task dependencies (PreToolUse:TaskUpdate)
-  wm hook task-evidence         Check git status for evidence (PreToolUse:TaskUpdate)
-  wm hook stop-conditions       Check exit conditions (Stop)
+  kata hook session-start         Initialize session + inject context (SessionStart)
+  kata hook user-prompt           Detect mode from user message (UserPromptSubmit)
+  kata hook mode-gate             Block writes without active mode (PreToolUse)
+  kata hook task-deps             Check task dependencies (PreToolUse:TaskUpdate)
+  kata hook task-evidence         Check git status for evidence (PreToolUse:TaskUpdate)
+  kata hook stop-conditions       Check exit conditions (Stop)
 
 Setup:
-  wm setup --yes                Quick setup with auto-detected defaults
-  wm setup --yes --strict       Setup with PreToolUse gate hooks
-  wm setup --batteries          Setup + scaffold batteries-included starter content
-  wm setup                      Interactive setup interview (asks about batteries)
-  wm batteries                  Scaffold batteries content only (idempotent)
-  wm teardown --yes             Remove wm hooks and config
-  wm teardown --dry-run         Preview what would be removed
+  kata setup --yes                Quick setup with auto-detected defaults
+  kata setup --yes --strict       Setup with PreToolUse gate hooks
+  kata setup --batteries          Setup + scaffold batteries-included starter content (implies --yes)
+  kata setup --batteries --strict Setup + batteries + strict PreToolUse hooks
+  kata enter onboard                Guided setup interview (interactive, agent-driven)
+  kata batteries                  Scaffold batteries content only (idempotent, skips existing)
+  kata batteries --update         Re-scaffold batteries, overwriting with latest versions
+  kata teardown --yes             Remove kata hooks and config
+  kata teardown --dry-run         Preview what would be removed
 
 Task Tracking:
   Tasks are managed via Claude Code's native task system (~/.claude/tasks/{session}/).
-  - wm enter creates native tasks from template (TaskCreate)
-  - wm can-exit checks for pending native tasks
+  - kata enter creates native tasks from template (TaskCreate)
+  - kata can-exit checks for pending native tasks
   - Use TaskUpdate(taskId="X", status="completed") to complete tasks
 
 Examples:
-  wm enter implementation   # Enter mode, creates native tasks
-  wm status --json          # Check current state
-  TaskList                  # View all tasks
-  TaskUpdate                # Complete a task
-  wm can-exit               # Check if all tasks completed
-  wm exit                   # Complete mode
+  kata enter implementation   # Enter mode, creates native tasks
+  kata status --json          # Check current state
+  TaskList                    # View all tasks
+  TaskUpdate                  # Complete a task
+  kata can-exit               # Check if all tasks completed
+  kata exit                   # Complete mode
 
 Custom Templates (one-off sessions):
-  wm init-template /tmp/my-workflow.md --phases=4
-  wm validate-template /tmp/my-workflow.md
-  wm enter --template=/tmp/my-workflow.md             # Track with tasks
-  wm enter --template=/tmp/my-workflow.md --dry-run   # Preview only
-  wm enter --template=/tmp/my-workflow.md --tmp       # One-off (tracked, not registered)
+  kata init-template /tmp/my-workflow.md --phases=4
+  kata validate-template /tmp/my-workflow.md
+  kata enter --template=/tmp/my-workflow.md             # Track with tasks
+  kata enter --template=/tmp/my-workflow.md --dry-run   # Preview only
+  kata enter --template=/tmp/my-workflow.md --tmp       # One-off (tracked, not registered)
 
 Permanent Modes (saved in modes.yaml):
-  wm init-mode code-review                            # Create new mode + template
-  wm init-mode sprint-planning --phases=5             # With custom phase count
-  wm register-mode /tmp/my-workflow.md --copy         # Register existing template
+  kata init-mode code-review                            # Create new mode + template
+  kata init-mode sprint-planning --phases=5             # With custom phase count
+  kata register-mode /tmp/my-workflow.md --copy         # Register existing template
 
 Issue Linking:
-  wm enter implementation --issue=123         Link issue when entering mode
-  wm link 456                                 Link to different issue mid-session
-  wm link --show                              Check current linkage
-  wm link --clear                             Clear issue linkage
+  kata enter implementation --issue=123         Link issue when entering mode
+  kata link 456                                 Link to different issue mid-session
+  kata link --show                              Check current linkage
+  kata link --clear                             Clear issue linkage
 
 State Management:
-  wm init --force                              Reset session state to defaults
-  wm exit                                      Mark current mode complete, reset to default
+  kata init --force                              Reset session state to defaults
+  kata exit                                      Mark current mode complete, reset to default
 
 Troubleshooting:
-  - Switching issues? Use 'wm link <new-issue>' or 'wm enter <mode> --issue=N'
-  - State corrupted? Use 'wm init --force' to hard reset
+  - Switching issues? Use 'kata link <new-issue>' or 'kata enter <mode> --issue=N'
+  - State corrupted? Use 'kata init --force' to hard reset
   - Task issues? Use TaskList to see native tasks
 
 Notes:

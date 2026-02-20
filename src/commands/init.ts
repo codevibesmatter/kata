@@ -12,17 +12,14 @@ import type { SessionState } from '../state/schema.js'
 function parseArgs(args: string[]): {
   session?: string
   force?: boolean
-  source?: string
 } {
-  const result: { session?: string; force?: boolean; source?: string } = {}
+  const result: { session?: string; force?: boolean } = {}
 
   for (const arg of args) {
     if (arg.startsWith('--session=')) {
       result.session = arg.slice('--session='.length)
     } else if (arg === '--force') {
       result.force = true
-    } else if (arg.startsWith('--source=')) {
-      result.source = arg.slice('--source='.length)
     }
   }
 
@@ -49,10 +46,9 @@ function createDefaultState(sessionId: string): SessionState {
 }
 
 /**
- * wm init [--session=SESSION_ID] [--force] [--source=SOURCE]
+ * wm init [--session=SESSION_ID] [--force]
  * Initialize session state (called by SessionStart hook)
- * --force: Reset to default state even if state exists (for new sessions, /clear)
- * --source: Source of initialization (startup|resume|compact|clear) for hook dispatch
+ * --force: Reset to default state even if state exists
  */
 export async function init(args: string[]): Promise<void> {
   const parsed = parseArgs(args)
@@ -74,7 +70,6 @@ export async function init(args: string[]): Promise<void> {
           sessionId,
           stateFile,
           action: 'exists',
-          source: parsed.source ?? 'startup',
         },
         null,
         2,
@@ -95,7 +90,6 @@ export async function init(args: string[]): Promise<void> {
         sessionId,
         stateFile,
         action: parsed.force ? 'reset' : 'created',
-        source: parsed.source ?? 'startup',
       },
       null,
       2,

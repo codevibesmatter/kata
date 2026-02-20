@@ -76,15 +76,6 @@ export async function createMockSession(options: MockSessionOptions = {}): Promi
   await mkdir(sessionsDir, { recursive: true })
   await writeFile(join(sessionsDir, 'state.json'), JSON.stringify(initialState, null, 2))
 
-  // Create registry.jsonl with session_started event (modern lookup)
-  const registryPath = join(claudeDir, 'sessions', 'registry.jsonl')
-  const registryEntry = JSON.stringify({
-    event: 'session_started',
-    sessionId,
-    timestamp: new Date().toISOString(),
-  })
-  await writeFile(registryPath, `${registryEntry}\n`)
-
   // Helper to read current state
   const getState = async (): Promise<SessionState> => {
     const content = await readFile(statePath, 'utf-8')

@@ -2,7 +2,6 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { randomUUID } from 'node:crypto'
 import { findClaudeProjectDir, getPackageRoot } from '../session/lookup.js'
 
 interface DiagnosticResult {
@@ -32,28 +31,6 @@ async function fileExists(filePath: string): Promise<boolean> {
     return true
   } catch {
     return false
-  }
-}
-
-async function getLastSessionFromRegistry(
-  registryPath: string,
-): Promise<{ sessionId: string; timestamp: string } | null> {
-  try {
-    const content = await fs.readFile(registryPath, 'utf-8')
-    const lines = content.trim().split('\n').filter(Boolean)
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        const entry = JSON.parse(lines[i])
-        if (entry.event === 'session_started' && entry.sessionId) {
-          return { sessionId: entry.sessionId, timestamp: entry.timestamp }
-        }
-      } catch {
-        // Skip malformed lines
-      }
-    }
-    return null
-  } catch {
-    return null
   }
 }
 
@@ -237,7 +214,6 @@ export async function doctor(args: string[]): Promise<void> {
   // Use cwd fallback for bootstrap scenarios (--fix may need to create .claude/)
   const claudeDir = getProjectDir(parsed.fix)
   const sessionsDir = path.join(claudeDir, '.claude/sessions')
-  const registryPath = path.join(sessionsDir, 'registry.jsonl')
   const currentSessionPath = path.join(claudeDir, '.claude/current-session-id')
 
   // Check 1: Sessions directory
@@ -261,63 +237,7 @@ export async function doctor(args: string[]): Promise<void> {
     })
   }
 
-  // Check 2: Registry file
-  if (!(await fileExists(registryPath))) {
-    diagnostics.push({
-      check: 'registry_file',
-      status: 'error',
-      message: 'Registry file missing',
-      fixable: true,
-    })
-    if (parsed.fix) {
-      const newSessionId = randomUUID()
-      const entry = {
-        event: 'session_started',
-        sessionId: newSessionId,
-        timestamp: new Date().toISOString(),
-      }
-      await fs.mkdir(sessionsDir, { recursive: true })
-      await fs.writeFile(registryPath, `${JSON.stringify(entry)}\n`)
-      fixed.push(`Created registry with session ${newSessionId}`)
-    }
-  } else {
-    diagnostics.push({
-      check: 'registry_file',
-      status: 'ok',
-      message: 'Registry file exists',
-      fixable: false,
-    })
-  }
-
-  // Check 3: Registry has session_started
-  const lastSession = await getLastSessionFromRegistry(registryPath)
-  if (!lastSession) {
-    diagnostics.push({
-      check: 'registry_session',
-      status: 'error',
-      message: 'No session_started event',
-      fixable: true,
-    })
-    if (parsed.fix && !fixed.some((f) => f.includes('Created registry'))) {
-      const newSessionId = randomUUID()
-      const entry = {
-        event: 'session_started',
-        sessionId: newSessionId,
-        timestamp: new Date().toISOString(),
-      }
-      await fs.appendFile(registryPath, `${JSON.stringify(entry)}\n`)
-      fixed.push(`Added session_started for ${newSessionId}`)
-    }
-  } else {
-    diagnostics.push({
-      check: 'registry_session',
-      status: 'ok',
-      message: `Session: ${lastSession.sessionId}`,
-      fixable: false,
-    })
-  }
-
-  // Check 4: current-session-id file (LEGACY - informational only)
+  // Check 2: current-session-id file (LEGACY - informational only)
   // This file is deprecated. Modern lookup uses CLAUDE_SESSION_ID env var -> registry.jsonl
   if (await fileExists(currentSessionPath)) {
     const currentId = (await fs.readFile(currentSessionPath, 'utf-8')).trim()
@@ -336,44 +256,6 @@ export async function doctor(args: string[]): Promise<void> {
     })
   }
 
-  // Check 5: State file
-  const effectiveSession = lastSession?.sessionId
-  if (effectiveSession) {
-    const stateFile = path.join(sessionsDir, effectiveSession, 'state.json')
-    if (!(await fileExists(stateFile))) {
-      diagnostics.push({
-        check: 'state_file',
-        status: 'warning',
-        message: `State missing for ${effectiveSession}`,
-        fixable: true,
-      })
-      if (parsed.fix) {
-        await fs.mkdir(path.join(sessionsDir, effectiveSession), { recursive: true })
-        const defaultState = {
-          sessionId: effectiveSession,
-          workflowId: '',
-          sessionType: 'default',
-          currentMode: 'default',
-          completedPhases: [],
-          phases: [],
-          modeHistory: [],
-          modeState: {},
-          beadsCreated: [],
-          editedFiles: [],
-          todosWritten: false,
-        }
-        await fs.writeFile(stateFile, JSON.stringify(defaultState, null, 2))
-        fixed.push(`Created state for ${effectiveSession}`)
-      }
-    } else {
-      diagnostics.push({
-        check: 'state_file',
-        status: 'ok',
-        message: 'State file exists',
-        fixable: false,
-      })
-    }
-  }
 
   // Check 6: Hooks registered in .claude/settings.json
   const hookCheck = checkHooksRegistered(claudeDir)
@@ -400,7 +282,7 @@ export async function doctor(args: string[]): Promise<void> {
   // Check 7: Session cleanup (informational)
   try {
     const sessionDirs = await fs.readdir(sessionsDir)
-    const sessionCount = sessionDirs.filter((d) => d !== 'registry.jsonl').length
+    const sessionCount = sessionDirs.length
     diagnostics.push({
       check: 'session_cleanup',
       status: 'ok',
@@ -449,7 +331,6 @@ export async function doctor(args: string[]): Promise<void> {
     success,
     diagnostics,
     ...(fixed.length > 0 && { fixed }),
-    ...(effectiveSession && { sessionId: effectiveSession }),
   }
 
   if (parsed.json) {

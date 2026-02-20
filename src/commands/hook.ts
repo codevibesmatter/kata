@@ -124,13 +124,11 @@ async function captureConsoleLog(fn: () => Promise<void>): Promise<string> {
 // Calls init then prime — initializes session state and outputs context
 async function handleSessionStart(input: Record<string, unknown>): Promise<void> {
   const sessionId = input.session_id as string | undefined
-  const source = (input.source as string) ?? 'startup'
 
   // Import and run init (silently capture its output)
   const { init } = await import('./init.js')
   const initArgs: string[] = []
   if (sessionId) initArgs.push(`--session=${sessionId}`)
-  if (source) initArgs.push(`--source=${source}`)
   await captureConsoleLog(() => init(initArgs))
 
   // Now build prime context
@@ -174,14 +172,6 @@ async function handleSessionStart(input: Record<string, unknown>): Promise<void>
     }
   } catch {
     // Config not available, skip
-  }
-
-  // Continuation warning for resumed sessions
-  if (source === 'resume' || source === 'compact') {
-    contextParts.push('\n--- Session Continuation ---')
-    contextParts.push(
-      `This session was ${source === 'resume' ? 'resumed' : 'compacted'}. Check session state with: wm status`,
-    )
   }
 
   outputJson({

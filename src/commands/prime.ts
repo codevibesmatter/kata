@@ -10,16 +10,13 @@ import { loadWmConfig } from '../config/wm-config.js'
  */
 function parseArgs(args: string[]): {
   session?: string
-  source?: string
   hookJson?: boolean
 } {
-  const result: { session?: string; source?: string; hookJson?: boolean } = {}
+  const result: { session?: string; hookJson?: boolean } = {}
 
   for (const arg of args) {
     if (arg.startsWith('--session=')) {
       result.session = arg.slice('--session='.length)
-    } else if (arg.startsWith('--source=')) {
-      result.source = arg.slice('--source='.length)
     } else if (arg === '--hook-json') {
       result.hookJson = true
     }
@@ -100,7 +97,7 @@ wm can-exit                           # Check stop conditions
 /**
  * Build full context block for prime output
  */
-async function buildContextBlock(sessionId: string, source?: string): Promise<string> {
+async function buildContextBlock(sessionId: string): Promise<string> {
   const contextParts: string[] = []
   const stateFile = await getStateFilePath(sessionId)
 
@@ -128,15 +125,6 @@ async function buildContextBlock(sessionId: string, source?: string): Promise<st
           contextParts.push('---')
           contextParts.push('')
           contextParts.push(templateContent)
-
-          // Continuation warning
-          if (source === 'resume' || source === 'compact') {
-            contextParts.push('')
-            contextParts.push('---')
-            contextParts.push(
-              `**Session ${source === 'resume' ? 'resumed' : 'compacted'}** - Check state: \`wm status\``,
-            )
-          }
 
           // Ledger context
           if (state.ledger) {
@@ -196,7 +184,7 @@ async function buildContextBlock(sessionId: string, source?: string): Promise<st
 }
 
 /**
- * wm prime [--session=ID] [--source=SOURCE] [--hook-json]
+ * wm prime [--session=ID] [--hook-json]
  * Outputs context injection block (like bt prime, bpd prime)
  *
  * When --hook-json is passed, outputs valid Claude Code hook JSON:
@@ -210,7 +198,7 @@ export async function prime(args: string[]): Promise<void> {
 
   try {
     const sessionId = parsed.session || (await getCurrentSessionId())
-    const contextBlock = await buildContextBlock(sessionId, parsed.source)
+    const contextBlock = await buildContextBlock(sessionId)
 
     if (parsed.hookJson) {
       // Output as Claude Code hook JSON
