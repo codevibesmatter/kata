@@ -41,8 +41,9 @@ phases:
       depends_on: [p2]
     tasks:
       - "AskUserQuestion: Enable spec review before implementation? (default: no)"
-      - "AskUserQuestion: Enable code review? If yes, which reviewer? (codex/gemini/none)"
-      - "AskUserQuestion: Set custom verify command? (default: none)"
+      - "AskUserQuestion: Enable code review? If yes, which external reviewer? (codex/gemini/none — see ## External Review Setup below)"
+      - "AskUserQuestion: Does this project use browser automation for testing? (Playwright/Cypress/Puppeteer/none)"
+      - "AskUserQuestion: Behavioral verify command? e.g. 'playwright test', 'cypress run', or custom script. Leave blank for none."
       - "AskUserQuestion: Spec files path? (default: planning/specs)"
       - "AskUserQuestion: Research files path? (default: planning/research)"
       - "AskUserQuestion: Session retention days? (default: 7)"
@@ -123,6 +124,15 @@ When asked "Install batteries-included starter content?", choosing Yes scaffolds
 | `test-agent` | Writes tests for spec behaviors |
 | `debug-agent` | Traces bugs to root cause (read-only) |
 | `review-agent` | Reviews code and specs for quality |
+
+Agents are invoked with Claude Code's Task tool:
+```
+Task(subagent_type="impl-agent", prompt="
+  Implement phase P2.1 from planning/specs/123-feature.md
+  Return: files changed, verification result
+")
+```
+The orchestrator (main session) spawns agents for parallel or delegated work, then collects results via `TaskOutput(task_id=..., block=true)`.
 
 **Spec templates** (`planning/spec-templates/`):
 - `feature.md` — Feature spec with behaviors, phases, acceptance criteria
@@ -240,6 +250,64 @@ After collecting answers through the interview, run **one** of these commands in
 **Custom path only:** after running the command above, open `.claude/workflows/wm.yaml` and patch any values the user overrode during the interview (spec_path, research_path, test_command, verify_command, reviews, session_retention_days). The `kata setup --yes` command auto-detects sensible defaults; only write fields that differ.
 
 Then run `kata doctor` (p6) to verify everything is correct.
+
+## External Review Setup
+
+When p3 asks "Enable code review? Which reviewer?":
+
+### `codex` — Claude Code sub-agent review
+Uses the batteries `review-agent` sub-agent (no external tool needed). The orchestrator spawns a `review-agent` after each implementation phase:
+```
+Task(subagent_type="review-agent", prompt="Review git diff for phase P2.1 of spec planning/specs/123-*.md")
+```
+Set in `wm.yaml`:
+```yaml
+reviews:
+  code_reviewer: codex
+```
+
+### `gemini` — Google Gemini CLI review
+Requires the Gemini CLI installed and authenticated:
+```bash
+npm install -g @google/gemini-cli   # or pip install gemini-cli
+gemini auth login
+```
+Then set in `wm.yaml`:
+```yaml
+reviews:
+  code_reviewer: gemini
+```
+The implementation template will prompt you to run `gemini review` after each phase.
+
+### `none` — No external review gate
+Implementation phases complete without a review step. Recommended for solo projects or when using PR review instead.
+
+## Browser Automation Setup
+
+When p3 asks about browser automation:
+
+### Playwright
+```bash
+npm install -D @playwright/test
+npx playwright install
+```
+Set verify command in `wm.yaml`:
+```yaml
+verify_command: "npx playwright test"
+```
+
+### Cypress
+```bash
+npm install -D cypress
+```
+```yaml
+verify_command: "npx cypress run"
+```
+
+### Custom script
+Any shell command that exits 0 on pass. The command is called by the VERIFY subphase in implementation mode and its output is written to `.claude/verification-evidence/{issue}.json`.
+
+If your project has no browser automation, leave `verify_command` unset — implementation mode will skip the verification gate.
 
 ## Hooks Installed
 

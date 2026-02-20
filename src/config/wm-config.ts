@@ -28,7 +28,7 @@ export interface WmConfig {
   // Version tracking
   wm_version?: string
   // Custom verification command (generates .claude/verification-evidence/<issue>.json)
-  // Default: 'pnpm at verify work' (Baseplane). Override for other projects or set null to disable.
+  // e.g. 'playwright test', 'cypress run', or a custom script. Set null to disable.
   verify_command?: string | null
 }
 

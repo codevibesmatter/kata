@@ -90,13 +90,11 @@ pnpm install
     case 'verification_not_run': {
       const wmCfg = loadWmConfig()
       const reviewer = wmCfg.reviews?.code_reviewer
-      // Use configured verify_command; fall back to Baseplane default for codex/gemini, else test
+      // Use configured verify_command; fall back to project test command
       const verifyCmd =
         wmCfg.verify_command != null
           ? wmCfg.verify_command
-          : reviewer === 'codex' || reviewer === 'gemini'
-            ? 'pnpm at verify work "<task description>" --spec=<spec-path>'
-            : (wmCfg.project?.test_command ?? 'pnpm test')
+          : (wmCfg.project?.test_command ?? reviewer ?? 'your verify command')
       return {
         type: 'verification_not_run',
         title: `BLOCKED: Verification not run for issue #${issueNum}`,
@@ -127,9 +125,7 @@ reviews:
       const failedVerifyCmd =
         failedCfg.verify_command != null
           ? failedCfg.verify_command
-          : failedReviewer === 'codex' || failedReviewer === 'gemini'
-            ? 'pnpm at verify work "<task description>" --spec=<spec-path>'
-            : (failedCfg.project?.test_command ?? 'pnpm test')
+          : (failedCfg.project?.test_command ?? failedReviewer ?? 'your verify command')
       return {
         type: 'verification_failed',
         title: `BLOCKED: Verification FAILED for issue #${issueNum}`,
