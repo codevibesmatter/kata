@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 #
-# wm - Workflow Management CLI
+# kata - Workflow kata CLI for Claude Code
 #
-# Type-safe state management for Claude Code workflow sessions.
+# Structured session modes, phase tracking, and stop hooks
+# for disciplined AI coding sessions.
 # Uses built dist/index.js (Node.js) when installed via npm.
 # Falls back to Bun + src/index.ts for local development.
 #
 # Usage:
-#   wm enter <mode>                 Enter a mode (creates phase tasks)
-#   wm status [--json]              Show current mode and phase
-#   wm exit                         Exit current mode
-#   wm can-exit                     Check if exit conditions met
-#   wm prime                        Output context injection block
-#   wm help                         Show help
+#   kata enter <mode>               Enter a mode (creates phase tasks)
+#   kata status [--json]            Show current mode and phase
+#   kata exit                       Exit current mode
+#   kata can-exit                   Check if exit conditions met
+#   kata prime                      Output context injection block
+#   kata help                       Show help
 
 set -euo pipefail
 

@@ -1,7 +1,7 @@
 {
-  "name": "@codevibesmatter/wm",
+  "name": "@codevibesmatter/kata",
   "version": "1.0.0",
-  "description": "Workflow management CLI for Claude Code — structured session modes, phase tracking, and stop hooks",
+  "description": "Structured workflow kata for Claude Code — modes, phases, tasks, and stop hooks for disciplined AI coding sessions",
   "type": "module",
   "exports": {
     ".": {
@@ -14,14 +14,14 @@
     }
   },
   "bin": {
-    "wm": "./wm"
+    "kata": "./kata"
   },
   "engines": {
     "node": ">=18"
   },
   "files": [
     "dist/",
-    "wm",
+    "kata",
     "modes.yaml",
     "templates/",
     "batteries/"
@@ -35,10 +35,13 @@
   },
   "keywords": [
     "claude-code",
+    "kata",
     "workflow",
     "cli",
     "ai-agent",
-    "session-management"
+    "session-management",
+    "agent-loop",
+    "modes"
   ],
   "author": "codevibesmatter",
   "license": "MIT",
@@ -47,11 +50,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codevibesmatter/wm.git"
+    "url": "https://github.com/codevibesmatter/kata.git"
   },
-  "homepage": "https://github.com/codevibesmatter/wm#readme",
+  "homepage": "https://github.com/codevibesmatter/kata#readme",
   "bugs": {
-    "url": "https://github.com/codevibesmatter/wm/issues"
+    "url": "https://github.com/codevibesmatter/kata/issues"
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
