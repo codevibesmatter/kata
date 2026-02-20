@@ -52,11 +52,12 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
     return null
   }
 
-  // Return phases converted to PhaseDefinition type (include subphase_pattern for container phases)
+  // Return phases converted to PhaseDefinition type (include steps, container, subphase_pattern)
   return template.phases.map((p) => ({
     id: p.id,
     name: p.name || '',
     task_config: p.task_config,
+    steps: p.steps,
     container: (p as Record<string, unknown>).container as boolean | undefined,
     subphase_pattern: (p as Record<string, unknown>).subphase_pattern as
       | SubphasePattern[]

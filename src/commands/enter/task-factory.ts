@@ -15,6 +15,7 @@ export interface Task {
   depends_on: string[]
   completedAt: string | null
   reason: string | null
+  instruction?: string
 }
 
 export interface TasksFile {
@@ -109,9 +110,12 @@ export function buildSpecTasks(
  * Build phase tasks from a template path (resolves template, returns Task[])
  *
  * Task creation logic:
- * 1. Phase with task_config → creates ONE phase-level task
- * 2. Phase with steps → creates task for EACH step (individual trackable units)
- * 3. Phase with both → creates phase task, then step tasks (steps depend on phase)
+ * 1. Phase with steps → creates ONE task per step (detailed trackable units with instructions)
+ * 2. Phase with task_config only (no steps) → creates ONE phase-level task
+ * 3. Container phases (no task_config, no steps) → skipped here, handled by buildSpecTasks
+ *
+ * Step tasks: first step inherits phase deps, subsequent steps depend on previous step.
+ * phaseLastTaskId tracks the last task of each phase for cross-phase dependency wiring.
  */
 export function buildPhaseTasks(
   templatePath: string,
@@ -130,52 +134,88 @@ export function buildPhaseTasks(
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.error(`Building phase tasks for workflow: ${workflowId}`)
 
-  const phaseIdToTaskId = new Map<string, string>()
+  // Tracks the last task ID per phase — used to chain cross-phase dependencies
   const phaseLastTaskId = new Map<string, string>()
 
   for (const phase of template.phases) {
-    if (phase.task_config?.title) {
+    // Resolve phase-level dependencies (declared in task_config.depends_on)
+    const phaseDependsOn: string[] = []
+    if (phase.task_config?.depends_on?.length) {
+      for (const depPhaseId of phase.task_config.depends_on) {
+        const lastId = phaseLastTaskId.get(depPhaseId)
+        if (lastId) phaseDependsOn.push(lastId)
+      }
+    }
+
+    if (phase.steps?.length) {
+      // Expand steps into individual tasks — each step gets its own native task
+      let prevStepTaskId: string | null = null
+
+      for (let i = 0; i < phase.steps.length; i++) {
+        const step = phase.steps[i]
+        const taskId = `${phase.id}:${step.id}`
+        const title = issueNum
+          ? `GH#${issueNum}: ${phase.id.toUpperCase()}: ${step.title}`
+          : `${workflowId}: ${phase.name}: ${step.title}`
+
+        const dependsOn: string[] = []
+        if (i === 0) {
+          // First step inherits phase-level dependencies
+          dependsOn.push(...phaseDependsOn)
+        } else if (prevStepTaskId) {
+          // Each subsequent step depends on the previous step
+          dependsOn.push(prevStepTaskId)
+        }
+
+        tasks.push({
+          id: taskId,
+          title,
+          done: false,
+          depends_on: dependsOn,
+          completedAt: null,
+          reason: null,
+          instruction: step.instruction,
+        })
+
+        // biome-ignore lint/suspicious/noConsole: intentional CLI output
+        console.error(`  Created step task: ${taskId}`)
+        if (dependsOn.length > 0) {
+          // biome-ignore lint/suspicious/noConsole: intentional CLI output
+          console.error(`    Depends on: ${dependsOn.join(', ')}`)
+        }
+
+        prevStepTaskId = taskId
+      }
+
+      // Last step of this phase is the dependency anchor for subsequent phases
+      if (prevStepTaskId) phaseLastTaskId.set(phase.id, prevStepTaskId)
+    } else if (phase.task_config?.title) {
+      // No steps: create a single phase-level task (summary task)
       const fullTitle = issueNum
         ? `GH#${issueNum}: ${phase.task_config.title}`
         : `${workflowId}: ${phase.task_config.title}`
 
       const taskId = phase.id
 
-      const dependsOn: string[] = []
-      if (phase.task_config.depends_on?.length) {
-        for (const depPhaseId of phase.task_config.depends_on) {
-          const lastTaskId = phaseLastTaskId.get(depPhaseId)
-          if (lastTaskId) {
-            dependsOn.push(lastTaskId)
-          } else {
-            const depTaskId = phaseIdToTaskId.get(depPhaseId)
-            if (depTaskId) {
-              dependsOn.push(depTaskId)
-            }
-          }
-        }
-      }
-
       tasks.push({
         id: taskId,
         title: fullTitle,
         done: false,
-        depends_on: dependsOn,
+        depends_on: phaseDependsOn,
         completedAt: null,
         reason: null,
       })
 
-      phaseIdToTaskId.set(phase.id, taskId)
       phaseLastTaskId.set(phase.id, taskId)
 
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error(`  Created phase task: ${phase.id} → ${taskId}`)
-
-      if (dependsOn.length > 0) {
+      if (phaseDependsOn.length > 0) {
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`    Depends on: ${dependsOn.join(', ')}`)
+        console.error(`    Depends on: ${phaseDependsOn.join(', ')}`)
       }
     }
+    // Container phases (no task_config, no steps) are skipped — handled by buildSpecTasks
   }
 
   return tasks
@@ -268,7 +308,7 @@ export function writeNativeTaskFiles(
     const nativeTask: NativeTask = {
       id: nativeId,
       subject: task.title,
-      description: `Workflow task from ${workflowId}. Original ID: ${task.id}`,
+      description: task.instruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
       activeForm,
       status: task.done ? 'completed' : 'pending',
       blocks,

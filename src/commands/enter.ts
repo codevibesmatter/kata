@@ -625,20 +625,24 @@ export async function enter(args: string[]): Promise<void> {
       const specTasks = buildSpecTasks(specPhases, issueNum, subphasePattern, containerPhaseNum)
 
       // Wire cross-phase dependencies:
-      // - First P2.X:impl depends on P1 (Claim)
+      // - First P2.X:impl depends on last task of P1 (Claim)
+      //   P1 may be expanded into steps, so find the last task with id 'p1' or 'p1:*'
       const firstImplId = `p${containerPhaseNum}.1:${subphasePattern[0]?.id_suffix ?? 'impl'}`
       const firstImpl = specTasks.find((t) => t.id === firstImplId)
-      const p1Exists = orchTasks.some((t) => t.id === 'p1')
-      if (firstImpl && p1Exists) {
-        firstImpl.depends_on.push('p1')
+      const lastP1TaskId = [...orchTasks]
+        .filter((t) => t.id === 'p1' || t.id.startsWith('p1:'))
+        .pop()?.id
+      if (firstImpl && lastP1TaskId) {
+        firstImpl.depends_on.push(lastP1TaskId)
       }
 
-      // - P3 (Close) depends on last P2.X:verify (or last subphase pattern item)
+      // - First task of P3 (Close) depends on last P2.X:verify
+      //   P3 may be expanded into steps, so find the first task with id 'p3' or 'p3:*'
       const lastPatternSuffix = subphasePattern[subphasePattern.length - 1]?.id_suffix ?? 'verify'
       const lastVerifyId = `p${containerPhaseNum}.${specPhases.length}:${lastPatternSuffix}`
-      const p3Task = orchTasks.find((t) => t.id === 'p3')
-      if (p3Task && specTasks.some((t) => t.id === lastVerifyId)) {
-        p3Task.depends_on.push(lastVerifyId)
+      const firstP3Task = orchTasks.find((t) => t.id === 'p3' || t.id.startsWith('p3:'))
+      if (firstP3Task && specTasks.some((t) => t.id === lastVerifyId)) {
+        firstP3Task.depends_on.push(lastVerifyId)
       }
 
       // Order: before-container (P0, P1), spec tasks (P2.X), after-container (P3, P4)
@@ -698,13 +702,19 @@ export async function enter(args: string[]): Promise<void> {
     if (hasContainerPhase && specPhases) {
       const subphasePattern = containerPhase?.subphase_pattern ?? []
       const specTaskCount = specPhases.length * (subphasePattern.length || 1)
-      // Orchestration tasks: non-container template phases with task_config
+      // Orchestration tasks: non-container phases expand steps or fall back to task_config
       const orchTaskCount =
-        templatePhases?.filter((p) => !p.container && p.task_config?.title).length ?? 0
+        templatePhases
+          ?.filter((p) => !p.container)
+          .reduce((n, p) => n + (p.steps?.length ? p.steps.length : p.task_config?.title ? 1 : 0), 0) ?? 0
       wouldCreateTasks = orchTaskCount + specTaskCount
     } else {
-      // Count template phases with task_config definitions (matches createPhaseTasks behavior)
-      wouldCreateTasks = templatePhases?.filter((p) => p.task_config?.title).length ?? 0
+      // Phases with steps create one task per step; phases with only task_config create one task
+      wouldCreateTasks =
+        templatePhases?.reduce(
+          (n, p) => n + (p.steps?.length ? p.steps.length : p.task_config?.title ? 1 : 0),
+          0,
+        ) ?? 0
     }
   }
 
@@ -791,7 +801,7 @@ export async function enter(args: string[]): Promise<void> {
           pattern:
             hasContainerPhase && specPhases
               ? `${templatePhases?.filter((p) => !p.container && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${containerPhase?.subphase_pattern?.length || 1} subphases = ${wouldCreateTasks} tasks`
-              : `${effectivePhases.length} tasks`,
+              : `${wouldCreateTasks} tasks`,
         }),
         enteredAt: finalState.updatedAt,
         ...(specPath && { specPath, phasesFromSpec: true }),
