@@ -166,6 +166,98 @@ wm init --force     # Hard-reset session state
 wm teardown --yes   # Remove all wm hooks and config
 ```
 
+## Comparison to similar tools
+
+The Claude Code ecosystem has several workflow and memory tools. Here's how `wm` fits in.
+
+### Beads (`@beads/bd`)
+**[github.com/steveyegge/beads](https://github.com/steveyegge/beads)**
+
+The most influential tool in this space. A git-backed task tracker with a dependency graph — JSONL files in `.beads/`, hash-based IDs to prevent merge conflicts, `bd ready` to surface only unblocked work. Solves "agent amnesia": agents lose all context of prior work between sessions. Anthropic's native `TaskCreate`/`TaskUpdate` system was directly inspired by beads.
+
+**vs `wm`:** Complementary, not competitive. Beads is project-level memory across sessions (days/weeks); `wm` is session-level enforcement within a single session. They stack well — beads tracks what needs doing across the project, `wm` enforces how a single session executes.
+
+---
+
+### beads_viewer (`bv`)
+**[github.com/Dicklesworthstone/beads_viewer](https://github.com/Dicklesworthstone/beads_viewer)**
+
+A Go TUI that reads beads data and computes graph analytics: PageRank, betweenness centrality, critical path, kanban view. Live-reloads on `.beads/beads.jsonl`. Has `--robot-*` JSON flags for programmatic agent access. Purely a visualization layer on top of beads.
+
+**vs `wm`:** No overlap. `wm` has no visualization component.
+
+---
+
+### RIPER Workflow
+**[github.com/tony/claude-code-riper-5](https://github.com/tony/claude-code-riper-5)**
+
+Five-phase structured development: Research → Innovate → Plan → Execute → Review. Enforces phases through **capability restrictions** — in Research mode Claude has read-only access so it can't prematurely write code. Implemented via slash commands (`/riper:research`, `/riper:execute`) and specialized subagents per phase.
+
+**vs `wm`:** Closest conceptual match. Both enforce named phases in sequence. Key difference: RIPER gates at the *capability* level (what Claude can do in each phase); `wm` gates at the *exit* level (Claude can do anything, but can't stop until phases are done). RIPER enforces a fixed 5-phase flow; `wm` is configurable with any template.
+
+---
+
+### Claude Task Master
+**[github.com/eyaltoledano/claude-task-master](https://github.com/eyaltoledano/claude-task-master)**
+
+Parses PRDs into structured tasks using AI (Claude, GPT-4, Gemini, etc.) via MCP. Handles full task lifecycle with subtask expansion and status tracking. Designed for Cursor AI but works with Claude Code.
+
+**vs `wm`:** Task Master is about *creating* a backlog from requirements; `wm` is about *enforcing* that the current session's tasks complete. Different problem. Task Master requires MCP setup; `wm` needs only hooks.
+
+---
+
+### Simone
+**[github.com/Helmi/claude-simone](https://github.com/Helmi/claude-simone)**
+
+Convention-based project and task management via structured prompts and activity tracking, optimized for AI-assisted development. Has a legacy directory-based system and a newer MCP server.
+
+**vs `wm`:** Simone is convention-based (Claude *should* follow the structure); `wm` is enforcement-based (Claude *cannot stop* without completing phases). Simone has no stop hook equivalent.
+
+---
+
+### claude-mem
+**[github.com/thedotmack/claude-mem](https://github.com/thedotmack/claude-mem)**
+
+Automatic context preservation using SQLite + Chroma vector DB. Hooks capture everything Claude does during a session, compress it with AI, and semantically retrieve relevant context at the start of the next session. Claims ~10x token savings vs. injecting full transcripts.
+
+**vs `wm`:** Pure memory/continuity — no phase enforcement, no stop hooks. Solves agent amnesia with semantic search rather than structured tasks. `wm` does light session continuity via state files but nothing close to claude-mem's semantic retrieval.
+
+---
+
+### qlaude
+**[github.com/starsh2001/qlaude](https://github.com/starsh2001/qlaude)**
+
+Queue-based prompt automation with Telegram notifications. Stack multiple prompts; as Claude finishes each one, qlaude auto-fires the next. Detects Claude's idle/working/waiting states via PTY analysis. For unattended batch work.
+
+**vs `wm`:** Different axis. qlaude handles *between-session* orchestration (keep Claude working while you're away); `wm` handles *within-session* structure (enforce phases during a session). qlaude asks "is Claude done?"; `wm` asks "has Claude done the *right* things?".
+
+---
+
+### claude-flow
+**[github.com/ruvnet/claude-flow](https://github.com/ruvnet/claude-flow)**
+
+Enterprise multi-agent swarm platform. 60+ specialized agents (coders, testers, architects, security auditors) coordinated via queen-led hierarchy with consensus algorithms. Vector memory for cross-agent knowledge sharing, WebAssembly for sub-1ms routing, 6 LLM providers with failover.
+
+**vs `wm`:** Different category entirely. claude-flow is infrastructure for deploying agent swarms at scale; `wm` is a lightweight discipline layer for a single developer using a single Claude session.
+
+---
+
+### Summary
+
+| Tool | Core problem | Enforcement | Scope |
+|------|-------------|-------------|-------|
+| [beads](https://github.com/steveyegge/beads) | Agent amnesia / task tracking | None — agent decides | Project (weeks) |
+| [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) | Visualizing task dependencies | N/A | Visualization |
+| [RIPER](https://github.com/tony/claude-code-riper-5) | Phase discipline, no premature coding | Capability gating per phase | Session |
+| [Task Master](https://github.com/eyaltoledano/claude-task-master) | PRD → structured backlog | None | Project |
+| [Simone](https://github.com/Helmi/claude-simone) | AI project understanding | Convention only | Project |
+| [claude-mem](https://github.com/thedotmack/claude-mem) | Context continuity | None | Cross-session |
+| [qlaude](https://github.com/starsh2001/qlaude) | Unattended batch execution | None | Between sessions |
+| [claude-flow](https://github.com/ruvnet/claude-flow) | Multi-agent swarm coordination | None | Enterprise |
+| **wm** | **Session phase enforcement** | **Stop hook blocks exit** | **Session** |
+
+`wm`'s unique position: the only tool focused on *enforcing that sessions complete correctly* via the Stop hook, rather than helping plan or remember work. RIPER is the closest cousin, but gates on capability (what Claude can do) rather than exit (whether Claude can stop).
+
 ## License
 
 MIT
