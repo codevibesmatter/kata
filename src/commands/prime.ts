@@ -149,6 +149,21 @@ async function buildContextBlock(sessionId: string): Promise<string> {
             }
           }
 
+          // Task system rules from global_behavior in modes.yaml
+          try {
+            const modesConfig = await loadModesConfig()
+            if (modesConfig.global_behavior?.task_system?.length) {
+              contextParts.push('')
+              contextParts.push('---')
+              contextParts.push('# Task System Rules')
+              for (const rule of modesConfig.global_behavior.task_system) {
+                contextParts.push(`- ${rule}`)
+              }
+            }
+          } catch {
+            // Config not available, skip
+          }
+
           // Prime extensions from wm.yaml
           try {
             const wmConfig = loadWmConfig()

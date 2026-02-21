@@ -232,8 +232,9 @@ async function enterWithCustomTemplate(
       title: p.task_config!.title,
     }))
 
-  // Build guidance
-  const guidance = buildWorkflowGuidance(workflowId, modeName, null, phaseTitles)
+  // Build guidance (load global_behavior for task_system rules)
+  const modesConfig = await loadModesConfig()
+  const guidance = buildWorkflowGuidance(workflowId, modeName, null, phaseTitles, undefined, modesConfig.global_behavior?.task_system)
 
   // Output human-readable guidance - native tasks mode
   if (guidance.requiredTodos.length > 0 && !parsed.dryRun) {
@@ -723,12 +724,14 @@ export async function enter(args: string[]): Promise<void> {
 
   // Build comprehensive workflow guidance with suggested todos
   // Now passes templatePhases for dynamic reading instead of hardcoding
+  // task_system rules from global_behavior flow into stdout JSON for agent consumption
   const guidance = buildWorkflowGuidance(
     workflowId,
     canonical,
     specPhases,
     phaseTitles,
     templatePhases ?? undefined,
+    config.global_behavior?.task_system,
   )
 
   // Output human-readable guidance to stderr - native tasks mode

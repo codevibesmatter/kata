@@ -352,3 +352,8 @@ global_behavior:
   inference:
     title_from_message: "Extract noun phrase after plan/implement/fix"
     issue_from_message: "Look for #NNN, GH#NNN, issue NNN"
+  task_system:
+    - "Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate."
+    - "Run TaskList FIRST to discover pre-created tasks and their dependency chains."
+    - "Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate."
+    - "Follow the dependency chain — blocked tasks cannot start until dependencies complete."

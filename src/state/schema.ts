@@ -180,6 +180,7 @@ export const GlobalBehaviorSchema = z.object({
   never_ask_globally: z.array(z.string()).optional(),
   ask_when: z.array(z.string()).optional(),
   inference: z.record(z.string()).optional(),
+  task_system: z.array(z.string()).optional(),
 })
 
 /**

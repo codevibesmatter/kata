@@ -17,6 +17,7 @@ export interface RequiredTodo {
 export interface WorkflowGuidance {
   requiredTodos: RequiredTodo[]
   workflow: string[]
+  taskSystem: string[]
   commands: {
     listTasks: string
     pendingTasks: string
@@ -49,6 +50,7 @@ export function buildWorkflowGuidance(
   specPhases: SpecPhase[] | null,
   phaseTitles: PhaseTitle[],
   templatePhases?: PhaseDefinition[],
+  taskSystemRules?: string[],
 ): WorkflowGuidance {
   const requiredTodos: RequiredTodo[] = []
 
@@ -215,5 +217,5 @@ export function buildWorkflowGuidance(
     completeWithEvidence: 'TaskUpdate(taskId="X", status="completed")',
   }
 
-  return { requiredTodos, workflow, commands }
+  return { requiredTodos, workflow, taskSystem: taskSystemRules ?? [], commands }
 }
