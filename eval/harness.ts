@@ -219,9 +219,10 @@ export async function runScenario(
   try {
     // Unset CLAUDECODE so the spawned SDK process isn't blocked by the
     // "cannot launch inside another Claude Code session" guard.
-    // Override CLAUDE_PROJECT_DIR so the inner agent uses its own project dir,
-    // not the outer agent's.
+    // Set CLAUDE_PROJECT_DIR to the inner project so kata commands resolve
+    // to the correct project even if the agent tries to cd elsewhere.
     const { CLAUDECODE: _cc, CLAUDE_PROJECT_DIR: _cpd, ...baseEnv } = process.env
+    baseEnv.CLAUDE_PROJECT_DIR = projectDir
 
     const isResume = !!options.resumeSessionId
 
