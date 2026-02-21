@@ -90,8 +90,8 @@ interface SettingsJson {
  * Build wm hook entries for .claude/settings.json.
  * Uses an absolute path to the wm binary so hooks work regardless of PATH
  * (both for globally-installed and locally-installed packages).
- * Default: SessionStart, UserPromptSubmit, Stop
- * With --strict: also PreToolUse gate hooks
+ * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
+ * With --strict: also PreToolUse task-deps + task-evidence hooks
  */
 function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEntry[]> {
   // Quote the binary path so spaces in the path are handled correctly
@@ -128,10 +128,9 @@ function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEn
         ],
       },
     ],
-  }
-
-  if (strict) {
-    hooks.PreToolUse = [
+    // mode-gate is always registered: it injects --session=ID into kata bash
+    // commands so session resolution works correctly (not just a strict feature)
+    PreToolUse: [
       {
         hooks: [
           {
@@ -141,6 +140,11 @@ function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEn
           },
         ],
       },
+    ],
+  }
+
+  if (strict) {
+    hooks.PreToolUse.push(
       {
         matcher: 'TaskUpdate',
         hooks: [
@@ -161,7 +165,7 @@ function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEn
           },
         ],
       },
-    ]
+    )
   }
 
   return hooks
@@ -442,8 +446,8 @@ export async function setup(args: string[]): Promise<void> {
       process.stdout.write(`    - SessionStart\n`)
       process.stdout.write(`    - UserPromptSubmit\n`)
       process.stdout.write(`    - Stop\n`)
+      process.stdout.write(`    - PreToolUse (mode-gate)\n`)
       if (parsed.strict) {
-        process.stdout.write(`    - PreToolUse (mode-gate)\n`)
         process.stdout.write(`    - PreToolUse (task-deps)\n`)
         process.stdout.write(`    - PreToolUse (task-evidence)\n`)
       }
@@ -461,7 +465,7 @@ export async function setup(args: string[]): Promise<void> {
 
 Usage:
   kata setup --yes                Quick setup with auto-detected defaults
-  kata setup --yes --strict       Setup + PreToolUse gate hooks
+  kata setup --yes --strict       Setup + PreToolUse task enforcement hooks
   kata setup --batteries          Setup + scaffold batteries-included starter content
   kata setup --batteries --strict Setup + batteries + strict hooks
 
@@ -469,7 +473,7 @@ Flags:
   --yes         Write wm.yaml and register hooks using auto-detected defaults
   --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
                 (implies --yes)
-  --strict      Also register PreToolUse hooks: mode-gate, task-deps, task-evidence
+  --strict      Also register PreToolUse hooks: task-deps, task-evidence
   --cwd=PATH    Run setup in a different directory
 
 For the guided setup interview, run:
