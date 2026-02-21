@@ -6,7 +6,7 @@ mode: eval
 workflow_prefix: "EV"
 
 phases:
-  - id: onboard
+  - id: p0
     name: "Onboard Scenario"
     task_config:
       title: "Run onboard scenario — fresh TanStack Start project"
@@ -31,12 +31,12 @@ phases:
 
           **When complete:** Note pass/fail, token usage, and any observations.
 
-  - id: task-mode
+  - id: p1
     name: "Task Mode Scenario"
     task_config:
       title: "Run task-mode scenario — add /health route"
       labels: [eval, scenario, task-mode]
-      depends_on: [onboard]
+      depends_on: [p0]
     steps:
       - id: run
         title: "Run task-mode eval"
@@ -54,12 +54,12 @@ phases:
           **If PAUSED:** Resume with appropriate answer.
           **When complete:** Note pass/fail, token usage, observations.
 
-  - id: planning-mode
+  - id: p2
     name: "Planning Mode Scenario"
     task_config:
       title: "Run planning-mode scenario — write a spec"
       labels: [eval, scenario, planning-mode]
-      depends_on: [onboard]
+      depends_on: [p0]
     steps:
       - id: run
         title: "Run planning-mode eval"
@@ -77,12 +77,12 @@ phases:
           **If PAUSED:** Resume with appropriate answer.
           **When complete:** Note pass/fail, token usage, observations.
 
-  - id: report
+  - id: p3
     name: "Report"
     task_config:
       title: "Summarize eval results"
       labels: [eval, report]
-      depends_on: [onboard, task-mode, planning-mode]
+      depends_on: [p0, p1, p2]
     steps:
       - id: summarize
         title: "Write eval summary"
