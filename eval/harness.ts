@@ -20,7 +20,6 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import type { HookCallback } from '@anthropic-ai/claude-agent-sdk'
 import {
   appendFileSync,
   cpSync,
@@ -173,12 +172,14 @@ export async function runScenario(
   let pendingQuestion: PendingQuestion | null = null
   let sessionId: string | undefined
 
-  // Hook: intercept AskUserQuestion and stop the session so the parent agent
-  // can provide an answer and resume.
-  const interceptQuestion: HookCallback = async (input) => {
-    const questions = (input as { tool_input?: { questions?: PendingQuestion['questions'] } })
-      .tool_input?.questions
+  // SDK-native AskUserQuestion interception via canUseTool (like cc-gateway).
+  // Denies the tool and stops the session so the parent agent can resume with an answer.
+  const canUseTool = async (toolName: string, input: Record<string, unknown>) => {
+    if (toolName !== 'AskUserQuestion') {
+      return { behavior: 'allow' as const }
+    }
 
+    const questions = (input as { questions?: PendingQuestion['questions'] }).questions
     if (questions && sessionId) {
       pendingQuestion = { sessionId, questions }
 
@@ -200,20 +201,9 @@ export async function runScenario(
         join(evalDir, 'pending-question.json'),
         JSON.stringify(pendingQuestion, null, 2),
       )
-
-      // Stop the session
-      return {
-        hookSpecificOutput: {
-          hookEventName: input.hook_event_name,
-          permissionDecision: 'deny',
-          permissionDecisionReason: 'Question requires external input. Session paused for answer.',
-        },
-        continue: false,
-        stopReason: 'AskUserQuestion: session paused for external input',
-      }
     }
 
-    return {}
+    return { behavior: 'deny' as const, message: 'Session paused — awaiting external input.' }
   }
 
   try {
@@ -238,9 +228,7 @@ export async function runScenario(
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       settingSources: ['project'],
-      hooks: {
-        PreToolUse: [{ matcher: 'AskUserQuestion', hooks: [interceptQuestion] }],
-      },
+      canUseTool,
       env: cleanEnv,
     }
 

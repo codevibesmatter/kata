@@ -2,12 +2,15 @@
  * Research Mode Eval
  *
  * Scenario: Pre-configured project, agent enters research mode and explores a topic.
+ * Tests that hooks and templates properly control the agent — no maxTurns safety net.
  *
  * Asserts:
  * 1. Agent entered research mode (state.json shows research)
- * 2. Research findings doc created in planning/research/
- * 3. Changes committed
- * 4. kata can-exit passes
+ * 2. Agent stayed in research mode (did NOT switch to planning/implementation)
+ * 3. Research findings doc created in planning/research/
+ * 4. No spec files created (research mode doesn't write specs)
+ * 5. Changes committed
+ * 6. kata can-exit passes
  */
 
 import type { EvalScenario, EvalCheckpoint } from '../harness.js'
@@ -24,7 +27,6 @@ const assertResearchMode: EvalCheckpoint = {
     const content = ctx.readFile(stateFiles.trim())
     try {
       const state = JSON.parse(content)
-      // Check current mode OR history (agent may have run kata exit, resetting to default)
       const wasResearch =
         state.sessionType === 'research' ||
         state.currentMode === 'research' ||
@@ -39,10 +41,33 @@ const assertResearchMode: EvalCheckpoint = {
   },
 }
 
+const assertStayedInResearch: EvalCheckpoint = {
+  name: 'Agent stayed in research mode (no mode switch)',
+  assert: (ctx) => {
+    const stateFiles = ctx.run(
+      'find .claude/sessions -name state.json -type f 2>/dev/null | head -1',
+    )
+    if (!stateFiles) return 'No state.json'
+    const content = ctx.readFile(stateFiles.trim())
+    try {
+      const state = JSON.parse(content)
+      const history: Array<{ mode: string }> = state.modeHistory ?? []
+      const otherModes = history
+        .map((h) => h.mode)
+        .filter((m) => m !== 'research' && m !== 'default')
+      if (otherModes.length > 0) {
+        return `Agent switched to other modes: ${otherModes.join(', ')}`
+      }
+      return null
+    } catch {
+      return 'state.json is not valid JSON'
+    }
+  },
+}
+
 const assertFindingsDoc: EvalCheckpoint = {
   name: 'Research findings document created',
   assert: (ctx) => {
-    // Read research_path from wm.yaml (default: planning/research)
     const researchPath = ctx.run(
       "grep 'research_path:' .claude/workflows/wm.yaml 2>/dev/null | awk '{print $2}'",
     )?.trim() || 'planning/research'
@@ -56,10 +81,22 @@ const assertFindingsDoc: EvalCheckpoint = {
   },
 }
 
+const assertNoSpecs: EvalCheckpoint = {
+  name: 'No spec files created (research only)',
+  assert: (ctx) => {
+    const specs = ctx.run(
+      'find planning/specs -name "*.md" -type f 2>/dev/null | head -5',
+    )
+    if (specs && specs.trim().length > 0) {
+      return `Agent created spec files during research mode: ${specs.trim()}`
+    }
+    return null
+  },
+}
+
 const assertChangesCommitted: EvalCheckpoint = {
   name: 'Changes committed',
   assert: (ctx) => {
-    // Check that there's at least one commit beyond the initial scaffold
     const commitCount = ctx.run('git rev-list --count HEAD 2>/dev/null')
     if (!commitCount || parseInt(commitCount.trim(), 10) < 2) {
       return 'No new commits beyond initial scaffold'
@@ -81,14 +118,14 @@ const assertCanExit: EvalCheckpoint = {
 
 export const researchModeScenario: EvalScenario = {
   id: 'research-mode',
-  name: 'Research mode — explore routing patterns',
-  prompt:
-    'research adding auth',
-  maxTurns: 60,
+  name: 'Research mode — explore and document findings',
+  prompt: 'research adding auth',
   timeoutMs: 15 * 60 * 1000,
   checkpoints: [
     assertResearchMode,
+    assertStayedInResearch,
     assertFindingsDoc,
+    assertNoSpecs,
     assertChangesCommitted,
     assertCanExit,
   ],
