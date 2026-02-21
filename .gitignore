@@ -4,5 +4,4 @@ dist/
 tsconfig.tsbuildinfo
 .turbo/
 eval-projects/
-eval-transcripts/
-reference/
+.geminiignore
