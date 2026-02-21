@@ -166,6 +166,7 @@ export const ModeConfigSchema = z.object({
   deprecated: z.boolean().optional(),
   redirect_to: z.string().optional(),
   micro_planning: z.boolean().optional(),
+  issue_handling: z.enum(['required', 'none']).optional(), // How issues are handled on entry
   behavior: ModeBehaviorSchema.optional(), // Behavioral guidance
 })
 

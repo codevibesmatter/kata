@@ -39,11 +39,14 @@ async function buildModeSelectionHelp(): Promise<string> {
     .sort()
     .join(', ')
 
-  // Build table
+  // Build table with issue_handling derived from modes.yaml
   const modeTable = Object.entries(config.modes)
     .filter(([_, cfg]) => !cfg.deprecated && cfg.category !== 'system')
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, cfg]) => `| \`${name}\` | ${cfg.description || ''} |`)
+    .map(([name, cfg]) => {
+      const issueRequired = cfg.issue_handling === 'required' ? '**Yes**' : 'No'
+      return `| \`${name}\` | ${cfg.description || ''} | ${issueRequired} |`
+    })
     .join('\n')
 
   return `# MODE ENTRY IS MANDATORY
@@ -56,18 +59,9 @@ ${allModes}
 
 ## Quick Reference
 
-| Mode | Description |
-|------|-------------|
+| Mode | Description | Issue Required? |
+|------|-------------|-----------------|
 ${modeTable}
-
-## Task Size -> Mode Selection
-
-| Task Size | Mode | Issue Required? | Example |
-|-----------|------|-----------------|---------|
-| **Small** (<1 hr) | \`task\` | No | Add CLI command, small refactor |
-| **Medium** (hours) | \`implementation\` | **Yes** | Feature work from approved spec |
-| **Large** (days) | \`planning\` first | **Yes** | New features, architecture |
-| **Questions** | \`freeform\` | No | "How does X work?" |
 
 ## Classify User Intent
 

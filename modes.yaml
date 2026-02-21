@@ -36,6 +36,7 @@ modes:
   planning:
     name: "Planning"
     description: "Research → spec → review → approved"
+    issue_handling: "required"
     intent_keywords:
       - "plan feature"
       - "spec"
@@ -68,6 +69,7 @@ modes:
   implementation:
     name: "Implementation"
     description: "Execute approved specs - phases defined in spec YAML frontmatter"
+    issue_handling: "required"
     intent_keywords:
       - "implement"
       - "build"
@@ -102,6 +104,7 @@ modes:
   task:
     name: "Task"
     description: "Combined planning + implementation for small tasks and chores"
+    issue_handling: "none"
     intent_keywords:
       - "task:"
       - "chore"

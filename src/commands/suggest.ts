@@ -282,6 +282,7 @@ function inferTitle(message: string): string {
  */
 function buildCommand(
   mode: string,
+  modeConfig: ModeConfig,
   context: ReturnType<typeof extractContext>,
   message: string,
 ): string {
@@ -289,9 +290,8 @@ function buildCommand(
     return `kata enter ${mode} --issue=${context.issueNumber}`
   }
 
-  // For modes that need issues, suggest creation
-  const issueRequiredModes = ['planning', 'implementation', 'bugfix', 'feature-clarification']
-  if (issueRequiredModes.includes(mode)) {
+  // Derive issue requirement from modes.yaml instead of a hardcoded list
+  if (modeConfig.issue_handling === 'required') {
     const title = inferTitle(message)
     const label = mode === 'bugfix' ? 'bug' : 'feature'
     return `gh issue create --title="${title}" --label="${label}" && kata enter ${mode} --issue=<NEW_ISSUE>`
@@ -316,7 +316,7 @@ function buildGuidance(
   lines.push('')
 
   // Entry command
-  const command = buildCommand(mode, context, '')
+  const command = buildCommand(mode, modeConfig, context, '')
   lines.push(`**ENTER:** \`${command}\``)
   lines.push('')
 
@@ -484,7 +484,7 @@ Redirecting to **${redirectConfig.name}** mode.
   }
 
   const guidance = buildGuidance(detected.mode, modeConfig, context, config.global_behavior)
-  const command = buildCommand(detected.mode, context, message)
+  const command = buildCommand(detected.mode, modeConfig, context, message)
 
   const result: SuggestResult = {
     mode: detected.mode,
