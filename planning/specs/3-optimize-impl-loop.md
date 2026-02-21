@@ -15,15 +15,31 @@ phases:
   - id: p1
     name: "verify-phase CLI command + wm.yaml config keys"
     deps: []
+    tasks:
+      - "Extend WmConfig.project with build_command, typecheck_command, smoke_command, diff_base, test_file_pattern"
+      - "Create src/commands/verify-phase.ts reading all commands from loadWmConfig()"
+      - "Wire verify-phase into src/index.ts CLI router and help text"
   - id: p2
     name: "Stop conditions hardening"
     deps: [p1]
+    tasks:
+      - "Harden checkVerificationEvidence() with timestamp check vs latest commit"
+      - "Add checkTestsPass(issueNumber) reading phase evidence files"
+      - "Add checkFeatureTestsAdded() reading diff_base and test_file_pattern from config"
+      - "Wire both new checks into validateCanExit() for implementation mode"
+      - "Add verification_stale artifact type to src/messages/stop-guidance.ts"
   - id: p3
     name: "Per-phase loop update (implementation.md template)"
     deps: [p1, p2]
+    tasks:
+      - "Update VERIFY sub-phase step to call kata verify-phase with retry guidance"
+      - "Update IMPL sub-phase step to instruct reading test_cases: before coding"
   - id: p4
     name: "Spec template update (test_cases: scaffold)"
     deps: []
+    tasks:
+      - "Add test_cases: scaffold to planning/spec-templates/feature.md phase sections"
+      - "Add test_cases: scaffold to planning/spec-templates/bug.md phase sections"
 ---
 
 # Optimize implementation loop: per-phase tests, sequenced review, smoke tests
