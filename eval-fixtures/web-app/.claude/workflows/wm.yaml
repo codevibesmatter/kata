@@ -1,0 +1,14 @@
+project:
+  name: web-app-fixture
+  build_command: "npm run build"
+  typecheck_command: "npm run typecheck"
+  test_command: "npm test"
+  diff_base: "origin/main"
+  test_file_pattern: "*.test.ts,*.test.js"
+spec_path: planning/specs
+research_path: planning/research
+session_retention_days: 7
+reviews:
+  spec_review: false
+  code_reviewer: null
+wm_version: 0.0.1
