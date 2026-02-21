@@ -13,8 +13,10 @@
  *   - existing: point at a real project dir (for iterative task/planning/impl tests)
  *
  * AskUserQuestion flow:
- *   When the agent asks a clarifying question, a PreToolUse hook stops the session.
- *   The harness writes question + session_id to stdout and exits. The parent agent
+ *   When the agent calls AskUserQuestion, the canUseTool callback intercepts it with
+ *   deny + interrupt (stops the agent loop) plus an abort controller safety net
+ *   (kills the query if interrupt is ignored). The harness writes question + session_id
+ *   to stdout and a structured .eval/pending-question.json file. The parent agent
  *   (running this as a background task) sees the output via TaskOutput, then resumes
  *   with: npx tsx eval/run.ts --resume=<session_id> --answer="..."
  */
@@ -190,20 +192,25 @@ export async function runScenario(
     result.transcriptPath = options.transcriptPath
   }
 
-  // Track pending question — set by the PreToolUse hook when AskUserQuestion fires
+  // Track pending question — set by canUseTool when AskUserQuestion fires.
+  // The interrupt flag + abort controller guarantee the agent loop stops immediately.
   let pendingQuestion: PendingQuestion | null = null
   let sessionId: string | undefined
+  const abortController = new AbortController()
 
-  // SDK-native AskUserQuestion interception via canUseTool (like cc-gateway).
-  // Denies the tool and stops the session so the parent agent can resume with an answer.
+  // SDK-native AskUserQuestion interception via canUseTool.
+  // Returns deny + interrupt to immediately halt the agent loop, then aborts
+  // the query as a safety net so the session cannot continue under any circumstance.
   const canUseTool = async (toolName: string, input: Record<string, unknown>) => {
     if (toolName !== 'AskUserQuestion') {
       return { behavior: 'allow' as const }
     }
 
     const questions = (input as { questions?: PendingQuestion['questions'] }).questions
-    if (questions && sessionId) {
-      pendingQuestion = { sessionId, questions }
+    if (questions) {
+      // Record question data. sessionId may not be set yet (race with init message
+      // processing), so use a placeholder — we patch it after the loop ends.
+      pendingQuestion = { sessionId: sessionId ?? '', questions }
 
       // Write to stdout so parent agent sees via TaskOutput
       process.stdout.write('\n[QUESTION] Agent needs input:\n')
@@ -213,19 +220,21 @@ export async function runScenario(
           process.stdout.write(`    ${i + 1}. ${q.options[i].label} — ${q.options[i].description}\n`)
         }
       }
-      process.stdout.write(`[QUESTION] session_id=${sessionId}\n`)
-      process.stdout.write('[QUESTION] Resume with: --resume=<session_id> --answer="<answer>"\n\n')
-
-      // Also write to a file for structured access
-      const evalDir = join(projectDir, '.eval')
-      mkdirSync(evalDir, { recursive: true })
-      writeFileSync(
-        join(evalDir, 'pending-question.json'),
-        JSON.stringify(pendingQuestion, null, 2),
-      )
+      if (sessionId) {
+        process.stdout.write(`[QUESTION] session_id=${sessionId}\n`)
+        process.stdout.write('[QUESTION] Resume with: --resume=<session_id> --answer="<answer>"\n\n')
+      }
     }
 
-    return { behavior: 'deny' as const, message: 'Session paused — awaiting external input.' }
+    // Safety net: abort the query so it cannot continue even if interrupt is ignored.
+    // Deferred to let the deny+interrupt response propagate first.
+    setTimeout(() => abortController.abort(), 100)
+
+    return {
+      behavior: 'deny' as const,
+      message: 'Session paused — awaiting external input.',
+      interrupt: true,
+    }
   }
 
   try {
@@ -245,6 +254,7 @@ export async function runScenario(
     const isResume = !!options.resumeSessionId
 
     const queryOptions: Record<string, unknown> = {
+      abortController,
       cwd: projectDir,
       allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Task', 'AskUserQuestion'],
       permissionMode: 'bypassPermissions',
@@ -264,54 +274,81 @@ export async function runScenario(
       ? (options.resumeAnswer ?? 'Continue.')
       : scenario.prompt
 
-    for await (const message of query({ prompt, options: queryOptions })) {
-      // Capture session ID from init message
-      if (
-        (message as { type: string; subtype?: string; session_id?: string }).type === 'system' &&
-        (message as { subtype?: string }).subtype === 'init'
-      ) {
-        sessionId = (message as { session_id: string }).session_id
-        result.sessionId = sessionId
-      }
-
-      // Write every event to transcript
-      if (options.transcriptPath) {
-        appendFileSync(
-          options.transcriptPath,
-          JSON.stringify({ ts: new Date().toISOString(), ...message }) + '\n',
-        )
-      }
-
-      if (message.type === 'assistant') {
-        result.turns++
-        if (options.verbose) {
-          emitAssistantMessage(result.turns, message)
+    // The for-await loop may end normally (agent finished) or via abort (AskUserQuestion
+    // triggered the safety-net abort controller). Catch abort errors gracefully.
+    try {
+      for await (const message of query({ prompt, options: queryOptions })) {
+        // Capture session ID from init message
+        if (
+          (message as { type: string; subtype?: string; session_id?: string }).type === 'system' &&
+          (message as { subtype?: string }).subtype === 'init'
+        ) {
+          sessionId = (message as { session_id: string }).session_id
+          result.sessionId = sessionId
         }
-      } else if (message.type === 'user') {
-        if (options.verbose) {
-          emitToolResults(message)
-        }
-      } else if (message.type === 'result') {
-        const modelUsage = Object.values(message.modelUsage ?? {})
-        result.inputTokens = modelUsage.reduce(
-          (s, u) => s + u.inputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens,
-          0,
-        )
-        result.outputTokens = modelUsage.reduce((s, u) => s + u.outputTokens, 0)
-        result.costUsd = message.total_cost_usd ?? 0
-        if (options.verbose) {
-          process.stdout.write(
-            `\n[done] ${message.subtype} · ${result.turns} turns · $${result.costUsd.toFixed(4)}\n`,
+
+        // Write every event to transcript
+        if (options.transcriptPath) {
+          appendFileSync(
+            options.transcriptPath,
+            JSON.stringify({ ts: new Date().toISOString(), ...message }) + '\n',
           )
         }
+
+        if (message.type === 'assistant') {
+          result.turns++
+          if (options.verbose) {
+            emitAssistantMessage(result.turns, message)
+          }
+        } else if (message.type === 'user') {
+          if (options.verbose) {
+            emitToolResults(message)
+          }
+        } else if (message.type === 'result') {
+          const modelUsage = Object.values(message.modelUsage ?? {})
+          result.inputTokens = modelUsage.reduce(
+            (s, u) => s + u.inputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens,
+            0,
+          )
+          result.outputTokens = modelUsage.reduce((s, u) => s + u.outputTokens, 0)
+          result.costUsd = message.total_cost_usd ?? 0
+          if (options.verbose) {
+            process.stdout.write(
+              `\n[done] ${message.subtype} · ${result.turns} turns · $${result.costUsd.toFixed(4)}\n`,
+            )
+          }
+        }
+      }
+    } catch (err) {
+      // AbortError is expected when canUseTool triggers the safety-net abort.
+      // Any other error is unexpected and should propagate.
+      const isAbort =
+        (err instanceof Error && err.name === 'AbortError') ||
+        abortController.signal.aborted
+      if (!isAbort) throw err
+      if (options.verbose) {
+        process.stdout.write('[abort] Query aborted (AskUserQuestion safety net)\n')
       }
     }
 
-    // If session was paused for a question, attach it to the result
+    // If session was paused for a question, finalize and attach it to the result.
+    // Patch sessionId if it wasn't available when canUseTool fired (race with init).
     if (pendingQuestion) {
+      if (!pendingQuestion.sessionId && sessionId) {
+        pendingQuestion.sessionId = sessionId
+      }
       result.pendingQuestion = pendingQuestion
+
+      // Write structured file now that we have the definitive sessionId
+      const evalDir = join(projectDir, '.eval')
+      mkdirSync(evalDir, { recursive: true })
+      writeFileSync(
+        join(evalDir, 'pending-question.json'),
+        JSON.stringify(pendingQuestion, null, 2),
+      )
+
       if (options.verbose) {
-        process.stdout.write(`[paused] Session paused for AskUserQuestion. session_id=${sessionId}\n`)
+        process.stdout.write(`[paused] Session paused for AskUserQuestion. session_id=${pendingQuestion.sessionId}\n`)
       }
     }
 
