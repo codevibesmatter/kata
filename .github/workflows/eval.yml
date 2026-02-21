@@ -1,0 +1,68 @@
+name: Agentic Eval Suite
+
+on:
+  schedule:
+    # Run nightly at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Scenario to run (leave blank for all)'
+        required: false
+        type: string
+
+jobs:
+  eval:
+    name: Run eval scenarios
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build kata-wm
+        run: npm run build
+
+      - name: Run eval suite
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.scenario }}" ]; then
+            npm run eval -- --scenario=${{ inputs.scenario }} --json > eval-results.json
+          else
+            npm run eval -- --json > eval-results.json
+          fi
+
+      - name: Upload eval results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: eval-results.json
+          retention-days: 30
+
+      - name: Print summary
+        if: always()
+        run: |
+          if [ -f eval-results.json ]; then
+            node -e "
+              const r = JSON.parse(require('fs').readFileSync('eval-results.json', 'utf-8'));
+              const passed = r.results.filter(s => s.passed).length;
+              const total = r.results.length;
+              console.log('Eval results: ' + passed + '/' + total + ' scenarios passed');
+              r.results.forEach(s => {
+                const mark = s.passed ? '✅' : '❌';
+                console.log(mark + ' ' + s.scenarioName + ' (' + s.turns + ' turns, ' + (s.inputTokens + s.outputTokens) + ' tokens)');
+              });
+            "
+          fi

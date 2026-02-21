@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.js.map
+.claude/sessions/
+.claude/agents/
+.claude/verification-evidence/
+.claude/.cleanup-ran
