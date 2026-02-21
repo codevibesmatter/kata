@@ -114,7 +114,10 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     const kataContext = getKataContext(projectDir, ctx.sessionId)
 
     // ── 5. Run scenario via Agent SDK ────────────────────────────────────────
-    const agentEnv = { ...process.env, CLAUDE_PROJECT_DIR: projectDir, GIT_AUTHOR_NAME: 'kata-eval', GIT_AUTHOR_EMAIL: 'eval@kata.test', GIT_COMMITTER_NAME: 'kata-eval', GIT_COMMITTER_EMAIL: 'eval@kata.test' }
+    // Unset CLAUDECODE so the spawned claude process isn't blocked by the
+    // "cannot launch inside another Claude Code session" guard.
+    const { CLAUDECODE: _cc, ...baseEnv } = process.env
+    const agentEnv = { ...baseEnv, CLAUDE_PROJECT_DIR: projectDir, GIT_AUTHOR_NAME: 'kata-eval', GIT_AUTHOR_EMAIL: 'eval@kata.test', GIT_COMMITTER_NAME: 'kata-eval', GIT_COMMITTER_EMAIL: 'eval@kata.test' }
 
     for await (const message of query({
       prompt: scenario.prompt,
@@ -131,8 +134,14 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
       if (message.type === 'assistant') {
         result.turns++
       } else if (message.type === 'result') {
-        result.inputTokens = message.usage?.input_tokens ?? 0
-        result.outputTokens = message.usage?.output_tokens ?? 0
+        // Sum modelUsage for accurate totals (usage.input_tokens only counts
+        // non-cached tokens; cached input is the majority in long sessions).
+        const modelUsage = Object.values(message.modelUsage ?? {})
+        result.inputTokens = modelUsage.reduce(
+          (s, u) => s + u.inputTokens + u.cacheReadInputTokens + u.cacheCreationInputTokens,
+          0,
+        )
+        result.outputTokens = modelUsage.reduce((s, u) => s + u.outputTokens, 0)
         result.costUsd = message.total_cost_usd ?? 0
       }
     }
