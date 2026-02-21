@@ -7,91 +7,74 @@ workflow_prefix: "EV"
 
 phases:
   - id: p0
-    name: "Onboard Scenario"
+    name: "Run Scenario"
     task_config:
-      title: "Run onboard scenario — fresh TanStack Start project"
-      labels: [eval, scenario, onboard]
+      title: "P0: Run — select scenario, execute, handle pauses"
+      labels: [eval, run]
     steps:
-      - id: run
-        title: "Run onboard eval"
+      - id: select-and-run
+        title: "Select and run eval scenario"
         instruction: |
-          Run the onboard scenario against a fresh TanStack Start fixture:
+          List available scenarios:
           ```bash
-          npx tsx eval/run.ts --scenario=onboard --verbose
+          npx tsx eval/run.ts --list
           ```
 
-          This copies `eval-fixtures/tanstack-start/` to `eval-projects/onboard-<ts>/`
-          and prompts the inner agent to set up kata.
-
-          **If the agent asks a question (PAUSED):**
-          Resume with the answer a real user would give:
+          Run the requested scenario:
           ```bash
-          npx tsx eval/run.ts --scenario=onboard --project="<project_dir>" --resume=<session_id> --answer="<choice>"
+          npx tsx eval/run.ts --scenario=<id> --verbose
           ```
 
-          **When complete:** Note pass/fail, token usage, and any observations.
+          Or against an existing project:
+          ```bash
+          npx tsx eval/run.ts --scenario=<id> --project=<path> --verbose
+          ```
+
+          **If PAUSED (AskUserQuestion):**
+          Decide what a real user would answer, then resume:
+          ```bash
+          npx tsx eval/run.ts --scenario=<id> --project=<path> --resume=<session_id> --answer="<choice>"
+          ```
+
+          Repeat resume until the scenario completes or fails.
 
   - id: p1
-    name: "Task Mode Scenario"
+    name: "Analyze Results"
     task_config:
-      title: "Run task-mode scenario — add /health route"
-      labels: [eval, scenario, task-mode]
+      title: "P1: Analyze — check assertions, note observations"
+      labels: [eval, analyze]
       depends_on: [p0]
     steps:
-      - id: run
-        title: "Run task-mode eval"
+      - id: check-results
+        title: "Check results and observations"
         instruction: |
-          Run against the pre-configured web-app fixture:
-          ```bash
-          npx tsx eval/run.ts --scenario=task-mode --verbose
-          ```
+          Review the eval output:
+          - Which assertions passed/failed?
+          - Did the agent follow mode guidance correctly?
+          - Were there unexpected behaviors (wrong mode, leaked tasks, skipped phases)?
+          - How many turns and what cost?
 
-          Or against the onboard project from the previous scenario (long-standing):
-          ```bash
-          npx tsx eval/run.ts --scenario=task-mode --project="<onboard_project_dir>" --verbose
-          ```
-
-          **If PAUSED:** Resume with appropriate answer.
-          **When complete:** Note pass/fail, token usage, observations.
+          If a scenario failed, investigate:
+          - Read the transcript in eval-transcripts/
+          - Check the project state in eval-projects/
+          - Identify root cause: template issue, hook issue, agent behavior?
 
   - id: p2
-    name: "Planning Mode Scenario"
-    task_config:
-      title: "Run planning-mode scenario — write a spec"
-      labels: [eval, scenario, planning-mode]
-      depends_on: [p0]
-    steps:
-      - id: run
-        title: "Run planning-mode eval"
-        instruction: |
-          Run against the pre-configured web-app fixture:
-          ```bash
-          npx tsx eval/run.ts --scenario=planning-mode --verbose
-          ```
-
-          Or against a long-standing project:
-          ```bash
-          npx tsx eval/run.ts --scenario=planning-mode --project="<project_dir>" --verbose
-          ```
-
-          **If PAUSED:** Resume with appropriate answer.
-          **When complete:** Note pass/fail, token usage, observations.
-
-  - id: p3
     name: "Report"
     task_config:
-      title: "Summarize eval results"
+      title: "P2: Report — summarize findings, action items"
       labels: [eval, report]
-      depends_on: [p0, p1, p2]
+      depends_on: [p1]
     steps:
       - id: summarize
         title: "Write eval summary"
         instruction: |
-          Summarize all scenario results:
-          - Pass/fail for each scenario
-          - Total token usage and cost
-          - Observations: what worked, what broke, what needs fixing
-          - Action items if any scenarios failed
+          Summarize:
+          - Pass/fail per scenario
+          - Token usage and cost
+          - What worked well
+          - What broke and why
+          - Action items (template fixes, hook fixes, harness improvements)
 
 stop_hook: false
 ---
@@ -104,48 +87,20 @@ Drive inner Claude agents through kata scenarios and verify the results.
 
 You (the outer agent) act as the human user. You:
 
-1. **Run each scenario** — tasks are created per scenario, follow them in order
-2. **Handle questions** — if the inner agent asks a question (AskUserQuestion), the harness pauses. Resume with `--resume=<session_id> --answer="<choice>"`
-3. **Check results** — the harness runs assertions automatically
-4. **Report** — summarize pass/fail, token usage, observations
+1. **Run a scenario** — the harness spawns an inner agent with the prompt
+2. **Handle questions** — if the inner agent asks (AskUserQuestion), resume with an answer
+3. **Check results** — assertions run automatically
+4. **Report** — summarize what happened
 
-## Running Evals
+## Commands
 
-### Run a single scenario
 ```bash
-npx tsx eval/run.ts --scenario=onboard --verbose
+npx tsx eval/run.ts --list                          # List scenarios
+npx tsx eval/run.ts --scenario=<id> --verbose       # Run fresh
+npx tsx eval/run.ts --scenario=<id> --project=<path> --verbose  # Run against existing project
+npx tsx eval/run.ts --scenario=<id> --project=<path> --resume=<sid> --answer="<choice>"  # Resume
 ```
-
-### Run against an existing project (long-standing)
-```bash
-npx tsx eval/run.ts --scenario=task-mode --project=/path/to/project --verbose
-```
-
-### Resume a paused session
-```bash
-npx tsx eval/run.ts --scenario=onboard --project=/path/to/project --resume=<session_id> --answer="Quick setup"
-```
-
-### List available scenarios
-```bash
-npx tsx eval/run.ts --list
-```
-
-## Eval Output
-
-- **stdout** — pass/fail, token usage, cost
-- **`eval-transcripts/`** — full JSONL transcripts
-- **`eval-projects/`** — persistent project dirs for inspection
-
-Both dirs are gitignored.
-
-## Fixture Projects
-
-| Fixture | Path | Description |
-|---------|------|-------------|
-| `tanstack-start` | `eval-fixtures/tanstack-start/` | Fresh TanStack Start app, no kata config |
-| `web-app` | `eval-fixtures/web-app/` | Pre-configured with kata hooks, wm.yaml, templates |
 
 ## Key Principle
 
-**You are the user.** When the inner agent asks a question, decide the answer a real user would give. When it makes mistakes, note them. The eval tests the full kata experience, not just code correctness.
+**You are the user.** Answer questions naturally. Note mistakes. The eval tests the full kata experience.

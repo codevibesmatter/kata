@@ -41,7 +41,7 @@ AskUserQuestion(questions=[{
     {label: "Start implementing", description: "Switch to implementation mode"},
     {label: "Save findings", description: "Create a research doc with key insights"},
     {label: "Debug something", description: "Switch to debug mode for systematic investigation"},
-    {label: "Done", description: "Question answered — end session"}
+    {label: "Done", description: "Question answered — summarize and stop"}
   ],
   multiSelect: false
 }])
@@ -52,7 +52,7 @@ Then follow the user's choice:
 - **Start implementing** → `wm enter implementation`
 - **Save findings** → Write to `planning/research/{YYYY-MM-DD}-{slug}.md`, then commit
 - **Debug** → `wm enter debug`
-- **Done** → Summarize findings in a few sentences and end
+- **Done** → Summarize findings in a few sentences and stop (never run `kata exit`)
 
 ## Quick Research Output Format
 

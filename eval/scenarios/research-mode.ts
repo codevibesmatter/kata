@@ -24,8 +24,13 @@ const assertResearchMode: EvalCheckpoint = {
     const content = ctx.readFile(stateFiles.trim())
     try {
       const state = JSON.parse(content)
-      if (state.sessionType !== 'research' && state.currentMode !== 'research') {
-        return `Mode is ${state.currentMode || state.sessionType}, expected research`
+      // Check current mode OR history (agent may have run kata exit, resetting to default)
+      const wasResearch =
+        state.sessionType === 'research' ||
+        state.currentMode === 'research' ||
+        state.modeHistory?.some((h: { mode: string }) => h.mode === 'research')
+      if (!wasResearch) {
+        return `Mode is ${state.currentMode || state.sessionType}, expected research (checked history too)`
       }
       return null
     } catch {
@@ -78,7 +83,7 @@ export const researchModeScenario: EvalScenario = {
   id: 'research-mode',
   name: 'Research mode — explore routing patterns',
   prompt:
-    'I want to research how routing works in this TanStack Start app. Enter research mode and explore.',
+    'research adding auth',
   maxTurns: 60,
   timeoutMs: 15 * 60 * 1000,
   checkpoints: [

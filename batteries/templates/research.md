@@ -258,7 +258,7 @@ phases:
             options: [
               {label: "Plan the feature", description: "Switch to planning mode to write a spec"},
               {label: "More research needed", description: "Continue exploring specific questions"},
-              {label: "Done", description: "Research complete, no immediate action"}
+              {label: "Done", description: "Research complete — summarize and stop"}
             ],
             multiSelect: false
           }])
