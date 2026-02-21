@@ -128,6 +128,35 @@ phases:
           ## Implementation Phases
           Break into 2-5 phases (p1, p2...) with concrete tasks per phase.
           Phases go in the YAML frontmatter `phases:` array.
+          For each phase, add `test_cases:` with 1-3 entries specifying what to test
+          and whether it's a unit, integration, or smoke test.
+
+          Then: Mark this task completed via TaskUpdate
+
+      - id: extract-patterns
+        title: "Extract code patterns and implementation hints"
+        instruction: |
+          Fill in the spec's Implementation Hints and Verification Strategy sections.
+          This prevents the implementation agent from re-discovering APIs from scratch.
+
+          1. Re-read the research doc(s) from P0. Extract any code snippets,
+             import paths, install commands, or API patterns discovered.
+          2. If the feature uses external libraries, web-search for the exact
+             integration guide. Extract: install commands, import paths,
+             initialization patterns, key API calls.
+          3. If the feature touches framework-specific patterns (routing,
+             middleware, SSR), find the canonical pattern in the project's
+             existing code or framework docs.
+          4. Fill in the Key Imports table — exact package subpath exports
+             and named imports the implementer will need.
+          5. Add 2-5 Code Patterns — short snippets showing initialization,
+             wiring, and key API usage. These should be copy-pasteable starting
+             points, not full implementations.
+          6. List Gotchas — package subpath export quirks, peer dependencies,
+             TypeScript config requirements, build-time code generation.
+          7. Fill in Verification Strategy — what test infra exists (or must
+             be created), the correct build/check command for this project.
+          8. Add Reference Doc URLs with descriptions.
 
           Then: Mark this task completed via TaskUpdate
 
@@ -171,7 +200,11 @@ phases:
           - [ ] No placeholder text (TODO, TBD, {variable} left unfilled)
           - [ ] File paths in spec actually exist (or will be created)
           - [ ] Implementation phases cover all behaviors
+          - [ ] Each phase has at least 1 test_case with type
           - [ ] Non-goals section present
+          - [ ] Implementation Hints has: dependencies, key imports, 1+ code pattern
+          - [ ] Reference doc URLs present (not just library names)
+          - [ ] Verification Strategy specifies build command and test infra
           - [ ] GitHub issue linked (or explicitly skipped)
 
           Fix any gaps found.
@@ -259,6 +292,7 @@ P0: Research
 P1: Spec Writing
     ├── Create spec file from template
     ├── Write behaviors + acceptance criteria
+    ├── Extract code patterns + implementation hints
     └── Link GitHub issue
 
 P2: Review

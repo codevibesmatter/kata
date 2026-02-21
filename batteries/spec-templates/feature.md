@@ -13,11 +13,19 @@ phases:
     tasks:
       - "{Task 1}"
       - "{Task 2}"
+    test_cases:
+      - id: "{test-id}"
+        description: "{what this test verifies}"
+        type: "unit | integration | smoke"
   - id: p2
     name: "{Phase 2 Name}"
     tasks:
       - "{Task 1}"
       - "{Task 2}"
+    test_cases:
+      - id: "{test-id}"
+        description: "{what this test verifies}"
+        type: "unit | integration | smoke"
 ---
 
 # {Feature Title}
@@ -86,6 +94,35 @@ Explicitly out of scope for this feature:
 ## Implementation Phases
 
 See YAML frontmatter `phases:` above. Each phase should be 1-4 hours of focused work.
+
+## Verification Strategy
+
+### Test Infrastructure
+{What testing setup exists or needs to be created. E.g., "vitest with jsdom — config exists at vitest.config.ts" or "No test config — create vitest.config.ts in Phase 1."}
+
+### Build Verification
+{The correct command to verify the build. Note any framework-specific caveats. E.g., "Use `npm run build` (not bare `tsc`) because route types are generated at build time."}
+
+## Implementation Hints
+
+### Dependencies
+```bash
+npm install {package1} {package2}
+```
+
+### Key Imports
+| Module | Import | Used For |
+|--------|--------|----------|
+| `{package/subpath}` | `{ named }` | {purpose} |
+
+### Code Patterns
+{2-5 code snippets showing core integration patterns — initialization, wiring, key API usage.}
+
+### Gotchas
+- {Known issue, non-obvious behavior, or common mistake with this library/framework}
+
+### Reference Docs
+- [{title}]({url}) — {what it covers}
 
 ---
 
