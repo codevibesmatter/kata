@@ -17,7 +17,15 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from 'node:fs'
 import { execSync, spawnSync } from 'node:child_process'
 import { join, resolve, dirname } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -68,11 +76,22 @@ export interface EvalResult {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  transcriptPath?: string
+}
+
+export interface HarnessOptions {
+  /** Stream agent messages to stdout as they arrive */
+  verbose?: boolean
+  /** Write full JSONL transcript to this path (auto-created dir if needed) */
+  transcriptPath?: string
 }
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
 
-export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
+export async function runScenario(
+  scenario: EvalScenario,
+  options: HarnessOptions = {},
+): Promise<EvalResult> {
   const startMs = Date.now()
   const projectDir = join(tmpdir(), `kata-eval-${randomBytes(8).toString('hex')}`)
 
@@ -88,6 +107,11 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     costUsd: 0,
   }
 
+  if (options.transcriptPath) {
+    mkdirSync(dirname(options.transcriptPath), { recursive: true })
+    result.transcriptPath = options.transcriptPath
+  }
+
   const GIT_ENV = {
     ...process.env,
     GIT_AUTHOR_NAME: 'kata-eval',
@@ -96,16 +120,19 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     GIT_COMMITTER_EMAIL: 'eval@kata.test',
   }
 
+  const remoteDir = `${projectDir}-remote.git`
+
   try {
     // ── 1. Copy fixture to temp dir ──────────────────────────────────────────
     cpSync(FIXTURE_PATH, projectDir, { recursive: true })
 
-    // ── 2. Git init + initial commit ─────────────────────────────────────────
-    execSync('git init && git add -A && git commit -m "chore: initial fixture"', {
-      cwd: projectDir,
-      env: GIT_ENV,
-      stdio: 'pipe',
-    })
+    // ── 2. Git init + initial commit + bare remote ───────────────────────────
+    // Create a bare remote first so the agent can `git push` without errors.
+    execSync(`git init --bare ${remoteDir}`, { env: GIT_ENV, stdio: 'pipe' })
+    execSync(
+      `git init && git remote add origin ${remoteDir} && git add -A && git commit -m "chore: initial fixture" && git push -u origin master`,
+      { cwd: projectDir, env: GIT_ENV, stdio: 'pipe' },
+    )
 
     // ── 3. Build eval context ────────────────────────────────────────────────
     const ctx: EvalContext = buildContext(projectDir)
@@ -117,7 +144,14 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     // Unset CLAUDECODE so the spawned claude process isn't blocked by the
     // "cannot launch inside another Claude Code session" guard.
     const { CLAUDECODE: _cc, ...baseEnv } = process.env
-    const agentEnv = { ...baseEnv, CLAUDE_PROJECT_DIR: projectDir, GIT_AUTHOR_NAME: 'kata-eval', GIT_AUTHOR_EMAIL: 'eval@kata.test', GIT_COMMITTER_NAME: 'kata-eval', GIT_COMMITTER_EMAIL: 'eval@kata.test' }
+    const agentEnv = {
+      ...baseEnv,
+      CLAUDE_PROJECT_DIR: projectDir,
+      GIT_AUTHOR_NAME: 'kata-eval',
+      GIT_AUTHOR_EMAIL: 'eval@kata.test',
+      GIT_COMMITTER_NAME: 'kata-eval',
+      GIT_COMMITTER_EMAIL: 'eval@kata.test',
+    }
 
     for await (const message of query({
       prompt: scenario.prompt,
@@ -131,8 +165,23 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
         env: agentEnv,
       },
     })) {
+      // Write every event to transcript
+      if (options.transcriptPath) {
+        appendFileSync(
+          options.transcriptPath,
+          JSON.stringify({ ts: new Date().toISOString(), ...message }) + '\n',
+        )
+      }
+
       if (message.type === 'assistant') {
         result.turns++
+        if (options.verbose) {
+          emitAssistantMessage(result.turns, message)
+        }
+      } else if (message.type === 'user') {
+        if (options.verbose) {
+          emitToolResults(message)
+        }
       } else if (message.type === 'result') {
         // Sum modelUsage for accurate totals (usage.input_tokens only counts
         // non-cached tokens; cached input is the majority in long sessions).
@@ -143,6 +192,11 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
         )
         result.outputTokens = modelUsage.reduce((s, u) => s + u.outputTokens, 0)
         result.costUsd = message.total_cost_usd ?? 0
+        if (options.verbose) {
+          process.stdout.write(
+            `\n[done] ${message.subtype} · ${result.turns} turns · $${result.costUsd.toFixed(4)}\n`,
+          )
+        }
       }
     }
 
@@ -159,17 +213,67 @@ export async function runScenario(scenario: EvalScenario): Promise<EvalResult> {
     result.passed = result.assertions.every((a) => a.passed)
   } finally {
     result.durationMs = Date.now() - startMs
-    try {
-      rmSync(projectDir, { recursive: true, force: true })
-    } catch {
-      // ignore
+    for (const dir of [projectDir, remoteDir]) {
+      try {
+        rmSync(dir, { recursive: true, force: true })
+      } catch {
+        // ignore
+      }
     }
   }
 
   return result
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Streaming output helpers ─────────────────────────────────────────────────
+
+function emitAssistantMessage(turn: number, message: { message?: { content?: unknown[] } }): void {
+  const content = message.message?.content ?? []
+  for (const block of content as Array<{ type: string; text?: string; name?: string; input?: unknown }>) {
+    if (block.type === 'text' && block.text) {
+      const preview = block.text.slice(0, 300).replace(/\n/g, ' ')
+      process.stdout.write(`[T${String(turn).padStart(3, '0')}] ${preview}\n`)
+    } else if (block.type === 'tool_use') {
+      const inputStr = formatToolInput(block.name ?? '', block.input)
+      process.stdout.write(`[T${String(turn).padStart(3, '0')}] ▶ ${block.name}(${inputStr})\n`)
+    }
+  }
+}
+
+function emitToolResults(message: { message?: { content?: unknown[] } }): void {
+  const content = message.message?.content ?? []
+  for (const block of content as Array<{ type: string; content?: unknown[] | string; is_error?: boolean }>) {
+    if (block.type === 'tool_result') {
+      const raw =
+        typeof block.content === 'string'
+          ? block.content
+          : Array.isArray(block.content)
+            ? (block.content as Array<{ text?: string }>)
+                .map((c) => c.text ?? '')
+                .join('')
+            : ''
+      const preview = raw.slice(0, 200).replace(/\n/g, '↵')
+      const tag = block.is_error ? '✗' : '✓'
+      process.stdout.write(`       ${tag} ${preview}\n`)
+    }
+  }
+}
+
+function formatToolInput(name: string, input: unknown): string {
+  if (!input || typeof input !== 'object') return ''
+  const obj = input as Record<string, unknown>
+
+  // Show most useful field for common tools
+  if (name === 'Bash' && obj.command) return String(obj.command).slice(0, 120)
+  if ((name === 'Read' || name === 'Write' || name === 'Edit') && obj.file_path)
+    return String(obj.file_path)
+  if (name === 'Glob' && obj.pattern) return String(obj.pattern)
+  if (name === 'Grep' && obj.pattern) return String(obj.pattern)
+
+  return JSON.stringify(input).slice(0, 80)
+}
+
+// ─── Context builder ──────────────────────────────────────────────────────────
 
 function buildContext(projectDir: string): EvalContext {
   const sessionId = randomBytes(16)

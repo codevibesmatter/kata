@@ -97,7 +97,10 @@ export function assertDiffContains(pattern: string | RegExp): EvalCheckpoint {
   return {
     name: `git diff contains: ${label}`,
     assert(ctx: EvalContext) {
-      const diff = ctx.run('git diff HEAD~1..HEAD')
+      // Diff against the initial fixture commit (root commit) so all agent
+      // changes are visible regardless of how many commits were made.
+      const initialSha = ctx.run('git rev-list --max-parents=0 HEAD')
+      const diff = ctx.run(`git diff ${initialSha}..HEAD`)
       const matches = pattern instanceof RegExp ? pattern.test(diff) : diff.includes(pattern)
       if (!matches) {
         return fail(`Expected diff to contain '${label}'`)
