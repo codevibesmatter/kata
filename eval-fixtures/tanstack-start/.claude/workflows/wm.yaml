@@ -1,0 +1,11 @@
+project:
+  name: tanstack-start-fixture
+  test_command: vitest run
+  ci: null
+spec_path: planning/specs
+research_path: planning/research
+session_retention_days: 7
+reviews:
+  spec_review: false
+  code_reviewer: null
+wm_version: 0.0.1
