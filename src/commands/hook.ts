@@ -150,11 +150,36 @@ async function handleSessionStart(input: Record<string, unknown>): Promise<void>
 }
 
 // ── Handler: user-prompt ──
-// Calls suggest to detect mode from user message
+// Detects mode from user message. When a mode is already active, emits a
+// lightweight hint instead of running full keyword-based suggest — the LLM
+// understands natural language mode-switch requests on its own.
 async function handleUserPrompt(input: Record<string, unknown>): Promise<void> {
   const message = (input.user_message as string) ?? (input.prompt as string) ?? ''
 
-  // Import and call suggest logic, capturing its console output
+  // If a mode is already active, just remind the LLM of the current mode
+  // and how to switch. No keyword detection needed — the LLM handles intent.
+  const session = await getSessionState(input.session_id as string | undefined)
+  if (session) {
+    const activeMode = session.state.currentMode || session.state.sessionType || 'default'
+    if (activeMode !== 'default') {
+      const { loadModesConfig } = await import('../config/cache.js')
+      const modesConfig = await loadModesConfig()
+      const availableModes = Object.keys(modesConfig.modes)
+        .filter((id) => !modesConfig.modes[id].deprecated)
+        .join(', ')
+      outputJson({
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext:
+            `Currently in **${activeMode}** mode. ` +
+            `To switch modes: \`kata enter <mode>\` (available: ${availableModes}).`,
+        },
+      })
+      return
+    }
+  }
+
+  // No mode active — run full suggest to nudge the user into one
   const { suggest } = await import('./suggest.js')
   const suggestOutput = await captureConsoleLog(() => suggest(message.split(' ')))
 
