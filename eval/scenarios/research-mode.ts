@@ -119,7 +119,12 @@ const assertCanExit: EvalCheckpoint = {
 export const researchModeScenario: EvalScenario = {
   id: 'research-mode',
   name: 'Research mode — explore and document findings',
-  prompt: 'research adding auth',
+  templatePath: '.claude/workflows/templates/research.md',
+  prompt:
+    'research how this project could add database persistence — ' +
+    'explore what ORM/driver options exist for a Node/Express app, ' +
+    'what migration strategies work, and how to structure the data layer. ' +
+    'Document findings.',
   timeoutMs: 15 * 60 * 1000,
   checkpoints: [
     assertResearchMode,

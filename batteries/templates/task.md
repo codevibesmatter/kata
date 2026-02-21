@@ -51,7 +51,7 @@ phases:
           ```
 
           TaskOutput(task_id=..., block=true)
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: scope-and-approach
         title: "Define scope and approach"
@@ -75,7 +75,7 @@ phases:
           gh issue edit {N} --remove-label "status:todo" --add-label "status:in-progress"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p1
     name: Implement
@@ -112,7 +112,7 @@ phases:
           # Run tests matching the changed area
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p2
     name: Complete
@@ -153,7 +153,7 @@ phases:
           gh issue close {N} --comment "Resolved in {commit-sha}"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
 global_conditions:
   - changes_committed

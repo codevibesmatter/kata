@@ -193,7 +193,7 @@ export function getNextStepMessage(nextTask?: { id: string; title: string }): st
 
   return `**🎯 NEXT STEP (DO NOT SKIP):**
 1. DO THE ACTUAL WORK for this task
-2. When work is COMPLETE: Mark task completed via TodoWrite
+2. When work is COMPLETE: TaskUpdate(taskId="X", status="completed")
 
 **Current task:** ${nextTask.title}
 

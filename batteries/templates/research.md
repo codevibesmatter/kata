@@ -46,7 +46,7 @@ phases:
           ])
 
           Based on answers, determine which phases to include/skip.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p1
     name: Scope Definition
@@ -70,7 +70,7 @@ phases:
           gh issue list --search "{topic}" --limit 5
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: set-boundaries
         title: "Set research boundaries"
@@ -86,7 +86,7 @@ phases:
           **Time limit:** Set a rough budget (e.g. "30 min codebase, 15 min external").
           Research expands indefinitely without boundaries.
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p2
     name: Codebase Research
@@ -130,7 +130,7 @@ phases:
           - Pattern 2: {description} (source: file:line)
           - Existing constraint: {rule or decision}
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p3
     name: External Research
@@ -152,7 +152,7 @@ phases:
           WebFetch(url="{doc-url}", prompt="Extract key patterns and recommendations")
 
           Document findings with sources (URLs).
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p4
     name: Synthesis
@@ -186,7 +186,7 @@ phases:
           ### Open Questions
           - {what's still unclear}
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: create-research-doc
         title: "Write research findings document"
@@ -236,7 +236,7 @@ phases:
           git push
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p5
     name: Present
@@ -264,7 +264,7 @@ phases:
           }])
 
           Follow through on their choice.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
 global_conditions:
   - changes_committed

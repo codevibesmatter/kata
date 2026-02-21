@@ -33,6 +33,8 @@ import { execSync } from 'node:child_process'
 import { join, resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SessionState } from '../src/state/schema.js'
+import { judgeTranscript, saveJudgeArtifact } from './judge.js'
+import type { JudgeResult } from './judge.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = resolve(__dirname, '../eval-fixtures')
@@ -66,6 +68,11 @@ export interface EvalScenario {
    * - If set, uses the existing directory as-is (for long-standing project evals)
    */
   projectDir?: string
+  /**
+   * Path to the mode template (.md with YAML frontmatter) for LLM judge review.
+   * When set and judge is enabled, the transcript is reviewed against this template.
+   */
+  templatePath?: string
 }
 
 export interface EvalContext {
@@ -92,6 +99,10 @@ export interface EvalResult {
   /** Set when the agent asked a question and the session was paused */
   pendingQuestion?: PendingQuestion
   transcriptPath?: string
+  /** LLM judge review (only present when --judge is used) */
+  judgeResult?: JudgeResult
+  /** Path to saved judge review markdown */
+  judgeReviewPath?: string
 }
 
 export interface PendingQuestion {
@@ -113,6 +124,10 @@ export interface HarnessOptions {
   resumeSessionId?: string
   /** Answer to provide when resuming (sent as the prompt) */
   resumeAnswer?: string
+  /** Run LLM-as-judge review on the transcript after the scenario completes */
+  judge?: boolean
+  /** What `kata enter` printed (passed to judge for context) */
+  enterOutput?: string
 }
 
 // ─── Harness ──────────────────────────────────────────────────────────────────
@@ -304,6 +319,46 @@ export async function runScenario(
       })
     }
     result.passed = result.assertions.every((a) => a.passed)
+
+    // LLM-as-judge — audit the pipeline
+    if (options.judge && options.transcriptPath && scenario.templatePath) {
+      try {
+        if (options.verbose) {
+          process.stdout.write('\n[judge] Running pipeline audit...\n')
+        }
+        const resolvedTemplatePath = scenario.templatePath.startsWith('/')
+          ? scenario.templatePath
+          : join(projectDir, scenario.templatePath)
+        const judgeResult = await judgeTranscript({
+          transcriptPath: options.transcriptPath,
+          templatePath: resolvedTemplatePath,
+          enterOutput: options.enterOutput,
+        })
+        result.judgeResult = judgeResult
+
+        const reviewPath = saveJudgeArtifact(judgeResult, {
+          scenarioId: scenario.id,
+          transcriptPath: options.transcriptPath,
+          templatePath: resolvedTemplatePath,
+        })
+        result.judgeReviewPath = reviewPath
+
+        if (options.verbose) {
+          process.stdout.write(
+            `[judge] Agent: ${judgeResult.agentScore}/100 | ` +
+            `System: ${judgeResult.systemScore}/100 | ` +
+            `${judgeResult.verdict}\n`,
+          )
+          process.stdout.write(`[judge] Review: ${reviewPath}\n`)
+        }
+      } catch (err) {
+        if (options.verbose) {
+          process.stdout.write(
+            `[judge] Failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          )
+        }
+      }
+    }
   } finally {
     result.durationMs = Date.now() - startMs
     // No cleanup — projects persist for inspection and iteration

@@ -86,6 +86,7 @@ function assertPlanningPhasesComplete(): import('../harness.js').EvalCheckpoint 
 export const planningModeScenario: EvalScenario = {
   id: 'planning-mode',
   name: 'Planning mode: user authentication feature spec',
+  templatePath: '.claude/workflows/templates/planning.md',
   prompt:
     'Use kata planning to design a user authentication feature for this web app. ' +
     'The feature should cover JWT-based auth with login and protected routes. ' +

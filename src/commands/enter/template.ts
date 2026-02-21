@@ -18,7 +18,7 @@ export function parseTemplateYaml(templatePath: string): TemplateYaml | null {
 }
 
 /**
- * Get phase titles from template for TodoWrite context
+ * Get phase titles from template for TaskUpdate context
  */
 export function getPhaseTitlesFromTemplate(templatePath: string): PhaseTitle[] {
   const fullTemplatePath = resolveTemplatePath(templatePath)

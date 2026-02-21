@@ -177,7 +177,7 @@ export function buildWorkflowGuidance(
 
   // Build workflow instructions based on mode
   // Note: Detailed workflow comes from template/spec, not hardcoded here
-  // Tasks are managed via Claude Code's native task system (TodoWrite)
+  // Tasks are managed via Claude Code's native task system (TaskUpdate/TaskList)
   const workflow: string[] = []
   if (mode === 'implementation') {
     const specPath = loadWmConfig().spec_path ?? 'planning/specs'
@@ -212,7 +212,7 @@ export function buildWorkflowGuidance(
   const commands = {
     listTasks: 'kata status',
     pendingTasks: 'kata can-exit',
-    completeWithEvidence: 'Mark task completed via TodoWrite',
+    completeWithEvidence: 'TaskUpdate(taskId="X", status="completed")',
   }
 
   return { requiredTodos, workflow, commands }

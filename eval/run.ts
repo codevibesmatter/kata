@@ -10,6 +10,7 @@
  *   npm run eval -- --json                    # JSON output
  *   npm run eval -- --list                    # List available scenarios
  *   npm run eval -- --verbose                 # Stream agent output in real time
+ *   npm run eval -- --judge                   # Run LLM-as-judge on transcripts
  *   npm run eval -- --no-transcript           # Skip writing transcript files
  */
 
@@ -38,6 +39,7 @@ const jsonMode = args.includes('--json')
 const listMode = args.includes('--list')
 const verbose = args.includes('--verbose')
 const noTranscript = args.includes('--no-transcript')
+const judgeMode = args.includes('--judge')
 const scenarioArg = args.find((a) => a.startsWith('--scenario='))?.split('=')[1]
 const projectArg = args.find((a) => a.startsWith('--project='))?.split('=')[1]
 const resumeArg = args.find((a) => a.startsWith('--resume='))?.split('=')[1]
@@ -87,6 +89,7 @@ async function main(): Promise<void> {
       transcriptPath,
       resumeSessionId: resumeArg,
       resumeAnswer: answerArg,
+      judge: judgeMode,
     })
     results.push(result)
 
@@ -129,7 +132,11 @@ async function main(): Promise<void> {
         process.stdout.write(`  Transcript: ${transcriptPath}\n`)
       }
 
-      const result = await runScenario(scenario, { verbose: verbose && !jsonMode, transcriptPath })
+      const result = await runScenario(scenario, {
+        verbose: verbose && !jsonMode,
+        transcriptPath,
+        judge: judgeMode,
+      })
       results.push(result)
 
       if (!jsonMode) {
@@ -182,6 +189,14 @@ function printResult(result: EvalResult): void {
 
   if (result.transcriptPath) {
     console.log(`  📄 ${result.transcriptPath}`)
+  }
+
+  if (result.judgeResult) {
+    const j = result.judgeResult
+    console.log(`\n  Judge: Agent ${j.agentScore}/100 | System ${j.systemScore}/100 | ${j.verdict}`)
+    if (result.judgeReviewPath) {
+      console.log(`  Review: ${result.judgeReviewPath}`)
+    }
   }
 }
 

@@ -39,7 +39,7 @@ phases:
           Error: {error message}"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: map-system
         title: "Map affected system BEFORE reading code"
@@ -66,7 +66,7 @@ phases:
              - Frontend layer (wrong rendering, stale state)
 
           Write your system map before proceeding.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: classify-bug
         title: "Classify bug type"
@@ -85,7 +85,7 @@ phases:
           Your classification: **{type}**
           Reason: {why}
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p1
     name: Investigate
@@ -104,7 +104,7 @@ phases:
           3. **Unlikely but worth checking:** {hypothesis}
 
           Start investigating hypothesis #1 first.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: trace-code-path
         title: "Trace the code path"
@@ -127,7 +127,7 @@ phases:
 
           Review agent findings. Does it confirm hypothesis #1?
           If no, investigate hypothesis #2.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: confirm-root-cause
         title: "Confirm root cause"
@@ -149,7 +149,7 @@ phases:
           {explanation}"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p2
     name: Fix
@@ -172,7 +172,7 @@ phases:
           git diff  # Review the change
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: add-regression-guard
         title: "Add test or assertion to prevent regression"
@@ -184,7 +184,7 @@ phases:
 
           If no test infrastructure, add a code comment explaining the invariant.
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p3
     name: Verify
@@ -207,7 +207,7 @@ phases:
           ```
 
           Document: confirmed fixed ✓
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: regression-check
         title: "Check for regressions"
@@ -220,7 +220,7 @@ phases:
           Check: does the fix affect any other code paths?
           If yes, test those paths manually.
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: commit-and-close
         title: "Commit fix and close issue"
@@ -243,7 +243,7 @@ phases:
           Fix: {what changed}"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
 global_conditions:
   - changes_committed

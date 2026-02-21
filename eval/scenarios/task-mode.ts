@@ -23,6 +23,7 @@ import {
 export const taskModeScenario: EvalScenario = {
   id: 'task-mode',
   name: 'Task mode: add /health route',
+  templatePath: '.claude/workflows/templates/task.md',
   prompt:
     'Add a `/health` route to the web app that returns `{"status": "ok"}` with HTTP 200. ' +
     'The route should be at GET /health. Make the change, commit it, and ensure kata can-exit passes.',

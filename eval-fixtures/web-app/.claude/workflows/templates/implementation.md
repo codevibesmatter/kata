@@ -24,7 +24,7 @@ phases:
           - Non-goals (what NOT to do)
 
           If no spec exists, ask user for the spec file location.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: verify-environment
         title: "Verify dev environment is working"
@@ -38,7 +38,7 @@ phases:
           ```
 
           Document: current branch, any pre-existing issues.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p1
     name: Claim
@@ -62,7 +62,7 @@ phases:
           git status
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: claim-github-issue
         title: "Claim GitHub issue"
@@ -74,7 +74,7 @@ phases:
           ```
 
           If no GitHub issue, skip this step.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p2
     name: Implement
@@ -110,7 +110,7 @@ phases:
 
           Run your project's test and typecheck commands.
           Fix any remaining issues.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: commit-and-push
         title: "Commit and push all changes"
@@ -124,7 +124,7 @@ phases:
           git push
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: create-pr
         title: "Create pull request"
@@ -149,7 +149,7 @@ phases:
           gh issue edit {N} --remove-label "status:in-progress" --add-label "status:in-review"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: close-issue
         title: "Update GitHub issue"
@@ -164,7 +164,7 @@ phases:
           ```bash
           gh issue edit {N} --remove-label "status:in-review" --add-label "status:done"
           ```
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
 global_conditions:
   - changes_committed
@@ -180,7 +180,7 @@ You are in **implementation** mode. Execute the approved spec phase by phase.
 - Read and understand the spec before writing any code
 - Implement each spec phase completely before moving to the next
 - Verify after each phase (typecheck, tests, git status)
-- Track progress via task updates (TodoWrite)
+- Track progress via task updates (TaskUpdate)
 
 ## Phase Flow
 

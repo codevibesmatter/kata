@@ -40,7 +40,7 @@ phases:
           ])
 
           Document: type, scope, GitHub issue # if known.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: codebase-research
         title: "Research existing patterns"
@@ -61,7 +61,7 @@ phases:
 
           Wait for agent: TaskOutput(task_id=..., block=true)
           Compile findings into 3-5 bullet points.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p1
     name: Spec Writing
@@ -96,7 +96,7 @@ phases:
           ---
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: write-behaviors
         title: "Write feature behaviors and acceptance criteria"
@@ -129,7 +129,7 @@ phases:
           Break into 2-5 phases (p1, p2...) with concrete tasks per phase.
           Phases go in the YAML frontmatter `phases:` array.
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: link-github-issue
         title: "Create or link GitHub issue"
@@ -154,7 +154,7 @@ phases:
 
           **If skipping:** Leave `github_issue: null`
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p2
     name: Review
@@ -175,7 +175,7 @@ phases:
           - [ ] GitHub issue linked (or explicitly skipped)
 
           Fix any gaps found.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
       - id: spawn-review-agent
         title: "Spawn spec review agent"
@@ -201,7 +201,7 @@ phases:
           ", run_in_background=false)
 
           Address any issues raised.
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
   - id: p3
     name: Finalize
@@ -238,7 +238,7 @@ phases:
           Ready for implementation: \`wm enter implementation\`"
           ```
 
-          Then: Mark this task completed via TodoWrite
+          Then: Mark this task completed via TaskUpdate
 
 global_conditions:
   - changes_committed
