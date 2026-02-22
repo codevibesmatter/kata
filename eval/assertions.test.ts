@@ -28,10 +28,16 @@ import {
   assertWmYamlExists,
   assertTemplatesExist,
   assertCanExit,
+  assertAllNativeTasksCompleted,
+  assertNoTaskCreateCalls,
+  assertNativeTaskCount,
+  assertTaskDependencyOrderRespected,
   workflowPresets,
   workflowPresetsWithPush,
   planningPresets,
   liveWorkflowPresets,
+  taskDisciplinePresets,
+  liveTaskDisciplinePresets,
   onboardPresets,
 } from './assertions.js'
 import type { SessionState } from '../src/state/schema.js'
@@ -44,6 +50,8 @@ function mockContext(overrides: {
   dirs?: Record<string, string[]>
   runResults?: Record<string, string>
   baselineRef?: string | null
+  sessionId?: string | null
+  transcriptPath?: string | null
 }): EvalContext {
   const files = overrides.files ?? {}
   const dirs = overrides.dirs ?? {}
@@ -52,6 +60,8 @@ function mockContext(overrides: {
   return {
     projectDir: '/tmp/test-project',
     baselineRef: overrides.baselineRef ?? null,
+    sessionId: overrides.sessionId ?? null,
+    transcriptPath: overrides.transcriptPath ?? null,
     getSessionState() {
       if (overrides.state === null) return null
       return (overrides.state ?? {}) as SessionState
@@ -424,5 +434,79 @@ describe('onboardPresets', () => {
     expect(names).toContain('.claude/settings.json exists with hooks')
     expect(names).toContain('wm.yaml exists')
     expect(names).toContain('mode templates seeded')
+  })
+})
+
+// ─── Task Discipline Assertions ──────────────────────────────────────────────
+
+describe('assertAllNativeTasksCompleted', () => {
+  it('fails when no sessionId', async () => {
+    const ctx = mockContext({})
+    const result = await assertAllNativeTasksCompleted().assert(ctx)
+    expect(result).toContain('No sessionId')
+  })
+})
+
+describe('assertNoTaskCreateCalls', () => {
+  it('fails when no transcriptPath', async () => {
+    const ctx = mockContext({})
+    const result = await assertNoTaskCreateCalls().assert(ctx)
+    expect(result).toContain('No transcriptPath')
+  })
+
+  it('fails when transcript cannot be read', async () => {
+    const ctx = mockContext({ transcriptPath: '/nonexistent/path.jsonl' })
+    const result = await assertNoTaskCreateCalls().assert(ctx)
+    expect(result).toContain('Cannot read transcript')
+  })
+})
+
+describe('assertNativeTaskCount', () => {
+  it('fails when no sessionId', async () => {
+    const ctx = mockContext({})
+    const result = await assertNativeTaskCount(3).assert(ctx)
+    expect(result).toContain('No sessionId')
+  })
+})
+
+describe('assertTaskDependencyOrderRespected', () => {
+  it('fails when no sessionId', async () => {
+    const ctx = mockContext({})
+    const result = await assertTaskDependencyOrderRespected().assert(ctx)
+    expect(result).toContain('No sessionId')
+  })
+})
+
+// ─── Task Discipline Presets ─────────────────────────────────────────────────
+
+describe('taskDisciplinePresets', () => {
+  it('returns 4 checkpoints', () => {
+    const presets = taskDisciplinePresets()
+    expect(presets).toHaveLength(4)
+    expect(presets.map((p) => p.name)).toEqual([
+      'native task count >= 3',
+      'no TaskCreate calls in transcript',
+      'all native tasks completed',
+      'task dependency order respected',
+    ])
+  })
+})
+
+describe('liveTaskDisciplinePresets', () => {
+  it('returns 9 checkpoints (live workflow + task discipline)', () => {
+    const presets = liveTaskDisciplinePresets('task')
+    expect(presets).toHaveLength(9)
+    const names = presets.map((p) => p.name)
+    // live workflow (5)
+    expect(names).toContain('session state initialized with mode')
+    expect(names).toContain("session.currentMode === 'task'")
+    expect(names).toContain('git: new commit since baseline')
+    expect(names).toContain('git: working tree is clean')
+    expect(names).toContain('kata can-exit: exits 0')
+    // task discipline (4)
+    expect(names).toContain('native task count >= 3')
+    expect(names).toContain('no TaskCreate calls in transcript')
+    expect(names).toContain('all native tasks completed')
+    expect(names).toContain('task dependency order respected')
   })
 })

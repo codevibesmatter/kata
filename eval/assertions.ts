@@ -6,6 +6,8 @@
  * definitions in scenario files.
  */
 
+import { readFileSync } from 'node:fs'
+import { readNativeTaskFiles } from '../src/commands/enter/task-factory.js'
 import type { EvalCheckpoint, EvalContext } from './harness.js'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -519,6 +521,125 @@ export function assertCanExit(): EvalCheckpoint {
   }
 }
 
+// ─── Task Discipline Assertions ──────────────────────────────────────────────
+
+/**
+ * Assert that all pre-created native tasks have status: 'completed'.
+ * Requires sessionId on the EvalContext.
+ */
+export function assertAllNativeTasksCompleted(): EvalCheckpoint {
+  return {
+    name: 'all native tasks completed',
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check native tasks')
+      }
+      const tasks = readNativeTaskFiles(ctx.sessionId)
+      if (tasks.length === 0) {
+        return fail('No native task files found')
+      }
+      const pending = tasks.filter((t) => t.status !== 'completed')
+      if (pending.length > 0) {
+        const summary = pending.map((t) => `[${t.id}] ${t.subject} (${t.status})`).join('; ')
+        return fail(`${pending.length} native task(s) not completed: ${summary}`)
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that the transcript contains no TaskCreate tool_use blocks.
+ * Agents should use pre-created native tasks, not create their own.
+ * Requires transcriptPath on the EvalContext.
+ */
+export function assertNoTaskCreateCalls(): EvalCheckpoint {
+  return {
+    name: 'no TaskCreate calls in transcript',
+    assert(ctx: EvalContext) {
+      if (!ctx.transcriptPath) {
+        return fail('No transcriptPath on EvalContext — cannot check transcript')
+      }
+      let content: string
+      try {
+        content = readFileSync(ctx.transcriptPath, 'utf-8')
+      } catch {
+        return fail(`Cannot read transcript: ${ctx.transcriptPath}`)
+      }
+      // Each line is a JSON event; look for tool_use blocks with name TaskCreate
+      const lines = content.split('\n').filter(Boolean)
+      for (const line of lines) {
+        try {
+          const event = JSON.parse(line)
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'tool_use' && block.name === 'TaskCreate') {
+                return fail('Agent called TaskCreate — should use pre-created native tasks instead')
+              }
+            }
+          }
+        } catch {
+          // Skip unparseable lines
+        }
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that at least N native tasks exist for the session.
+ * Sanity check that tasks were actually created by kata enter.
+ */
+export function assertNativeTaskCount(min: number): EvalCheckpoint {
+  return {
+    name: `native task count >= ${min}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check native tasks')
+      }
+      const tasks = readNativeTaskFiles(ctx.sessionId)
+      if (tasks.length < min) {
+        return fail(`Expected >= ${min} native tasks, found ${tasks.length}`)
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that no completed task has an incomplete blocker.
+ * Verifies the agent respected the dependency chain.
+ */
+export function assertTaskDependencyOrderRespected(): EvalCheckpoint {
+  return {
+    name: 'task dependency order respected',
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check native tasks')
+      }
+      const tasks = readNativeTaskFiles(ctx.sessionId)
+      if (tasks.length === 0) {
+        return fail('No native task files found')
+      }
+      const statusById = new Map(tasks.map((t) => [t.id, t.status]))
+      for (const task of tasks) {
+        if (task.status === 'completed') {
+          for (const blockerId of task.blockedBy) {
+            const blockerStatus = statusById.get(blockerId)
+            if (blockerStatus && blockerStatus !== 'completed') {
+              return fail(
+                `Task [${task.id}] completed but blocker [${blockerId}] is '${blockerStatus}'`,
+              )
+            }
+          }
+        }
+      }
+      return pass()
+    },
+  }
+}
+
 // ─── Presets ──────────────────────────────────────────────────────────────────
 
 /**
@@ -568,6 +689,30 @@ export function liveWorkflowPresets(mode: string): EvalCheckpoint[] {
     assertNewCommitSinceBaseline(),
     assertCleanWorkingTree(),
     assertCanExit(),
+  ]
+}
+
+/**
+ * Task discipline presets: native tasks created, no TaskCreate calls,
+ * all tasks completed, dependency order respected.
+ */
+export function taskDisciplinePresets(): EvalCheckpoint[] {
+  return [
+    assertNativeTaskCount(3),
+    assertNoTaskCreateCalls(),
+    assertAllNativeTasksCompleted(),
+    assertTaskDependencyOrderRespected(),
+  ]
+}
+
+/**
+ * Live project + task discipline: session init, mode, commit, clean tree,
+ * can-exit, plus full task discipline checks.
+ */
+export function liveTaskDisciplinePresets(mode: string): EvalCheckpoint[] {
+  return [
+    ...liveWorkflowPresets(mode),
+    ...taskDisciplinePresets(),
   ]
 }
 

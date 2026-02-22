@@ -81,6 +81,10 @@ export interface EvalContext {
   projectDir: string
   /** Git ref captured before the agent ran (null for fixture-based scenarios) */
   baselineRef: string | null
+  /** Session ID from the agent SDK init message */
+  sessionId: string | null
+  /** Path to the JSONL transcript file (null when --no-transcript) */
+  transcriptPath: string | null
   getSessionState(): SessionState | null
   run(cmd: string): string
   fileExists(relativePath: string): boolean
@@ -381,7 +385,7 @@ export async function runScenario(
     }
 
     // Always run checkpoints — even when paused, state may already be written
-    const ctx: EvalContext = buildContext(projectDir, baselineRef)
+    const ctx: EvalContext = buildContext(projectDir, baselineRef, sessionId ?? null, options.transcriptPath ?? null)
     for (const checkpoint of scenario.checkpoints) {
       const error = await checkpoint.assert(ctx)
       result.assertions.push({
@@ -491,10 +495,17 @@ function formatToolInput(name: string, input: unknown): string {
 
 // ─── Context builder ──────────────────────────────────────────────────────────
 
-function buildContext(projectDir: string, baselineRef: string | null = null): EvalContext {
+function buildContext(
+  projectDir: string,
+  baselineRef: string | null = null,
+  sessionId: string | null = null,
+  transcriptPath: string | null = null,
+): EvalContext {
   return {
     projectDir,
     baselineRef,
+    sessionId,
+    transcriptPath,
     getSessionState(): SessionState | null {
       // Check .kata/sessions/ first (new layout), then .claude/sessions/ (old layout)
       const kataSessionsDir = join(projectDir, '.kata', 'sessions')

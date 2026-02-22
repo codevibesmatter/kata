@@ -11,17 +11,24 @@ let cachedInstance: ModesConfig | null = null
 let cachedKey: string | null = null
 
 /**
- * Shallow-merge an overlay config onto a base config.
- * Each mode key from overlay FULLY replaces the base entry (no deep merge within a mode).
+ * Deep-merge an overlay config onto a base config.
+ * Per-mode fields from overlay win; base fields preserved as defaults.
+ * To explicitly clear a field, set it to [] or null in the overlay.
  * Top-level arrays (categories, red_flags, global_behavior) are replaced when present.
  */
 function mergeModesConfig(base: ModesConfig, overlay: ModesConfig): ModesConfig {
+  const mergedModes = { ...base.modes }
+  for (const [key, overlayMode] of Object.entries(overlay.modes)) {
+    if (mergedModes[key]) {
+      // Deep merge: overlay fields win, base fields preserved as defaults
+      mergedModes[key] = { ...mergedModes[key], ...overlayMode }
+    } else {
+      mergedModes[key] = overlayMode
+    }
+  }
   return {
     ...base,
-    modes: {
-      ...base.modes,
-      ...overlay.modes,
-    },
+    modes: mergedModes,
     ...(overlay.categories !== undefined && { categories: overlay.categories }),
     ...(overlay.red_flags !== undefined && { red_flags: overlay.red_flags }),
     ...(overlay.global_behavior !== undefined && {
