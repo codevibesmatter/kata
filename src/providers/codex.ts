@@ -2,7 +2,7 @@
  * Codex provider — wraps OpenAI's Codex CLI.
  *
  * Spawns `codex exec` with the prompt via stdin, parses JSONL output
- * for agent messages. Uses --sandbox read-only by default.
+ * for agent messages. Uses --dangerously-bypass-approvals-and-sandbox for full autonomy.
  * Based on: baseplane/packages/agent-tools/src/codex/runner.ts
  */
 
@@ -19,7 +19,7 @@ export const codexProvider: AgentProvider = {
 
     const args = [
       'exec',
-      '--sandbox', 'read-only',
+      '--dangerously-bypass-approvals-and-sandbox',
       '--json',
       '--skip-git-repo-check',
       '--cd', options.cwd,
