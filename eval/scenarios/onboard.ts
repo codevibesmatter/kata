@@ -3,6 +3,8 @@
  *
  * Scenario: Fresh TanStack Start project, no kata config. Agent sets up kata.
  *
+ * Uses tanstack-start-fresh fixture — bare app code, no .claude/ directory.
+ *
  * Asserts:
  * 1. .claude/settings.json exists with hooks
  * 2. .claude/workflows/wm.yaml exists
@@ -16,7 +18,7 @@ import { onboardPresets } from '../assertions.js'
 export const onboardScenario: EvalScenario = {
   id: 'onboard',
   name: 'Fresh project onboard',
-  fixture: 'tanstack-start',
+  fixture: 'tanstack-start-fresh',
   prompt:
     'Help me get started with this project. kata-wm is installed globally.',
   maxTurns: 40,

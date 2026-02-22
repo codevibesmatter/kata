@@ -61,7 +61,7 @@ export interface EvalScenario {
   timeoutMs?: number
   /**
    * Fixture name under eval-fixtures/ to copy for fresh projects.
-   * Default: 'web-app'. Ignored when projectDir is set.
+   * Default: 'tanstack-start'. Ignored when projectDir is set.
    */
   fixture?: string
   /**
@@ -148,7 +148,7 @@ export async function runScenario(
       throw new Error(`Project directory does not exist: ${projectDir}`)
     }
   } else {
-    const fixtureName = scenario.fixture ?? 'web-app'
+    const fixtureName = scenario.fixture ?? 'tanstack-start'
     const fixturePath = join(FIXTURES_DIR, fixtureName)
     if (!existsSync(fixturePath)) {
       throw new Error(`Fixture not found: ${fixturePath}`)

@@ -144,8 +144,8 @@ bun test eval/assertions.test.ts                        # Run assertion unit tes
 
 | Fixture | Path | Description |
 |---------|------|-------------|
-| `tanstack-start` | `eval-fixtures/tanstack-start/` | Fresh TanStack Start app, no kata config |
-| `web-app` | `eval-fixtures/web-app/` | Pre-configured with kata hooks, wm.yaml (templates seeded by batteries at eval time) |
+| `tanstack-start` | `eval-fixtures/tanstack-start/` | TanStack Start app with kata config (settings.json, wm.yaml, planning/). Default fixture. |
+| `tanstack-start-fresh` | `eval-fixtures/tanstack-start-fresh/` | Bare TanStack Start app, no `.claude/` or `planning/`. Used by onboard scenario only. |
 
 ## Project root resolution
 

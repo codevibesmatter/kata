@@ -26,9 +26,9 @@ export const researchModeScenario: EvalScenario = {
   name: 'Research mode — explore and document findings',
   templatePath: '.claude/workflows/templates/research.md',
   prompt:
-    'Research how this project could add database persistence — ' +
-    'explore what ORM/driver options exist for a Node/Express app, ' +
-    'what migration strategies work, and how to structure the data layer. ' +
+    'Research how this app could add database persistence — ' +
+    'explore what ORM/driver options work with TanStack Start, ' +
+    'what migration strategies exist, and how to structure the data layer. ' +
     'Document findings.',
   timeoutMs: 15 * 60 * 1000,
   checkpoints: [
