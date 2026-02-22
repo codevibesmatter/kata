@@ -1,6 +1,7 @@
 // Session ID lookup utilities
 import * as path from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -123,21 +124,39 @@ export async function getStateFilePath(sessionId?: string): Promise<string> {
 }
 
 /**
- * Paths to modes.yaml configuration files
- * Package-level is the built-in config; project-level is an optional override
+ * Get the user-level configuration directory for kata.
+ * Respects XDG_CONFIG_HOME if set, otherwise uses ~/.config/kata.
+ * Always returns the path — does not create the directory.
+ * @returns Absolute path to user config directory
+ */
+export function getUserConfigDir(): string {
+  const xdgConfig = process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config')
+  return path.join(xdgConfig, 'kata')
+}
+
+/**
+ * Paths to modes.yaml configuration files across all three tiers.
+ * Resolution order (lowest to highest priority): package → user → project.
  */
 export interface ModesYamlPaths {
   packagePath: string
+  userPath: string | null
   projectPath: string | null
 }
 
 /**
- * Get paths to modes.yaml configuration files
- * Returns both the package-level (built-in) and project-level (override) paths
- * @returns Object with packagePath and projectPath (null if not found)
+ * Get paths to modes.yaml configuration files across all three tiers.
+ * Returns package (always present), user (if exists), and project (if exists).
+ * @returns Object with packagePath, userPath, and projectPath
  */
 export function getModesYamlPath(): ModesYamlPaths {
   const packagePath = path.join(getPackageRoot(), 'modes.yaml')
+
+  let userPath: string | null = null
+  const userCandidate = path.join(getUserConfigDir(), 'modes.yaml')
+  if (existsSync(userCandidate)) {
+    userPath = userCandidate
+  }
 
   let projectPath: string | null = null
   try {
@@ -150,7 +169,7 @@ export function getModesYamlPath(): ModesYamlPaths {
     // No Claude project dir found - project-level override not available
   }
 
-  return { packagePath, projectPath }
+  return { packagePath, userPath, projectPath }
 }
 
 /**
