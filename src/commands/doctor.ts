@@ -1,4 +1,4 @@
-// wm doctor - Diagnose and fix session state issues
+// kata doctor - Diagnose and fix session state issues
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -50,7 +50,7 @@ function getProjectDir(useFallback: boolean): string {
 }
 
 /**
- * Check if wm hooks are registered in .claude/settings.json
+ * Check if kata hooks are registered in .claude/settings.json
  */
 function checkHooksRegistered(claudeDir: string): {
   registered: string[]
@@ -58,7 +58,7 @@ function checkHooksRegistered(claudeDir: string): {
 } {
   const settingsPath = path.join(claudeDir, '.claude', 'settings.json')
   // Match on the hook subcommand (not the binary name) to tolerate both bare
-  // `wm hook …` and quoted `"/path/to/wm" hook …` forms written by setup.
+  // `kata hook …` and quoted `"/path/to/kata" hook …` forms written by setup.
   const requiredHooks: Record<string, string> = {
     SessionStart: 'hook session-start',
     UserPromptSubmit: 'hook user-prompt',
@@ -156,7 +156,7 @@ function fixMissingHooks(claudeDir: string, missingHooks: string[]): void {
 }
 
 /**
- * Check wm version compatibility between running wm and wm.yaml
+ * Check kata version compatibility between running kata and wm.yaml
  */
 function checkVersionCompatibility(claudeDir: string): {
   running: string

@@ -56,7 +56,7 @@ describe('setup --yes', () => {
     const output = await captureSetup(['--yes'], tmpDir)
 
     // Check output indicates success
-    expect(output).toContain('wm setup complete')
+    expect(output).toContain('kata setup complete')
 
     // Check wm.yaml was created
     const wmYamlPath = join(tmpDir, '.claude', 'workflows', 'wm.yaml')
@@ -121,9 +121,9 @@ describe('setup --yes', () => {
     expect(secondConfig.research_path).toBe(firstConfig.research_path)
   })
 
-  it('preserves existing non-wm hooks', async () => {
-    // Create a pre-existing settings.json with non-wm hooks
-    // Use a command that does NOT match the wm hook pattern
+  it('preserves existing non-kata hooks', async () => {
+    // Create a pre-existing settings.json with non-kata hooks
+    // Use a command that does NOT match the kata hook pattern
     // (the pattern matches '\bhook (session-start|...)' so 'my-custom-hook session-start' would match)
     mkdirSync(join(tmpDir, '.claude'), { recursive: true })
     writeFileSync(
@@ -151,7 +151,7 @@ describe('setup --yes', () => {
       hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>
     }
 
-    // Should have both custom hook and wm hook for SessionStart
+    // Should have both custom hook and kata hook for SessionStart
     const sessionStartEntries = settings.hooks.SessionStart
     expect(sessionStartEntries.length).toBeGreaterThanOrEqual(2)
 
@@ -161,7 +161,7 @@ describe('setup --yes', () => {
     )
     expect(hasCustomHook).toBe(true)
 
-    // wm hook should be present
+    // kata hook should be present
     const hasWmHook = sessionStartEntries.some((entry) =>
       entry.hooks?.some((h) => h.command.includes('hook session-start')),
     )
@@ -171,7 +171,7 @@ describe('setup --yes', () => {
   it('works without .claude/sessions/ existing', async () => {
     // Don't pre-create .claude/sessions/ - setup should create it
     const output = await captureSetup(['--yes'], tmpDir)
-    expect(output).toContain('wm setup complete')
+    expect(output).toContain('kata setup complete')
     expect(existsSync(join(tmpDir, '.claude', 'sessions'))).toBe(true)
   })
 

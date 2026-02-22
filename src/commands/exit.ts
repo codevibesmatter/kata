@@ -1,4 +1,4 @@
-// wm exit - Exit current mode
+// kata exit - Exit current mode
 import { getCurrentSessionId, getStateFilePath } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 import { writeState } from '../state/writer.js'
@@ -22,7 +22,7 @@ function parseArgs(args: string[]): {
 }
 
 /**
- * wm exit [--session=SESSION_ID]
+ * kata exit [--session=SESSION_ID]
  * Mark mode complete, return to previous
  */
 export async function exit(args: string[]): Promise<void> {

@@ -116,7 +116,7 @@ export function cleanupOldSessions(
     // Delete or dry-run
     if (opts.verbose) {
       process.stderr.write(
-        `wm cleanup: ${effectiveDryRun ? '[dry-run] ' : ''}deleting session ${sessionId}\n`,
+        `kata cleanup: ${effectiveDryRun ? '[dry-run] ' : ''}deleting session ${sessionId}\n`,
       )
     }
 

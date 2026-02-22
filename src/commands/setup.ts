@@ -87,8 +87,8 @@ interface SettingsJson {
 }
 
 /**
- * Build wm hook entries for .claude/settings.json.
- * Uses an absolute path to the wm binary so hooks work regardless of PATH
+ * Build kata hook entries for .claude/settings.json.
+ * Uses an absolute path to the kata binary so hooks work regardless of PATH
  * (both for globally-installed and locally-installed packages).
  * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
  * With --strict: also PreToolUse task-deps + task-evidence hooks
@@ -199,8 +199,8 @@ function writeSettings(cwd: string, settings: SettingsJson): void {
 }
 
 /**
- * Merge wm hook entries into existing settings
- * Preserves non-wm hooks, replaces wm hooks
+ * Merge kata hook entries into existing settings
+ * Preserves non-kata hooks, replaces kata hooks
  */
 function mergeHooksIntoSettings(
   settings: SettingsJson,
@@ -216,8 +216,8 @@ function mergeHooksIntoSettings(
     const existing = existingHooks[event] ?? []
     const wmEntries = wmHooks[event] ?? []
 
-    // Filter out existing wm hook entries by matching known wm subcommand names.
-    // Tolerates both bare `wm hook …` and quoted `"/path/wm" hook …` forms while
+    // Filter out existing kata hook entries by matching known kata subcommand names.
+    // Tolerates both bare `kata hook …` and quoted `"/path/kata" hook …` forms while
     // avoiding false positives from unrelated tools like lefthook or husky.
     const wmHookPattern =
       /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence)\b/
@@ -381,7 +381,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     }
   }
 
-  // Register hooks in settings.json using absolute wm binary path
+  // Register hooks in settings.json using absolute kata binary path
   const wmBin = resolveWmBin()
   const settings = readSettings(projectRoot)
   const wmHooks = buildHookEntries(profile.strict, wmBin)
@@ -481,7 +481,7 @@ Usage:
   kata setup --batteries --strict Setup + batteries + strict hooks
 
 Flags:
-  --yes         Write wm.yaml and register hooks using auto-detected defaults
+  --yes         Write config and register hooks using auto-detected defaults
   --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
                 (implies --yes)
   --strict      Also register PreToolUse hooks: task-deps, task-evidence

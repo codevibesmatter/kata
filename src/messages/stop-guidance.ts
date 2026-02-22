@@ -89,7 +89,7 @@ REQUIRED before completing tasks:
 2. \`git add . && git commit -m "..."\` - commit your changes
 
 **"Writing code" ≠ "Done". Code is NEVER done until tests pass and changes are committed.**`,
-        fixCommand: 'wm status',
+        fixCommand: 'kata status',
       }
     }
 

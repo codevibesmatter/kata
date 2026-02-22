@@ -1,4 +1,4 @@
-// wm status - Show current mode and phase
+// kata status - Show current mode and phase
 import { getCurrentSessionId, getStateFilePath } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 
@@ -23,7 +23,7 @@ function parseArgs(args: string[]): {
 }
 
 /**
- * wm status [--json] [--session=SESSION_ID]
+ * kata status [--json] [--session=SESSION_ID]
  * Shows current mode and phase
  */
 export async function status(args: string[]): Promise<void> {

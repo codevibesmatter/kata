@@ -1,4 +1,4 @@
-// wm hook <name> - Hook event dispatch
+// kata hook <name> - Hook event dispatch
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
@@ -455,7 +455,7 @@ function parseHookArgs(args: string[]): { hookName: string; remaining: string[] 
 }
 
 /**
- * wm hook <name>
+ * kata hook <name>
  * Dispatch hook events. Each hook reads stdin JSON and outputs Claude Code hook JSON.
  *
  * Supported hooks:
@@ -470,7 +470,7 @@ export async function hook(args: string[]): Promise<void> {
   const { hookName } = parseHookArgs(args)
 
   if (!hookName) {
-    process.stderr.write('Usage: wm hook <name>\n')
+    process.stderr.write('Usage: kata hook <name>\n')
     process.stderr.write(`Available hooks: ${Object.keys(hookHandlers).join(', ')}\n`)
     process.exitCode = 1
     return

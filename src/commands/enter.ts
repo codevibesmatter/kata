@@ -1,4 +1,4 @@
-// wm enter - Enter a mode
+// kata enter - Enter a mode
 import { existsSync, mkdirSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import {
@@ -266,7 +266,7 @@ async function enterWithCustomTemplate(
 
   const action = parsed.dryRun ? 'dry-run' : isTemporary ? 'started-temporary' : 'started'
 
-  // Output full template content for context injection (same as wm prime)
+  // Output full template content for context injection (same as kata prime)
   if (!parsed.dryRun) {
     outputFullTemplateContent(templatePath, modeName, workflowId, issueNum, effectivePhases[0])
   }
@@ -304,7 +304,7 @@ async function enterWithCustomTemplate(
 }
 
 /**
- * wm enter <mode> [--session=SESSION_ID]
+ * kata enter <mode> [--session=SESSION_ID]
  * Enter a mode, create state if needed
  */
 export async function enter(args: string[]): Promise<void> {
@@ -334,7 +334,7 @@ export async function enter(args: string[]): Promise<void> {
 
   if (!parsed.mode) {
     // biome-ignore lint/suspicious/noConsole: intentional CLI error output
-    console.error('Usage: wm enter <mode> [--session=SESSION_ID] [--template=PATH]')
+    console.error('Usage: kata enter <mode> [--session=SESSION_ID] [--template=PATH]')
     // biome-ignore lint/suspicious/noConsole: intentional CLI error output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: intentional CLI error output
@@ -411,7 +411,7 @@ export async function enter(args: string[]): Promise<void> {
       console.error(`   Previous mode: ${state.currentMode}`)
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error(
-        `   Tip: Use 'wm exit' to cleanly close previous workflow, or 'wm init --force' to reset`,
+        `   Tip: Use 'kata exit' to cleanly close previous workflow, or 'kata init --force' to reset`,
       )
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error('')
@@ -482,9 +482,9 @@ export async function enter(args: string[]): Promise<void> {
           // biome-ignore lint/suspicious/noConsole: intentional CLI output
           console.error('  1. Add tasks arrays to each phase in the spec YAML frontmatter')
           // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`  2. Run: wm validate-spec ${specPath}`)
+          console.error(`  2. Run: kata validate-spec ${specPath}`)
           // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`  3. Then retry: wm enter ${canonical} --issue=${issueNum}`)
+          console.error(`  3. Then retry: kata enter ${canonical} --issue=${issueNum}`)
           // biome-ignore lint/suspicious/noConsole: intentional CLI output
           console.error('')
           // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -546,9 +546,9 @@ export async function enter(args: string[]): Promise<void> {
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
         console.error('  1. Add phases to the spec YAML frontmatter')
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  2. Run: wm validate-spec ${specPath}`)
+        console.error(`  2. Run: kata validate-spec ${specPath}`)
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  3. Then retry: wm enter ${canonical} --issue=${issueNum}`)
+        console.error(`  3. Then retry: kata enter ${canonical} --issue=${issueNum}`)
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
         console.error('')
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -777,7 +777,7 @@ export async function enter(args: string[]): Promise<void> {
     console.error('')
   }
 
-  // Output full template content for context injection (same as wm prime)
+  // Output full template content for context injection (same as kata prime)
   if (!parsed.dryRun && modeConfig.template) {
     outputFullTemplateContent(
       modeConfig.template,

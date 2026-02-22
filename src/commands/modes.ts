@@ -1,8 +1,8 @@
-// wm modes — list available modes with entry commands
+// kata modes — list available modes with entry commands
 import { loadModesConfig } from '../config/cache.js'
 
 /**
- * wm modes
+ * kata modes
  *
  * Outputs a formatted list of available modes for Claude to pick from.
  * Used by the UserPromptSubmit hook when no mode is active.
@@ -18,7 +18,7 @@ export async function modes(_args: string[]): Promise<void> {
     if (mode.deprecated) continue
     // Skip system/utility modes that aren't for normal workflows
     if (['session-discovery', 'calibration', 'dedicated-testing', 'flow'].includes(id)) continue
-    lines.push(`- \`pnpm wm enter ${id}\` — ${mode.description}`)
+    lines.push(`- \`pnpm kata enter ${id}\` — ${mode.description}`)
   }
 
   lines.push('')

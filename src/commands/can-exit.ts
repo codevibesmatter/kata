@@ -1,4 +1,4 @@
-// wm can-exit - Check if exit conditions are met (native task-based)
+// kata can-exit - Check if exit conditions are met (native task-based)
 import { execSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -404,7 +404,7 @@ function buildStopGuidance(
 }
 
 /**
- * wm can-exit [--json] [--session=SESSION_ID]
+ * kata can-exit [--json] [--session=SESSION_ID]
  * Checks if exit conditions are met (based on native tasks)
  */
 export async function canExit(args: string[]): Promise<void> {

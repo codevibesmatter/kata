@@ -144,7 +144,7 @@ describe('cleanupOldSessions', () => {
       process.stderr.write = origWrite
     }
     const output = stderrChunks.join('')
-    expect(output).toContain('wm cleanup:')
+    expect(output).toContain('kata cleanup:')
     expect(output).toContain('old-session')
   })
 

@@ -166,7 +166,7 @@ function parseArgs(args: string[]): InitModeOptions & { help?: boolean; dryRun?:
 function showHelp(): void {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log(`
-Usage: wm init-mode <name> [options]
+Usage: kata init-mode <name> [options]
 
 Create a new mode with template and register it in modes.yaml.
 
@@ -189,14 +189,14 @@ Options:
   --help, -h                Show this help message
 
 Examples:
-  wm init-mode code-review
-  wm init-mode sprint-planning --phases=5 --category=planning
-  wm init-mode quick-fix --prefix=QF --aliases=qf,fast-fix
-  wm init-mode code-review --dry-run
+  kata init-mode code-review
+  kata init-mode sprint-planning --phases=5 --category=planning
+  kata init-mode quick-fix --prefix=QF --aliases=qf,fast-fix
+  kata init-mode code-review --dry-run
 
 After creation:
-  wm enter code-review                    # Use the new mode
-  wm validate-template packages/workflow-management/templates/code-review.md
+  kata enter code-review                    # Use the new mode
+  kata validate-template packages/workflow-management/templates/code-review.md
 `)
 }
 
@@ -214,19 +214,19 @@ export async function initModeCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm init-mode <name> [options]')
+    console.error('Usage: kata init-mode <name> [options]')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Examples:')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm init-mode code-review')
+    console.error('  kata init-mode code-review')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm init-mode sprint-planning --phases=5')
+    console.error('  kata init-mode sprint-planning --phases=5')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Run "wm init-mode --help" for more options.')
+    console.error('Run "kata init-mode --help" for more options.')
     process.exit(1)
   }
 
@@ -405,7 +405,7 @@ export async function initModeCommand(args: string[]): Promise<void> {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log(`  1. Edit template: ${templatePath}`)
   // biome-ignore lint/suspicious/noConsole: CLI output
-  console.log(`  2. Use the mode: wm enter ${parsed.name}`)
+  console.log(`  2. Use the mode: kata enter ${parsed.name}`)
   // biome-ignore lint/suspicious/noConsole: CLI output
-  console.log(`  3. Or with dry-run: wm enter ${parsed.name} --dry-run`)
+  console.log(`  3. Or with dry-run: kata enter ${parsed.name} --dry-run`)
 }

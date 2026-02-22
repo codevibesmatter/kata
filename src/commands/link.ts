@@ -1,4 +1,4 @@
-// wm link - Link or manage GitHub issue linkage for current session
+// kata link - Link or manage GitHub issue linkage for current session
 import { execSync } from 'node:child_process'
 import { getCurrentSessionId, getStateFilePath } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
@@ -107,7 +107,7 @@ async function showLink(sessionId?: string): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.log('')
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.log('Link an issue with: wm link <issue-number>')
+    console.log('Link an issue with: kata link <issue-number>')
     return
   }
 
@@ -206,7 +206,7 @@ async function linkIssue(issueNum: number, sessionId?: string): Promise<void> {
 }
 
 /**
- * wm link [<issue>] [--show] [--clear] [--session=SESSION_ID]
+ * kata link [<issue>] [--show] [--clear] [--session=SESSION_ID]
  *
  * Link or manage GitHub issue linkage for current session
  */
@@ -230,11 +230,11 @@ export async function link(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.error('Usage:')
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('  wm link <issue>     Link to issue')
+    console.error('  kata link <issue>     Link to issue')
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('  wm link --show      Show current link')
+    console.error('  kata link --show      Show current link')
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('  wm link --clear     Clear current link')
+    console.error('  kata link --clear     Clear current link')
     process.exitCode = 1
     return
   }

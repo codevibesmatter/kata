@@ -1,4 +1,4 @@
-// Setup profile for wm setup
+// Setup profile for kata setup
 // Handles auto-detection of project settings and default profile generation
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, join } from 'node:path'

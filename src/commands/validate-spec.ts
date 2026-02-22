@@ -191,9 +191,9 @@ export async function validateSpecCommand(args: string[]): Promise<void> {
     }
   } else {
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm validate-spec --issue=123')
+    console.error('Usage: kata validate-spec --issue=123')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('   or: wm validate-spec path/to/spec.md')
+    console.error('   or: kata validate-spec path/to/spec.md')
     process.exit(1)
   }
 

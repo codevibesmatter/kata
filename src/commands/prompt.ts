@@ -1,4 +1,4 @@
-// wm prompt - Output current mode's prompt content
+// kata prompt - Output current mode's prompt content
 import * as fs from 'node:fs/promises'
 import { getCurrentSessionId, getStateFilePath, resolveTemplatePath } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
@@ -21,7 +21,7 @@ function parseArgs(args: string[]): {
 }
 
 /**
- * wm prompt [--session=SESSION_ID]
+ * kata prompt [--session=SESSION_ID]
  * Outputs current mode's prompt content (for hooks)
  * Returns plain text
  */

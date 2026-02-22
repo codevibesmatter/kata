@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * wm - Workflow Management CLI
+ * kata - Workflow Management CLI
  *
  * Type-safe state management for Claude Code workflow sessions.
  */
@@ -67,7 +67,7 @@ async function main() {
       case 'advance':
         // Deprecated: Phase advancement is now done by completing native tasks
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('DEPRECATED: wm advance is no longer used.')
+        console.error('DEPRECATED: kata advance is no longer used.')
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
         console.error(
           'Phase advancement is tracked via native tasks. Use TaskUpdate(taskId="X", status="completed") to advance.',
@@ -175,7 +175,7 @@ async function main() {
         // biome-ignore lint/suspicious/noConsole: intentional for CLI
         console.error(`Unknown command: ${command}`)
         // biome-ignore lint/suspicious/noConsole: intentional for CLI
-        console.error('Run: wm help')
+        console.error('Run: kata help')
         process.exit(1)
     }
   } catch (error) {
