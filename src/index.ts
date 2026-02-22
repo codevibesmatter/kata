@@ -299,6 +299,8 @@ export {
   loadPrompt,
   listPrompts,
   claudeProvider,
+  geminiProvider,
+  codexProvider,
 } from './providers/index.js'
 export type { AgentProvider, AgentRunOptions } from './providers/types.js'
 export type { PreparedPrompt } from './providers/prompt.js'

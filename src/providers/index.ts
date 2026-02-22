@@ -6,12 +6,18 @@ export type { AgentProvider, AgentRunOptions } from './types.js'
 export { preparePrompt, loadPrompt, listPrompts } from './prompt.js'
 export type { PreparedPrompt } from './prompt.js'
 export { claudeProvider } from './claude.js'
+export { geminiProvider } from './gemini.js'
+export { codexProvider } from './codex.js'
 
 import type { AgentProvider } from './types.js'
 import { claudeProvider } from './claude.js'
+import { geminiProvider } from './gemini.js'
+import { codexProvider } from './codex.js'
 
 const providers: Record<string, AgentProvider> = {
   claude: claudeProvider,
+  gemini: geminiProvider,
+  codex: codexProvider,
 }
 
 /**
