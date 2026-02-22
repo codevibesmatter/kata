@@ -289,3 +289,16 @@ export * from './config/parser.js'
 export * from './config/cache.js'
 export * from './session/lookup.js'
 export * from './validation/index.js'
+
+// Agent providers
+export {
+  getProvider,
+  registerProvider,
+  listProviders,
+  preparePrompt,
+  loadPrompt,
+  listPrompts,
+  claudeProvider,
+} from './providers/index.js'
+export type { AgentProvider, AgentRunOptions } from './providers/types.js'
+export type { PreparedPrompt } from './providers/prompt.js'
