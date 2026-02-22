@@ -79,6 +79,8 @@ export interface EvalScenario {
 
 export interface EvalContext {
   projectDir: string
+  /** Git ref captured before the agent ran (null for fixture-based scenarios) */
+  baselineRef: string | null
   getSessionState(): SessionState | null
   run(cmd: string): string
   fileExists(relativePath: string): boolean
@@ -146,10 +148,21 @@ export async function runScenario(
 
   // Resolve project directory
   let projectDir: string
+  let baselineRef: string | null = null
   if (scenario.projectDir) {
     projectDir = resolve(scenario.projectDir)
     if (!existsSync(projectDir)) {
       throw new Error(`Project directory does not exist: ${projectDir}`)
+    }
+    // Capture baseline ref before agent runs (for delta assertions)
+    try {
+      baselineRef = execSync('git rev-parse HEAD', {
+        cwd: projectDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim()
+    } catch {
+      // Not a git repo or no commits — baselineRef stays null
     }
   } else {
     const fixtureName = scenario.fixture ?? 'tanstack-start'
@@ -368,7 +381,7 @@ export async function runScenario(
     }
 
     // Always run checkpoints — even when paused, state may already be written
-    const ctx: EvalContext = buildContext(projectDir)
+    const ctx: EvalContext = buildContext(projectDir, baselineRef)
     for (const checkpoint of scenario.checkpoints) {
       const error = await checkpoint.assert(ctx)
       result.assertions.push({
@@ -478,11 +491,15 @@ function formatToolInput(name: string, input: unknown): string {
 
 // ─── Context builder ──────────────────────────────────────────────────────────
 
-function buildContext(projectDir: string): EvalContext {
+function buildContext(projectDir: string, baselineRef: string | null = null): EvalContext {
   return {
     projectDir,
+    baselineRef,
     getSessionState(): SessionState | null {
-      const sessionsDir = join(projectDir, '.claude', 'sessions')
+      // Check .kata/sessions/ first (new layout), then .claude/sessions/ (old layout)
+      const kataSessionsDir = join(projectDir, '.kata', 'sessions')
+      const claudeSessionsDir = join(projectDir, '.claude', 'sessions')
+      const sessionsDir = existsSync(kataSessionsDir) ? kataSessionsDir : claudeSessionsDir
       if (!existsSync(sessionsDir)) return null
       try {
         const sessions = readdirSync(sessionsDir)

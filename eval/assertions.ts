@@ -19,14 +19,19 @@ function fail(msg: string): string {
 }
 
 /**
- * Read a top-level key from .claude/workflows/wm.yaml via grep.
+ * Read a top-level key from wm.yaml via grep.
+ * Checks .kata/wm.yaml first (new layout), then .claude/workflows/wm.yaml (old layout).
  * Returns the value string or the provided default.
  */
 function readWmYamlKey(ctx: EvalContext, key: string, fallback: string): string {
+  // Try new layout first, then old layout
   const raw = ctx.run(
-    `grep '^${key}:' .claude/workflows/wm.yaml 2>/dev/null | awk '{print $2}'`,
+    `grep '^${key}:' .kata/wm.yaml 2>/dev/null || grep '^${key}:' .claude/workflows/wm.yaml 2>/dev/null`,
   )?.trim()
-  return raw || fallback
+  if (!raw) return fallback
+  // Extract value after "key: "
+  const match = raw.match(new RegExp(`^${key}:\\s*(.+)$`))
+  return match?.[1]?.trim() || fallback
 }
 
 // ─── Session State Assertions ──────────────────────────────────────────────────
@@ -365,16 +370,20 @@ export function assertSettingsExist(): EvalCheckpoint {
 }
 
 /**
- * Assert that .claude/workflows/wm.yaml exists with a project: key.
+ * Assert that wm.yaml exists with a project: key.
+ * Checks .kata/wm.yaml (new layout) then .claude/workflows/wm.yaml (old layout).
  */
 export function assertWmYamlExists(): EvalCheckpoint {
   return {
-    name: '.claude/workflows/wm.yaml exists',
+    name: 'wm.yaml exists',
     assert(ctx: EvalContext) {
-      if (!ctx.fileExists('.claude/workflows/wm.yaml')) {
-        return fail('.claude/workflows/wm.yaml not found')
+      const newPath = '.kata/wm.yaml'
+      const oldPath = '.claude/workflows/wm.yaml'
+      const wmPath = ctx.fileExists(newPath) ? newPath : ctx.fileExists(oldPath) ? oldPath : null
+      if (!wmPath) {
+        return fail('wm.yaml not found (checked .kata/wm.yaml and .claude/workflows/wm.yaml)')
       }
-      const content = ctx.readFile('.claude/workflows/wm.yaml')
+      const content = ctx.readFile(wmPath)
       if (!content.includes('project:')) {
         return fail('wm.yaml missing project: key')
       }
@@ -384,18 +393,28 @@ export function assertWmYamlExists(): EvalCheckpoint {
 }
 
 /**
- * Assert that mode templates have been seeded in .claude/workflows/templates/.
+ * Assert that mode templates have been seeded.
+ * Checks .kata/templates/ (new layout) then .claude/workflows/templates/ (old layout).
  */
 export function assertTemplatesExist(): EvalCheckpoint {
   return {
     name: 'mode templates seeded',
     assert(ctx: EvalContext) {
-      const templates = ctx.listDir('.claude/workflows/templates')
-      if (templates.length === 0) {
-        return fail('No templates found in .claude/workflows/templates/')
+      const newDir = '.kata/templates'
+      const oldDir = '.claude/workflows/templates'
+      const templates = ctx.listDir(newDir)
+      if (templates.length > 0) {
+        if (!templates.includes('onboard.md')) {
+          return fail('onboard.md template missing from .kata/templates/')
+        }
+        return pass()
       }
-      if (!templates.includes('onboard.md')) {
-        return fail('onboard.md template missing')
+      const oldTemplates = ctx.listDir(oldDir)
+      if (oldTemplates.length === 0) {
+        return fail('No templates found (checked .kata/templates/ and .claude/workflows/templates/)')
+      }
+      if (!oldTemplates.includes('onboard.md')) {
+        return fail('onboard.md template missing from .claude/workflows/templates/')
       }
       return pass()
     },
@@ -412,6 +431,70 @@ export function assertGitInitialized(): EvalCheckpoint {
       const result = ctx.run('git rev-parse --git-dir 2>/dev/null')
       if (!result) {
         return fail('Not a git repository')
+      }
+      return pass()
+    },
+  }
+}
+
+// ─── Delta Assertions (for live projects with baselineRef) ────────────────────
+
+/**
+ * Assert that at least one new commit was made since the baseline ref.
+ * For live project scenarios where there's no "initial scaffold" commit.
+ */
+export function assertNewCommitSinceBaseline(): EvalCheckpoint {
+  return {
+    name: 'git: new commit since baseline',
+    assert(ctx: EvalContext) {
+      if (!ctx.baselineRef) {
+        return fail('No baselineRef set — this assertion requires a live project scenario')
+      }
+      const count = ctx.run(`git rev-list --count ${ctx.baselineRef}..HEAD`)
+      if (!count || parseInt(count, 10) < 1) {
+        return fail(`Expected at least 1 new commit since ${ctx.baselineRef.slice(0, 8)}, found 0`)
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that the diff since baseline contains a pattern.
+ * Like assertDiffContains but uses baselineRef instead of root commit.
+ */
+export function assertDeltaDiffContains(pattern: string | RegExp): EvalCheckpoint {
+  const label = pattern instanceof RegExp ? pattern.source : pattern
+  return {
+    name: `delta diff contains: ${label}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.baselineRef) {
+        return fail('No baselineRef set — this assertion requires a live project scenario')
+      }
+      const diff = ctx.run(`git diff ${ctx.baselineRef}..HEAD`)
+      const matches = pattern instanceof RegExp ? pattern.test(diff) : diff.includes(pattern)
+      if (!matches) {
+        return fail(`Expected delta diff (since ${ctx.baselineRef.slice(0, 8)}) to contain '${label}'`)
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that a session state file exists with a mode set.
+ * Works with both .kata/ and .claude/ layouts.
+ */
+export function assertSessionInitialized(): EvalCheckpoint {
+  return {
+    name: 'session state initialized with mode',
+    assert(ctx: EvalContext) {
+      const state = ctx.getSessionState()
+      if (!state) {
+        return fail('No session state found')
+      }
+      if (!state.currentMode) {
+        return fail('Session state exists but currentMode is not set')
       }
       return pass()
     },
@@ -470,6 +553,21 @@ export function planningPresets(mode: string = 'planning'): EvalCheckpoint[] {
     assertSpecApproved(),
     assertSpecHasBehaviors(),
     assertModeInHistory(mode),
+  ]
+}
+
+/**
+ * Live project workflow presets: session initialized, mode correct,
+ * new commit since baseline, clean tree, can-exit.
+ * For scenarios running against real projects (not fixtures).
+ */
+export function liveWorkflowPresets(mode: string): EvalCheckpoint[] {
+  return [
+    assertSessionInitialized(),
+    assertCurrentMode(mode),
+    assertNewCommitSinceBaseline(),
+    assertCleanWorkingTree(),
+    assertCanExit(),
   ]
 }
 

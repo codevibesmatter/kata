@@ -30,13 +30,19 @@ import { modeEntryScenario } from './scenarios/mode-entry.js'
 import { askUserPauseScenario } from './scenarios/ask-user-pause.js'
 import { planningAuthScenario } from './scenarios/planning-auth.js'
 import { implAuthScenario } from './scenarios/impl-auth.js'
+import { liveHookVerifyScenario } from './scenarios/live-hook-verify.js'
+import { liveTaskScenario } from './scenarios/live-task.js'
+import { liveResearchScenario } from './scenarios/live-research.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const TRANSCRIPT_DIR = resolve(__dirname, '../eval-transcripts')
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
-const scenarios = [askUserPauseScenario, modeEntryScenario, onboardScenario, taskModeScenario, planningModeScenario, planningAuthScenario, implAuthScenario, researchModeScenario]
+const scenarios = [askUserPauseScenario, modeEntryScenario, onboardScenario, taskModeScenario, planningModeScenario, planningAuthScenario, implAuthScenario, researchModeScenario, liveHookVerifyScenario, liveTaskScenario, liveResearchScenario]
+
+/** Scenarios that require --project (no built-in fixture) */
+const LIVE_SCENARIO_IDS = new Set(['live-hook-verify', 'live-task', 'live-research'])
 
 // ─── CLI ──────────────────────────────────────────────────────────────────────
 
@@ -116,6 +122,17 @@ async function main(): Promise<void> {
     if (toRun.length === 0) {
       process.stderr.write(`Unknown scenario: ${scenarioArg}\n`)
       process.stderr.write(`Available: ${scenarios.map((s) => s.id).join(', ')}\n`)
+      process.exit(1)
+    }
+
+    // Validate --project is provided for live-* scenarios
+    const liveWithoutProject = toRun.filter((s) => LIVE_SCENARIO_IDS.has(s.id) && !projectArg)
+    if (liveWithoutProject.length > 0) {
+      process.stderr.write(
+        `Error: Live scenarios require --project=<path>:\n` +
+        `  ${liveWithoutProject.map((s) => s.id).join(', ')}\n` +
+        `Usage: npm run eval -- --scenario=${liveWithoutProject[0].id} --project=/path/to/project\n`,
+      )
       process.exit(1)
     }
 

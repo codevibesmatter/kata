@@ -16,6 +16,9 @@ import {
   assertDiffContains,
   assertDiffNonTrivial,
   assertChangesPushed,
+  assertNewCommitSinceBaseline,
+  assertDeltaDiffContains,
+  assertSessionInitialized,
   assertSpecFileCreated,
   assertSpecApproved,
   assertSpecHasBehaviors,
@@ -28,6 +31,7 @@ import {
   workflowPresets,
   workflowPresetsWithPush,
   planningPresets,
+  liveWorkflowPresets,
   onboardPresets,
 } from './assertions.js'
 import type { SessionState } from '../src/state/schema.js'
@@ -39,6 +43,7 @@ function mockContext(overrides: {
   files?: Record<string, string>
   dirs?: Record<string, string[]>
   runResults?: Record<string, string>
+  baselineRef?: string | null
 }): EvalContext {
   const files = overrides.files ?? {}
   const dirs = overrides.dirs ?? {}
@@ -46,6 +51,7 @@ function mockContext(overrides: {
 
   return {
     projectDir: '/tmp/test-project',
+    baselineRef: overrides.baselineRef ?? null,
     getSessionState() {
       if (overrides.state === null) return null
       return (overrides.state ?? {}) as SessionState
@@ -203,6 +209,89 @@ describe('assertChangesPushed', () => {
   })
 })
 
+// ─── Delta Assertions (live project) ─────────────────────────────────────────
+
+describe('assertNewCommitSinceBaseline', () => {
+  it('passes when commits exist since baseline', async () => {
+    const ctx = mockContext({
+      baselineRef: 'abc123',
+      runResults: { 'git rev-list --count abc123..HEAD': '2' },
+    })
+    const result = await assertNewCommitSinceBaseline().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when no commits since baseline', async () => {
+    const ctx = mockContext({
+      baselineRef: 'abc123',
+      runResults: { 'git rev-list --count abc123..HEAD': '0' },
+    })
+    const result = await assertNewCommitSinceBaseline().assert(ctx)
+    expect(result).toContain('Expected at least 1 new commit')
+  })
+
+  it('fails when no baselineRef', async () => {
+    const ctx = mockContext({ baselineRef: null })
+    const result = await assertNewCommitSinceBaseline().assert(ctx)
+    expect(result).toContain('No baselineRef set')
+  })
+})
+
+describe('assertDeltaDiffContains', () => {
+  it('passes when delta diff contains pattern', async () => {
+    const ctx = mockContext({
+      baselineRef: 'abc123',
+      runResults: { 'git diff abc123..HEAD': '+health check endpoint\n+return 200' },
+    })
+    const result = await assertDeltaDiffContains('health check').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('passes with regex pattern', async () => {
+    const ctx = mockContext({
+      baselineRef: 'abc123',
+      runResults: { 'git diff abc123..HEAD': '+export function getHealth() {}' },
+    })
+    const result = await assertDeltaDiffContains(/function\s+get\w+/).assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when pattern not found', async () => {
+    const ctx = mockContext({
+      baselineRef: 'abc123',
+      runResults: { 'git diff abc123..HEAD': '+unrelated change' },
+    })
+    const result = await assertDeltaDiffContains('health').assert(ctx)
+    expect(result).toContain("Expected delta diff")
+  })
+
+  it('fails when no baselineRef', async () => {
+    const ctx = mockContext({ baselineRef: null })
+    const result = await assertDeltaDiffContains('anything').assert(ctx)
+    expect(result).toContain('No baselineRef set')
+  })
+})
+
+describe('assertSessionInitialized', () => {
+  it('passes when session has mode', async () => {
+    const ctx = mockContext({ state: { currentMode: 'task' } })
+    const result = await assertSessionInitialized().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when no session state', async () => {
+    const ctx = mockContext({ state: null })
+    const result = await assertSessionInitialized().assert(ctx)
+    expect(result).toContain('No session state found')
+  })
+
+  it('fails when mode not set', async () => {
+    const ctx = mockContext({ state: {} })
+    const result = await assertSessionInitialized().assert(ctx)
+    expect(result).toContain('currentMode is not set')
+  })
+})
+
 // ─── Artifact Assertions ─────────────────────────────────────────────────────
 
 describe('assertSpecFileCreated (config-driven)', () => {
@@ -210,8 +299,8 @@ describe('assertSpecFileCreated (config-driven)', () => {
     const ctx = mockContext({
       files: { '.claude/workflows/wm.yaml': 'spec_path: custom/specs' },
       dirs: { 'custom/specs': ['feature.md'] },
-      // awk '{print $2}' extracts just the value
-      runResults: { "grep '^spec_path:'": 'custom/specs' },
+      // grep returns the full matching line; readWmYamlKey extracts the value via regex
+      runResults: { "grep '^spec_path:'": 'spec_path: custom/specs' },
     })
     const result = await assertSpecFileCreated().assert(ctx)
     expect(result).toBeNull()
@@ -313,13 +402,27 @@ describe('planningPresets', () => {
   })
 })
 
+describe('liveWorkflowPresets', () => {
+  it('returns 5 checkpoints', () => {
+    const presets = liveWorkflowPresets('task')
+    expect(presets).toHaveLength(5)
+    expect(presets.map((p) => p.name)).toEqual([
+      'session state initialized with mode',
+      "session.currentMode === 'task'",
+      'git: new commit since baseline',
+      'git: working tree is clean',
+      'kata can-exit: exits 0',
+    ])
+  })
+})
+
 describe('onboardPresets', () => {
   it('returns 4 checkpoints', () => {
     expect(onboardPresets).toHaveLength(4)
     const names = onboardPresets.map((p) => p.name)
     expect(names).toContain('git repository initialized')
     expect(names).toContain('.claude/settings.json exists with hooks')
-    expect(names).toContain('.claude/workflows/wm.yaml exists')
+    expect(names).toContain('wm.yaml exists')
     expect(names).toContain('mode templates seeded')
   })
 })
