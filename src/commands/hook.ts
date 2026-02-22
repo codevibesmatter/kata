@@ -2,7 +2,9 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { getStateFilePath, findProjectDir } from '../session/lookup.js'
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { getStateFilePath, findProjectDir, getSessionsDir } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { readNativeTaskFiles } from './enter/task-factory.js'
 import type { SessionState } from '../state/schema.js'
@@ -376,6 +378,34 @@ async function handleTaskEvidence(_input: Record<string, unknown>): Promise<void
   })
 }
 
+/**
+ * Append a structured log entry to the session's stop-hook log.
+ * Written to {sessionsDir}/{sessionId}/stop-hook.log.jsonl
+ * so eval assertions can verify the stop hook fired and blocked.
+ */
+function logStopHook(
+  sessionId: string,
+  decision: 'block' | 'allow',
+  reasons: string[],
+  note?: string,
+): void {
+  try {
+    const projectDir = findProjectDir()
+    const sessionsDir = getSessionsDir(projectDir)
+    const sessionDir = join(sessionsDir, sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+    const entry = {
+      ts: new Date().toISOString(),
+      decision,
+      reasons,
+      ...(note ? { note } : {}),
+    }
+    appendFileSync(join(sessionDir, 'stop-hook.log.jsonl'), `${JSON.stringify(entry)}\n`)
+  } catch {
+    // Best-effort logging — never fail the hook
+  }
+}
+
 // ── Handler: stop-conditions ──
 // Calls canExit to check if session can be stopped
 async function handleStopConditions(input: Record<string, unknown>): Promise<void> {
@@ -397,6 +427,7 @@ async function handleStopConditions(input: Record<string, unknown>): Promise<voi
 
   // No stop conditions for this mode = allow exit
   if (stopConditions.length === 0) {
+    logStopHook(sessionId, 'allow', [], 'no stop conditions for mode')
     return
   }
 
@@ -423,14 +454,18 @@ async function handleStopConditions(input: Record<string, unknown>): Promise<voi
       if (result.guidance?.escapeHatch) {
         parts.push(result.guidance.escapeHatch)
       }
+      logStopHook(sessionId, 'block', result.reasons)
       // decision: "block" must be at the TOP LEVEL (not inside hookSpecificOutput)
       outputJson({
         decision: 'block',
         reason: parts.join('\n'),
       })
+    } else {
+      logStopHook(sessionId, 'allow', [], 'all conditions met')
     }
     // canExit === true: output nothing (allows stop)
   } catch {
+    logStopHook(sessionId, 'allow', [], 'parse error — defaulting to allow')
     // Could not parse exit output — allow stop
   }
 }

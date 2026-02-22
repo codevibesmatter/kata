@@ -640,6 +640,127 @@ export function assertTaskDependencyOrderRespected(): EvalCheckpoint {
   }
 }
 
+// ─── Stop Hook Assertions ────────────────────────────────────────────────────
+
+interface StopHookLogEntry {
+  ts: string
+  decision: 'block' | 'allow'
+  reasons: string[]
+  note?: string
+}
+
+/**
+ * Read stop hook log entries for a session.
+ * The stop hook writes to {sessionsDir}/{sessionId}/stop-hook.log.jsonl
+ */
+function readStopHookLog(ctx: EvalContext): StopHookLogEntry[] {
+  // Check both session dir layouts
+  for (const base of ['.kata/sessions', '.claude/sessions']) {
+    if (!ctx.sessionId) return []
+    const logPath = `${base}/${ctx.sessionId}/stop-hook.log.jsonl`
+    if (ctx.fileExists(logPath)) {
+      const content = ctx.readFile(logPath)
+      return content
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            return JSON.parse(line) as StopHookLogEntry
+          } catch {
+            return null
+          }
+        })
+        .filter((e): e is StopHookLogEntry => e !== null)
+    }
+  }
+  return []
+}
+
+/**
+ * Assert that the stop hook blocked the agent at least N times.
+ * Requires sessionId on EvalContext and stop-hook.log.jsonl in the session dir.
+ */
+export function assertStopHookBlocked(minTimes: number = 1): EvalCheckpoint {
+  return {
+    name: `stop hook blocked >= ${minTimes} time(s)`,
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check stop hook log')
+      }
+      const entries = readStopHookLog(ctx)
+      if (entries.length === 0) {
+        return fail('No stop hook log entries found — hook may not have fired')
+      }
+      const blocks = entries.filter((e) => e.decision === 'block')
+      if (blocks.length < minTimes) {
+        return fail(
+          `Expected stop hook to block >= ${minTimes} time(s), got ${blocks.length}. ` +
+          `Total hook firings: ${entries.length}`,
+        )
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that the stop hook blocked with a reason matching the given pattern.
+ * Useful for verifying specific conditions were enforced (e.g., 'pending', 'Uncommitted').
+ */
+export function assertStopHookBlockedWithReason(pattern: string | RegExp): EvalCheckpoint {
+  const label = pattern instanceof RegExp ? pattern.source : pattern
+  return {
+    name: `stop hook blocked with reason: ${label}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check stop hook log')
+      }
+      const entries = readStopHookLog(ctx)
+      const blocks = entries.filter((e) => e.decision === 'block')
+      if (blocks.length === 0) {
+        return fail('Stop hook never blocked — cannot check reasons')
+      }
+      const allReasons = blocks.flatMap((e) => e.reasons)
+      const matches = pattern instanceof RegExp
+        ? allReasons.some((r) => pattern.test(r))
+        : allReasons.some((r) => r.includes(pattern))
+      if (!matches) {
+        return fail(
+          `No stop hook block had reason matching '${label}'. ` +
+          `Reasons seen: ${allReasons.slice(0, 5).join('; ')}`,
+        )
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that the stop hook eventually allowed exit (last entry is 'allow').
+ */
+export function assertStopHookEventuallyAllowed(): EvalCheckpoint {
+  return {
+    name: 'stop hook eventually allowed exit',
+    assert(ctx: EvalContext) {
+      if (!ctx.sessionId) {
+        return fail('No sessionId on EvalContext — cannot check stop hook log')
+      }
+      const entries = readStopHookLog(ctx)
+      if (entries.length === 0) {
+        return fail('No stop hook log entries found')
+      }
+      const last = entries[entries.length - 1]
+      if (last.decision !== 'allow') {
+        return fail(
+          `Last stop hook decision was '${last.decision}', expected 'allow'. ` +
+          `Reasons: ${last.reasons.join('; ')}`,
+        )
+      }
+      return pass()
+    },
+  }
+}
+
 // ─── Presets ──────────────────────────────────────────────────────────────────
 
 /**
@@ -689,6 +810,18 @@ export function liveWorkflowPresets(mode: string): EvalCheckpoint[] {
     assertNewCommitSinceBaseline(),
     assertCleanWorkingTree(),
     assertCanExit(),
+  ]
+}
+
+/**
+ * Stop hook enforcement presets: hook fired, blocked at least once,
+ * blocked for pending tasks, and eventually allowed exit.
+ */
+export function stopHookPresets(): EvalCheckpoint[] {
+  return [
+    assertStopHookBlocked(1),
+    assertStopHookBlockedWithReason(/task.*pending/i),
+    assertStopHookEventuallyAllowed(),
   ]
 }
 

@@ -32,12 +32,16 @@ import {
   assertNoTaskCreateCalls,
   assertNativeTaskCount,
   assertTaskDependencyOrderRespected,
+  assertStopHookBlocked,
+  assertStopHookBlockedWithReason,
+  assertStopHookEventuallyAllowed,
   workflowPresets,
   workflowPresetsWithPush,
   planningPresets,
   liveWorkflowPresets,
   taskDisciplinePresets,
   liveTaskDisciplinePresets,
+  stopHookPresets,
   onboardPresets,
 } from './assertions.js'
 import type { SessionState } from '../src/state/schema.js'
@@ -508,5 +512,123 @@ describe('liveTaskDisciplinePresets', () => {
     expect(names).toContain('no TaskCreate calls in transcript')
     expect(names).toContain('all native tasks completed')
     expect(names).toContain('task dependency order respected')
+  })
+})
+
+// ─── Stop Hook Assertions ────────────────────────────────────────────────────
+
+describe('assertStopHookBlocked', () => {
+  it('fails when no sessionId', async () => {
+    const ctx = mockContext({})
+    const result = await assertStopHookBlocked().assert(ctx)
+    expect(result).toContain('No sessionId')
+  })
+
+  it('fails when no log entries found', async () => {
+    const ctx = mockContext({ sessionId: 'test-session-123' })
+    const result = await assertStopHookBlocked().assert(ctx)
+    expect(result).toContain('No stop hook log entries')
+  })
+
+  it('passes when log has block entries', async () => {
+    const logContent = [
+      '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["3 task(s) still pending"]}',
+      '{"ts":"2026-01-01T00:01:00Z","decision":"allow","reasons":[],"note":"all conditions met"}',
+    ].join('\n')
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlocked(1).assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when not enough blocks', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"allow","reasons":[],"note":"all conditions met"}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlocked(1).assert(ctx)
+    expect(result).toContain('Expected stop hook to block >= 1')
+  })
+})
+
+describe('assertStopHookBlockedWithReason', () => {
+  it('passes when reason matches string pattern', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["3 task(s) still pending"]}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlockedWithReason('pending').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('passes when reason matches regex', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["5 task(s) still pending"]}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlockedWithReason(/task.*pending/i).assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when no block has matching reason', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["Uncommitted changes"]}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlockedWithReason('pending').assert(ctx)
+    expect(result).toContain("No stop hook block had reason matching 'pending'")
+  })
+
+  it('fails when hook never blocked', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"allow","reasons":[]}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookBlockedWithReason('pending').assert(ctx)
+    expect(result).toContain('Stop hook never blocked')
+  })
+})
+
+describe('assertStopHookEventuallyAllowed', () => {
+  it('passes when last entry is allow', async () => {
+    const logContent = [
+      '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["pending"]}',
+      '{"ts":"2026-01-01T00:01:00Z","decision":"allow","reasons":[],"note":"all conditions met"}',
+    ].join('\n')
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookEventuallyAllowed().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when last entry is block', async () => {
+    const logContent = '{"ts":"2026-01-01T00:00:00Z","decision":"block","reasons":["pending"]}'
+    const ctx = mockContext({
+      sessionId: 'test-session-123',
+      files: { '.kata/sessions/test-session-123/stop-hook.log.jsonl': logContent },
+    })
+    const result = await assertStopHookEventuallyAllowed().assert(ctx)
+    expect(result).toContain("Last stop hook decision was 'block'")
+  })
+})
+
+describe('stopHookPresets', () => {
+  it('returns 3 checkpoints', () => {
+    const presets = stopHookPresets()
+    expect(presets).toHaveLength(3)
+    expect(presets.map((p) => p.name)).toEqual([
+      'stop hook blocked >= 1 time(s)',
+      'stop hook blocked with reason: task.*pending',
+      'stop hook eventually allowed exit',
+    ])
   })
 })
