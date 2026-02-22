@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 import { loadWmConfig } from '../config/wm-config.js'
 
 interface ValidationResult {
@@ -17,7 +17,7 @@ interface ValidationResult {
  * Find spec file by issue number
  */
 function findSpecFile(issueNum: number): string | null {
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   if (!projectDir) return null
 
   const specsDir = resolve(projectDir, loadWmConfig().spec_path ?? 'planning/specs')

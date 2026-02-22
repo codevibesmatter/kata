@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 
 interface InitModeOptions {
   name: string
@@ -250,7 +250,7 @@ export async function initModeCommand(args: string[]): Promise<void> {
     process.exit(1)
   }
 
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   if (!projectDir) {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Error: Could not find .claude directory')

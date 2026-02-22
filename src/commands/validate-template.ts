@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, basename } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 import { validatePhases } from '../validation/index.js'
 
 interface TemplateValidationResult {
@@ -258,7 +258,7 @@ export async function validateTemplateCommand(args: string[]): Promise<void> {
     process.exit(1)
   }
 
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   const templatePath = parsed.path.startsWith('/')
     ? parsed.path
     : resolve(projectDir || process.cwd(), parsed.path)

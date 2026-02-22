@@ -2,7 +2,7 @@
 // Called by `wm setup --batteries` after base setup completes.
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { getPackageRoot, getUserConfigDir } from '../session/lookup.js'
+import { getPackageRoot, getUserConfigDir, getProjectTemplatesDir } from '../session/lookup.js'
 
 export interface BatteriesResult {
   templates: string[]
@@ -72,10 +72,10 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     updated: [],
   }
 
-  // Mode templates → .claude/workflows/templates/
+  // Mode templates → .kata/templates/ (or .claude/workflows/templates/ for old layout)
   copyDirectory(
     join(batteryRoot, 'templates'),
-    join(projectRoot, '.claude', 'workflows', 'templates'),
+    getProjectTemplatesDir(projectRoot),
     result.templates,
     result.skipped,
     result.updated,

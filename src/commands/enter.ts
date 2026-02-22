@@ -4,7 +4,7 @@ import { resolve, dirname, join } from 'node:path'
 import {
   getCurrentSessionId,
   getStateFilePath,
-  findClaudeProjectDir,
+  findProjectDir,
   resolveTemplatePath,
 } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
@@ -92,7 +92,7 @@ async function enterWithCustomTemplate(
   _args: string[],
   parsed: ReturnType<typeof parseArgs>,
 ): Promise<void> {
-  const projectRoot = findClaudeProjectDir()
+  const projectRoot = findProjectDir()
 
   // Resolve template path
   const templatePath = parsed.template!.startsWith('/')
@@ -322,7 +322,9 @@ export async function enter(args: string[]): Promise<void> {
       const { loadWmConfig } = await import('../config/wm-config.js')
       const wmConfig = loadWmConfig()
       const retentionDays = wmConfig.session_retention_days ?? 7
-      const claudeDir = join(findClaudeProjectDir(), '.claude')
+      const { getKataDir } = await import('../session/lookup.js')
+      const projectRoot = findProjectDir()
+      const claudeDir = join(projectRoot, getKataDir(projectRoot))
       const sessionId = parsed.session || (await getCurrentSessionId())
       cleanupOldSessions(claudeDir, retentionDays, sessionId)
     } catch {

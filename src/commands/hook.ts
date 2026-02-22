@@ -2,7 +2,7 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { getStateFilePath, findClaudeProjectDir } from '../session/lookup.js'
+import { getStateFilePath, findProjectDir } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { readNativeTaskFiles } from './enter/task-factory.js'
 import type { SessionState } from '../state/schema.js'
@@ -344,7 +344,7 @@ async function handleTaskEvidence(_input: Record<string, unknown>): Promise<void
     // subdirectory (e.g. .claude/hooks/) don't get a spuriously clean status.
     let cwd: string | undefined
     try {
-      cwd = findClaudeProjectDir()
+      cwd = findProjectDir()
     } catch {
       // No .claude/ found — fall back to hook runner's cwd
     }

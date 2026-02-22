@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs'
-import { resolve, basename } from 'node:path'
+import { resolve, basename, join } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir, getProjectModesPath, getProjectTemplatesDir } from '../session/lookup.js'
 import { validatePhases } from '../validation/index.js'
 
 interface RegisterModeOptions {
@@ -140,7 +140,7 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     process.exit(1)
   }
 
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   if (!projectDir) {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Error: Could not find .claude directory')
@@ -226,9 +226,8 @@ export async function registerModeCommand(args: string[]): Promise<void> {
   }
 
   // Always write to project-level paths (npm installs have read-only package paths)
-  const workflowsDir = resolve(projectDir, '.claude', 'workflows')
-  const modesYamlPath = resolve(workflowsDir, 'modes.yaml')
-  const templatesDir = resolve(workflowsDir, 'templates')
+  const modesYamlPath = getProjectModesPath(projectDir)
+  const templatesDir = getProjectTemplatesDir(projectDir)
 
   // Determine final template location
   let finalTemplatePath = templatePath
@@ -353,8 +352,9 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     }
   }
 
-  // Update modes.yaml (ensure project workflows dir exists)
-  mkdirSync(workflowsDir, { recursive: true })
+  // Update modes.yaml (ensure directory exists)
+  const modesDir = join(modesYamlPath, '..')
+  mkdirSync(modesDir, { recursive: true })
   try {
     let modesYaml: Record<string, unknown> = { modes: {}, categories: {} }
 

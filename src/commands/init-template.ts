@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname, basename } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 
 interface InitTemplateOptions {
   path: string
@@ -169,7 +169,7 @@ export async function initTemplateCommand(args: string[]): Promise<void> {
   }
 
   // Resolve path
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   const templatePath = parsed.path.startsWith('/')
     ? parsed.path
     : resolve(projectDir || process.cwd(), parsed.path)

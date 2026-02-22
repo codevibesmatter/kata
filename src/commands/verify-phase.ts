@@ -3,7 +3,7 @@
 import { execSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getCurrentSessionId, findClaudeProjectDir, getStateFilePath } from '../session/lookup.js'
+import { getCurrentSessionId, findProjectDir, getStateFilePath, getVerificationDir } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 import { loadWmConfig } from '../config/wm-config.js'
 
@@ -354,7 +354,7 @@ function writeEvidenceFile(
   issueNumber: number,
   steps: StepResult[],
 ): void {
-  const dir = join(projectRoot, '.claude', 'verification-evidence')
+  const dir = getVerificationDir(projectRoot)
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
 
   const evidence: EvidenceFile = {
@@ -417,7 +417,7 @@ export async function verifyPhase(args: string[]): Promise<void> {
 
   let projectRoot: string
   try {
-    projectRoot = findClaudeProjectDir()
+    projectRoot = findProjectDir()
   } catch {
     console.error('Error: Not in a kata-wm project directory')
     process.exit(1)

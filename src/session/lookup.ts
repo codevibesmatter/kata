@@ -23,17 +23,18 @@ export function getPackageRoot(): string {
 }
 
 /**
- * Find Claude project directory by walking up from cwd
+ * Find kata project directory by walking up from cwd.
  * Priority:
- * 1. CLAUDE_PROJECT_DIR env var (explicit override)
- * 2. Walk up looking for .claude/sessions/ or .claude/workflows/
+ * 1. CLAUDE_PROJECT_DIR env var (explicit override, checks for .kata/ or .claude/)
+ * 2. Walk up looking for .kata/ (new layout)
+ * 3. Walk up looking for .claude/sessions/ or .claude/workflows/ (backwards compat)
  * @returns Absolute path to project root
- * @throws Error if not in a Claude project
+ * @throws Error if not in a kata project
  */
-export function findClaudeProjectDir(): string {
+export function findProjectDir(): string {
   // Honor CLAUDE_PROJECT_DIR env var (set by hooks, npm installs, CI)
   const envDir = process.env.CLAUDE_PROJECT_DIR
-  if (envDir && existsSync(path.join(envDir, '.claude'))) {
+  if (envDir && (existsSync(path.join(envDir, '.kata')) || existsSync(path.join(envDir, '.claude')))) {
     return envDir
   }
 
@@ -41,7 +42,11 @@ export function findClaudeProjectDir(): string {
   const root = path.parse(dir).root
 
   while (dir !== root) {
-    // Accept .claude/sessions/ (existing) or .claude/workflows/ (npm installs without sessions)
+    // Prefer .kata/ (new layout)
+    if (existsSync(path.join(dir, '.kata'))) {
+      return dir
+    }
+    // Backwards compat: accept .claude/sessions/ or .claude/workflows/ (old layout)
     if (
       existsSync(path.join(dir, '.claude/sessions')) ||
       existsSync(path.join(dir, '.claude/workflows'))
@@ -50,7 +55,6 @@ export function findClaudeProjectDir(): string {
     }
     const parent = path.dirname(dir)
     // Stop at git repo boundary — if this dir has .git, don't walk above it
-    // into a different project's .claude/
     if (existsSync(path.join(dir, '.git'))) {
       break
     }
@@ -58,10 +62,102 @@ export function findClaudeProjectDir(): string {
   }
 
   throw new Error(
-    'Not in a Claude project directory (no .claude/sessions/ or .claude/workflows/ found)\n' +
-      'Run: wm doctor --fix\n' +
+    'Not in a kata project directory (no .kata/ or .claude/ found)\n' +
+      'Run: kata doctor --fix\n' +
       'Or set CLAUDE_PROJECT_DIR environment variable',
   )
+}
+
+/**
+ * @deprecated Use findProjectDir() instead
+ */
+export const findClaudeProjectDir = findProjectDir
+
+/**
+ * Get the kata config directory for a project.
+ * Returns .kata/ if it exists, otherwise falls back to .claude/ (old layout).
+ * @param projectRoot - Absolute path to project root
+ * @returns '.kata' or '.claude' relative prefix
+ */
+export function getKataDir(projectRoot: string): string {
+  if (existsSync(path.join(projectRoot, '.kata'))) {
+    return '.kata'
+  }
+  // Backwards compat: old layout
+  return '.claude'
+}
+
+/**
+ * Resolve kata-owned paths within a project.
+ * New layout (.kata/):
+ *   .kata/sessions/       — session state
+ *   .kata/templates/      — mode templates
+ *   .kata/modes.yaml      — mode config
+ *   .kata/wm.yaml         — project config
+ *   .kata/verification-evidence/ — verify-phase output
+ *
+ * Old layout (.claude/):
+ *   .claude/sessions/             — session state
+ *   .claude/workflows/templates/  — mode templates
+ *   .claude/workflows/modes.yaml  — mode config
+ *   .claude/workflows/wm.yaml    — project config
+ *   .claude/verification-evidence/ — verify-phase output
+ */
+function resolveKataPath(projectRoot: string, ...segments: string[]): string {
+  const kataDir = getKataDir(projectRoot)
+  if (kataDir === '.kata') {
+    return path.join(projectRoot, '.kata', ...segments)
+  }
+  // Old layout mapping
+  const first = segments[0]
+  if (first === 'sessions') {
+    return path.join(projectRoot, '.claude', ...segments)
+  }
+  if (first === 'verification-evidence') {
+    return path.join(projectRoot, '.claude', ...segments)
+  }
+  // templates, modes.yaml, wm.yaml → .claude/workflows/...
+  return path.join(projectRoot, '.claude', 'workflows', ...segments)
+}
+
+/**
+ * Get path to sessions directory
+ */
+export function getSessionsDir(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return resolveKataPath(root, 'sessions')
+}
+
+/**
+ * Get path to project templates directory
+ */
+export function getProjectTemplatesDir(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return resolveKataPath(root, 'templates')
+}
+
+/**
+ * Get path to project modes.yaml
+ */
+export function getProjectModesPath(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return resolveKataPath(root, 'modes.yaml')
+}
+
+/**
+ * Get path to project wm.yaml
+ */
+export function getProjectWmConfigPath(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return resolveKataPath(root, 'wm.yaml')
+}
+
+/**
+ * Get path to verification evidence directory
+ */
+export function getVerificationDir(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return resolveKataPath(root, 'verification-evidence')
 }
 
 // UUID v4 pattern (Claude Code session IDs)
@@ -72,7 +168,7 @@ const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[
  *
  * Resolution order:
  * 1. --session=ID flag (handled by callers before reaching here)
- * 2. Scan .claude/sessions/ for the most recently modified state.json
+ * 2. Scan .kata/sessions/ for the most recently modified state.json
  *    (the active session is always the most recently touched one)
  * 3. Throws if no sessions exist
  *
@@ -80,8 +176,8 @@ const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[
  */
 export async function getCurrentSessionId(): Promise<string> {
   try {
-    const projectDir = findClaudeProjectDir()
-    const sessionsDir = path.join(projectDir, '.claude', 'sessions')
+    const projectDir = findProjectDir()
+    const sessionsDir = getSessionsDir(projectDir)
     if (!existsSync(sessionsDir)) {
       throw new Error('no sessions dir')
     }
@@ -119,8 +215,8 @@ export async function getCurrentSessionId(): Promise<string> {
  */
 export async function getStateFilePath(sessionId?: string): Promise<string> {
   const sid = sessionId || (await getCurrentSessionId())
-  const claudeDir = findClaudeProjectDir()
-  return path.join(claudeDir, '.claude/sessions', sid, 'state.json')
+  const projectDir = findProjectDir()
+  return path.join(getSessionsDir(projectDir), sid, 'state.json')
 }
 
 /**
@@ -160,13 +256,13 @@ export function getModesYamlPath(): ModesYamlPaths {
 
   let projectPath: string | null = null
   try {
-    const projectRoot = findClaudeProjectDir()
-    const candidate = path.join(projectRoot, '.claude', 'workflows', 'modes.yaml')
+    const projectRoot = findProjectDir()
+    const candidate = getProjectModesPath(projectRoot)
     if (existsSync(candidate)) {
       projectPath = candidate
     }
   } catch {
-    // No Claude project dir found - project-level override not available
+    // No project dir found - project-level override not available
   }
 
   return { packagePath, userPath, projectPath }
@@ -185,7 +281,7 @@ export function getTemplatesDir(): string {
  * Lookup order (first match wins): project → user → package batteries.
  *
  * 1. Absolute path — use as-is
- * 2. Project: .claude/workflows/templates/{name}
+ * 2. Project: .kata/templates/{name} (or .claude/workflows/templates/ for old layout)
  * 3. User: ~/.config/kata/templates/{name}
  * 4. Package: batteries/templates/{name}
  *
@@ -206,14 +302,14 @@ export function resolveTemplatePath(templatePath: string): string {
 
   // 1. Project-level template (highest priority)
   try {
-    const projectRoot = findClaudeProjectDir()
-    const projectTemplate = path.join(projectRoot, '.claude/workflows/templates', templatePath)
+    const projectRoot = findProjectDir()
+    const projectTemplate = path.join(getProjectTemplatesDir(projectRoot), templatePath)
     checked.push(projectTemplate)
     if (existsSync(projectTemplate)) {
       return projectTemplate
     }
   } catch {
-    // No Claude project dir found — skip project tier
+    // No project dir found — skip project tier
   }
 
   // 2. User-level template
@@ -254,14 +350,14 @@ export function resolveSpecTemplatePath(name: string): string {
 
   // 1. Project-level spec template
   try {
-    const projectRoot = findClaudeProjectDir()
+    const projectRoot = findProjectDir()
     const projectTemplate = path.join(projectRoot, 'planning', 'spec-templates', name)
     checked.push(projectTemplate)
     if (existsSync(projectTemplate)) {
       return projectTemplate
     }
   } catch {
-    // No Claude project dir found — skip project tier
+    // No project dir found — skip project tier
   }
 
   // 2. User-level spec template

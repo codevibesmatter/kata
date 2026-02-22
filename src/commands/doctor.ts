@@ -2,7 +2,7 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { findClaudeProjectDir, getPackageRoot } from '../session/lookup.js'
+import { findProjectDir, getPackageRoot, getSessionsDir, getProjectWmConfigPath } from '../session/lookup.js'
 
 interface DiagnosticResult {
   check: string
@@ -41,12 +41,12 @@ async function fileExists(filePath: string): Promise<boolean> {
 function getProjectDir(useFallback: boolean): string {
   if (useFallback) {
     try {
-      return findClaudeProjectDir()
+      return findProjectDir()
     } catch {
       return process.cwd()
     }
   }
-  return findClaudeProjectDir()
+  return findProjectDir()
 }
 
 /**
@@ -56,7 +56,7 @@ function checkHooksRegistered(claudeDir: string): {
   registered: string[]
   missing: string[]
 } {
-  const settingsPath = path.join(claudeDir, '.claude/settings.json')
+  const settingsPath = path.join(claudeDir, '.claude', 'settings.json')
   // Match on the hook subcommand (not the binary name) to tolerate both bare
   // `wm hook …` and quoted `"/path/to/wm" hook …` forms written by setup.
   const requiredHooks: Record<string, string> = {
@@ -101,7 +101,7 @@ function checkHooksRegistered(claudeDir: string): {
  * Auto-register missing hooks in .claude/settings.json
  */
 function fixMissingHooks(claudeDir: string, missingHooks: string[]): void {
-  const settingsPath = path.join(claudeDir, '.claude/settings.json')
+  const settingsPath = path.join(claudeDir, '.claude', 'settings.json')
 
   // Read existing or create new
   let settings: Record<string, unknown> = {}
@@ -180,7 +180,7 @@ function checkVersionCompatibility(claudeDir: string): {
 
   // Get configured version from wm.yaml
   let configured: string | null = null
-  const wmYamlPath = path.join(claudeDir, '.claude', 'workflows', 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(claudeDir)
   if (existsSync(wmYamlPath)) {
     try {
       const raw = readFileSync(wmYamlPath, 'utf-8')
@@ -213,7 +213,7 @@ export async function doctor(args: string[]): Promise<void> {
 
   // Use cwd fallback for bootstrap scenarios (--fix may need to create .claude/)
   const claudeDir = getProjectDir(parsed.fix)
-  const sessionsDir = path.join(claudeDir, '.claude/sessions')
+  const sessionsDir = getSessionsDir(claudeDir)
   const currentSessionPath = path.join(claudeDir, '.claude/current-session-id')
 
   // Check 1: Sessions directory

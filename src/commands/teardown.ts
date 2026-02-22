@@ -4,7 +4,7 @@
 // Preserves .claude/sessions/ and all non-wm hooks
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir, getProjectWmConfigPath, getProjectModesPath, getSessionsDir, getKataDir } from '../session/lookup.js'
 
 /**
  * Parse command line arguments for teardown command
@@ -118,7 +118,7 @@ export async function teardown(args: string[]): Promise<void> {
   let projectRoot = parsed.cwd
   if (!parsed.explicitCwd) {
     try {
-      projectRoot = findClaudeProjectDir()
+      projectRoot = findProjectDir()
     } catch {
       // No .claude/ found up the tree — use cwd
     }
@@ -148,15 +148,17 @@ export async function teardown(args: string[]): Promise<void> {
   }
 
   // 2. Check for wm.yaml
-  const wmYamlPath = join(projectRoot, '.claude', 'workflows', 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(projectRoot)
   if (existsSync(wmYamlPath)) {
-    actions.push('Delete: .claude/workflows/wm.yaml')
+    const kd = getKataDir(projectRoot)
+    actions.push(`Delete: ${kd === '.kata' ? '.kata/wm.yaml' : '.claude/workflows/wm.yaml'}`)
   }
 
   // 3. Check for modes.yaml (only with --all)
-  const modesYamlPath = join(projectRoot, '.claude', 'workflows', 'modes.yaml')
+  const modesYamlPath = getProjectModesPath(projectRoot)
   if (parsed.all && existsSync(modesYamlPath)) {
-    actions.push('Delete: .claude/workflows/modes.yaml')
+    const kd = getKataDir(projectRoot)
+    actions.push(`Delete: ${kd === '.kata' ? '.kata/modes.yaml' : '.claude/workflows/modes.yaml'}`)
   }
 
   // No actions needed
@@ -200,5 +202,7 @@ export async function teardown(args: string[]): Promise<void> {
     unlinkSync(modesYamlPath)
   }
 
-  process.stdout.write('\nTeardown complete. Sessions preserved at .claude/sessions/\n')
+  const kd = getKataDir(projectRoot)
+  const sessDir = kd === '.kata' ? '.kata/sessions' : '.claude/sessions'
+  process.stdout.write(`\nTeardown complete. Sessions preserved at ${sessDir}/\n`)
 }

@@ -44,14 +44,21 @@ tsup produces ESM-only output with two entry points:
 
 ### Runtime data layout
 
-| Path | Contents |
-|------|---------|
-| `.claude/sessions/{sessionId}/state.json` | Per-session `SessionState` (mode, phase, workflow ID, history) |
-| `~/.claude/tasks/{sessionId}/` | Native task files read by `can-exit` and `hook stop-conditions` |
-| `.claude/workflows/wm.yaml` | Project config (`WmConfig`) |
-| `.claude/workflows/modes.yaml` | Project-level mode overrides (merged over `modes.yaml` at package root) |
-| `.claude/workflows/templates/` | Mode templates — `onboard.md` seeded by `kata setup`; full set seeded by `kata batteries` |
-| `planning/spec-templates/` | Spec document stubs — feature, bug, epic (copied from `batteries/spec-templates/` during `kata batteries`) |
+**New projects** use `.kata/` for kata-owned config. **Existing projects** with `.claude/workflows/` are supported via backwards compatibility.
+
+| Path (new `.kata/` layout) | Old `.claude/` layout | Contents |
+|---|---|---|
+| `.kata/sessions/{sessionId}/state.json` | `.claude/sessions/{sessionId}/state.json` | Per-session `SessionState` |
+| `.kata/wm.yaml` | `.claude/workflows/wm.yaml` | Project config (`WmConfig`) |
+| `.kata/modes.yaml` | `.claude/workflows/modes.yaml` | Project-level mode overrides |
+| `.kata/templates/` | `.claude/workflows/templates/` | Mode templates |
+| `.kata/verification-evidence/` | `.claude/verification-evidence/` | Verify-phase output |
+| `~/.claude/tasks/{sessionId}/` | (same) | Native task files (Claude-owned) |
+| `.claude/settings.json` | (same) | Hook registration (Claude-owned) |
+| `.claude/agents/` | (same) | Agent definitions (Claude-owned) |
+| `planning/spec-templates/` | (same) | Spec document stubs |
+
+Layout detection: `getKataDir()` checks for `.kata/` first, falls back to `.claude/`. Path helpers (`getSessionsDir()`, `getProjectTemplatesDir()`, etc.) handle both layouts transparently.
 
 ### Hook architecture
 
@@ -72,9 +79,9 @@ Built-in modes are defined in `modes.yaml` (package root). Each mode references 
 - `templates/` — system templates only: `onboard.md` and `SESSION-TEMPLATE.template.md`
 - `batteries/templates/` — canonical mode templates (implementation, planning, task, bugfix, etc.)
 
-After setup, the project owns copies under `.claude/workflows/templates/`. The package files are seeds only, not used at runtime. To update project templates with newer versions, run `kata batteries --update`.
+After setup, the project owns copies under `.kata/templates/` (or `.claude/workflows/templates/` for old-layout projects). The package files are seeds only, not used at runtime. To update project templates with newer versions, run `kata batteries --update`.
 
-Project modes in `.claude/workflows/modes.yaml` are merged over the built-in set with project definitions taking precedence.
+Project modes in `.kata/modes.yaml` (or `.claude/workflows/modes.yaml`) are merged over the built-in set with project definitions taking precedence.
 
 ### Key dependencies
 
@@ -149,4 +156,4 @@ bun test eval/assertions.test.ts                        # Run assertion unit tes
 
 ## Project root resolution
 
-`findClaudeProjectDir()` walks up from cwd looking for `.claude/sessions/` or `.claude/workflows/`. It **stops at `.git` boundaries** to prevent escaping into a parent project (e.g., eval projects nested under this repo). If cwd has `.git` but no `.claude/`, it's a fresh project — the walk stops there.
+`findProjectDir()` (formerly `findClaudeProjectDir()`) walks up from cwd looking for `.kata/` first, then `.claude/sessions/` or `.claude/workflows/` (backwards compat). It **stops at `.git` boundaries** to prevent escaping into a parent project (e.g., eval projects nested under this repo). If cwd has `.git` but no `.kata/` or `.claude/`, it's a fresh project — the walk stops there.

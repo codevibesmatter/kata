@@ -2,7 +2,7 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getCurrentSessionId, findClaudeProjectDir, getStateFilePath } from '../session/lookup.js'
+import { getCurrentSessionId, findProjectDir, getStateFilePath, getVerificationDir } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 import {
   type StopGuidance,
@@ -109,13 +109,11 @@ function checkVerificationEvidence(issueNumber: number | undefined): {
   if (!issueNumber) return { passed: true } // Skip if no issue linked
 
   try {
-    // Resolve absolute path via findClaudeProjectDir so can-exit works from any subdirectory
+    // Resolve absolute path via findProjectDir so can-exit works from any subdirectory
     // and hook invocations don't falsely report evidence missing
-    const projectRoot = findClaudeProjectDir()
+    const projectRoot = findProjectDir()
     const evidenceFile = join(
-      projectRoot,
-      '.claude',
-      'verification-evidence',
+      getVerificationDir(projectRoot),
       `${issueNumber}.json`,
     )
     if (!existsSync(evidenceFile)) {
@@ -159,8 +157,8 @@ function checkVerificationEvidence(issueNumber: number | undefined): {
  */
 function checkTestsPass(issueNumber: number): { passed: boolean; reason?: string } {
   try {
-    const projectRoot = findClaudeProjectDir()
-    const evidenceDir = join(projectRoot, '.claude', 'verification-evidence')
+    const projectRoot = findProjectDir()
+    const evidenceDir = getVerificationDir(projectRoot)
     if (!existsSync(evidenceDir)) {
       return {
         passed: false,
