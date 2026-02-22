@@ -138,7 +138,7 @@ export function formatValidationErrors(result: ValidationResult): string {
 
 /**
  * Validate phases and throw if invalid
- * Use this for runtime validation in wm enter
+ * Use this for runtime validation in kata enter
  */
 export function validatePhasesOrThrow(phases: unknown[], templatePath?: string): PhaseDefinition[] {
   const result = validatePhases(phases, templatePath)

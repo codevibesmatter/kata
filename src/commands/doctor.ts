@@ -1,8 +1,8 @@
-// wm doctor - Diagnose and fix session state issues
+// kata doctor - Diagnose and fix session state issues
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { findClaudeProjectDir, getPackageRoot } from '../session/lookup.js'
+import { findProjectDir, getPackageRoot, getSessionsDir, getProjectWmConfigPath } from '../session/lookup.js'
 
 interface DiagnosticResult {
   check: string
@@ -41,24 +41,24 @@ async function fileExists(filePath: string): Promise<boolean> {
 function getProjectDir(useFallback: boolean): string {
   if (useFallback) {
     try {
-      return findClaudeProjectDir()
+      return findProjectDir()
     } catch {
       return process.cwd()
     }
   }
-  return findClaudeProjectDir()
+  return findProjectDir()
 }
 
 /**
- * Check if wm hooks are registered in .claude/settings.json
+ * Check if kata hooks are registered in .claude/settings.json
  */
 function checkHooksRegistered(claudeDir: string): {
   registered: string[]
   missing: string[]
 } {
-  const settingsPath = path.join(claudeDir, '.claude/settings.json')
+  const settingsPath = path.join(claudeDir, '.claude', 'settings.json')
   // Match on the hook subcommand (not the binary name) to tolerate both bare
-  // `wm hook …` and quoted `"/path/to/wm" hook …` forms written by setup.
+  // `kata hook …` and quoted `"/path/to/kata" hook …` forms written by setup.
   const requiredHooks: Record<string, string> = {
     SessionStart: 'hook session-start',
     UserPromptSubmit: 'hook user-prompt',
@@ -101,7 +101,7 @@ function checkHooksRegistered(claudeDir: string): {
  * Auto-register missing hooks in .claude/settings.json
  */
 function fixMissingHooks(claudeDir: string, missingHooks: string[]): void {
-  const settingsPath = path.join(claudeDir, '.claude/settings.json')
+  const settingsPath = path.join(claudeDir, '.claude', 'settings.json')
 
   // Read existing or create new
   let settings: Record<string, unknown> = {}
@@ -156,7 +156,7 @@ function fixMissingHooks(claudeDir: string, missingHooks: string[]): void {
 }
 
 /**
- * Check wm version compatibility between running wm and wm.yaml
+ * Check kata version compatibility between running kata and wm.yaml
  */
 function checkVersionCompatibility(claudeDir: string): {
   running: string
@@ -180,7 +180,7 @@ function checkVersionCompatibility(claudeDir: string): {
 
   // Get configured version from wm.yaml
   let configured: string | null = null
-  const wmYamlPath = path.join(claudeDir, '.claude', 'workflows', 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(claudeDir)
   if (existsSync(wmYamlPath)) {
     try {
       const raw = readFileSync(wmYamlPath, 'utf-8')
@@ -213,7 +213,7 @@ export async function doctor(args: string[]): Promise<void> {
 
   // Use cwd fallback for bootstrap scenarios (--fix may need to create .claude/)
   const claudeDir = getProjectDir(parsed.fix)
-  const sessionsDir = path.join(claudeDir, '.claude/sessions')
+  const sessionsDir = getSessionsDir(claudeDir)
   const currentSessionPath = path.join(claudeDir, '.claude/current-session-id')
 
   // Check 1: Sessions directory

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir, getUserConfigDir } from '../session/lookup.js'
+import { findProjectDir, getUserConfigDir, getProjectWmConfigPath } from '../session/lookup.js'
 
 export interface WmConfig {
   // Project profile
@@ -139,12 +139,12 @@ export function loadWmConfig(): WmConfig {
   // 2. Project-level wm.yaml (highest priority)
   let projectRoot: string | null = null
   try {
-    projectRoot = findClaudeProjectDir()
+    projectRoot = findProjectDir()
   } catch {
     // No Claude project dir
   }
   if (projectRoot) {
-    const projectConfigPath = join(projectRoot, '.claude', 'workflows', 'wm.yaml')
+    const projectConfigPath = getProjectWmConfigPath(projectRoot)
     const projectConfig = parseWmYaml(projectConfigPath)
     if (projectConfig) {
       merged = mergeWmConfig(merged, projectConfig, false) // skipProject=false for project layer

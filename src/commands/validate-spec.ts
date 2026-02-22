@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 import { loadWmConfig } from '../config/wm-config.js'
 
 interface ValidationResult {
@@ -17,7 +17,7 @@ interface ValidationResult {
  * Find spec file by issue number
  */
 function findSpecFile(issueNum: number): string | null {
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   if (!projectDir) return null
 
   const specsDir = resolve(projectDir, loadWmConfig().spec_path ?? 'planning/specs')
@@ -191,9 +191,9 @@ export async function validateSpecCommand(args: string[]): Promise<void> {
     }
   } else {
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm validate-spec --issue=123')
+    console.error('Usage: kata validate-spec --issue=123')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('   or: wm validate-spec path/to/spec.md')
+    console.error('   or: kata validate-spec path/to/spec.md')
     process.exit(1)
   }
 

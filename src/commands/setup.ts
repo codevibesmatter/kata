@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getDefaultProfile, type SetupProfile } from '../config/setup-profile.js'
 import type { WmConfig } from '../config/wm-config.js'
-import { getPackageRoot, findClaudeProjectDir } from '../session/lookup.js'
+import { getPackageRoot, findProjectDir, getKataDir, getSessionsDir, getProjectTemplatesDir, getProjectWmConfigPath } from '../session/lookup.js'
 
 /**
  * Resolve the absolute path to the kata binary.
@@ -87,8 +87,8 @@ interface SettingsJson {
 }
 
 /**
- * Build wm hook entries for .claude/settings.json.
- * Uses an absolute path to the wm binary so hooks work regardless of PATH
+ * Build kata hook entries for .claude/settings.json.
+ * Uses an absolute path to the kata binary so hooks work regardless of PATH
  * (both for globally-installed and locally-installed packages).
  * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
  * With --strict: also PreToolUse task-deps + task-evidence hooks
@@ -199,8 +199,8 @@ function writeSettings(cwd: string, settings: SettingsJson): void {
 }
 
 /**
- * Merge wm hook entries into existing settings
- * Preserves non-wm hooks, replaces wm hooks
+ * Merge kata hook entries into existing settings
+ * Preserves non-kata hooks, replaces kata hooks
  */
 function mergeHooksIntoSettings(
   settings: SettingsJson,
@@ -216,8 +216,8 @@ function mergeHooksIntoSettings(
     const existing = existingHooks[event] ?? []
     const wmEntries = wmHooks[event] ?? []
 
-    // Filter out existing wm hook entries by matching known wm subcommand names.
-    // Tolerates both bare `wm hook …` and quoted `"/path/wm" hook …` forms while
+    // Filter out existing kata hook entries by matching known kata subcommand names.
+    // Tolerates both bare `kata hook …` and quoted `"/path/kata" hook …` forms while
     // avoiding false positives from unrelated tools like lefthook or husky.
     const wmHookPattern =
       /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence)\b/
@@ -274,7 +274,7 @@ function buildWmConfig(projectRoot: string, profile: SetupProfile): WmConfig {
     wm_version: getWmVersion(),
   }
 
-  const wmYamlPath = join(projectRoot, '.claude', 'workflows', 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(projectRoot)
   if (!existsSync(wmYamlPath)) return fromProfile
 
   try {
@@ -323,12 +323,14 @@ function getWmVersion(): string {
 }
 
 /**
- * Write wm.yaml to .claude/workflows/
+ * Write wm.yaml to the kata config directory.
+ * For new projects (.kata/ layout): .kata/wm.yaml
+ * For existing projects (.claude/ layout): .claude/workflows/wm.yaml
  */
 function writeWmYaml(cwd: string, content: string): void {
-  const workflowsDir = join(cwd, '.claude', 'workflows')
-  mkdirSync(workflowsDir, { recursive: true })
-  const wmYamlPath = join(workflowsDir, 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(cwd)
+  const dir = join(wmYamlPath, '..')
+  mkdirSync(dir, { recursive: true })
   writeFileSync(wmYamlPath, content, 'utf-8')
 }
 
@@ -341,7 +343,7 @@ function writeWmYaml(cwd: string, content: string): void {
 function resolveProjectRoot(cwd: string, explicitCwd: boolean): string {
   if (explicitCwd) return cwd
   try {
-    return findClaudeProjectDir()
+    return findProjectDir()
   } catch {
     // Fresh project: no .claude/ yet, use provided cwd
     return cwd
@@ -359,11 +361,17 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   const config = buildWmConfig(projectRoot, profile)
   writeWmYaml(projectRoot, generateWmYaml(config))
 
+  // For fresh projects (no .kata/ or .claude/ yet), create .kata/ (new layout).
+  // For existing projects, getKataDir() detects the active layout.
+  if (!existsSync(join(projectRoot, '.kata')) && !existsSync(join(projectRoot, '.claude', 'workflows'))) {
+    mkdirSync(join(projectRoot, '.kata'), { recursive: true })
+  }
+
   // Ensure sessions directory exists
-  mkdirSync(join(projectRoot, '.claude', 'sessions'), { recursive: true })
+  mkdirSync(getSessionsDir(projectRoot), { recursive: true })
 
   // Seed onboard.md so `kata enter onboard` works without --batteries
-  const templatesDir = join(projectRoot, '.claude', 'workflows', 'templates')
+  const templatesDir = getProjectTemplatesDir(projectRoot)
   const onboardDest = join(templatesDir, 'onboard.md')
   if (!existsSync(onboardDest)) {
     const onboardSrc = join(getPackageRoot(), 'templates', 'onboard.md')
@@ -373,7 +381,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     }
   }
 
-  // Register hooks in settings.json using absolute wm binary path
+  // Register hooks in settings.json using absolute kata binary path
   const wmBin = resolveWmBin()
   const settings = readSettings(projectRoot)
   const wmHooks = buildHookEntries(profile.strict, wmBin)
@@ -389,7 +397,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
  * For the guided setup interview, use: kata enter onboard
  *
  * Installs hooks in PROJECT-LEVEL .claude/settings.json only.
- * Bypasses findClaudeProjectDir() since .claude/ may not exist yet.
+ * Bypasses findProjectDir() since .claude/ may not exist yet.
  */
 export async function setup(args: string[]): Promise<void> {
   const parsed = parseArgs(args)
@@ -409,15 +417,17 @@ export async function setup(args: string[]): Promise<void> {
       const { scaffoldBatteries } = await import('./scaffold-batteries.js')
       const result = scaffoldBatteries(projectRoot)
 
+      const kd = getKataDir(projectRoot)
       process.stdout.write('kata setup --batteries complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
-      process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
+      process.stdout.write(`  Config: ${kd === '.kata' ? '.kata/wm.yaml' : '.claude/workflows/wm.yaml'}\n`)
       process.stdout.write(`  Hooks: .claude/settings.json\n`)
       process.stdout.write('\nBatteries scaffolded:\n')
       if (result.templates.length > 0) {
+        const tmplRelDir = kd === '.kata' ? '.kata/templates' : '.claude/workflows/templates'
         process.stdout.write(`  Mode templates (${result.templates.length}):\n`)
         for (const t of result.templates) {
-          process.stdout.write(`    .claude/workflows/templates/${t}\n`)
+          process.stdout.write(`    ${tmplRelDir}/${t}\n`)
         }
       }
       if (result.agents.length > 0) {
@@ -437,11 +447,12 @@ export async function setup(args: string[]): Promise<void> {
       }
     } else {
       // Plain --yes summary
+      const kd2 = getKataDir(projectRoot)
       process.stdout.write('kata setup complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
       process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
       process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
-      process.stdout.write(`  Config: .claude/workflows/wm.yaml\n`)
+      process.stdout.write(`  Config: ${kd2 === '.kata' ? '.kata/wm.yaml' : '.claude/workflows/wm.yaml'}\n`)
       process.stdout.write(`  Hooks: .claude/settings.json\n`)
       process.stdout.write(`    - SessionStart\n`)
       process.stdout.write(`    - UserPromptSubmit\n`)
@@ -470,7 +481,7 @@ Usage:
   kata setup --batteries --strict Setup + batteries + strict hooks
 
 Flags:
-  --yes         Write wm.yaml and register hooks using auto-detected defaults
+  --yes         Write config and register hooks using auto-detected defaults
   --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
                 (implies --yes)
   --strict      Also register PreToolUse hooks: task-deps, task-evidence

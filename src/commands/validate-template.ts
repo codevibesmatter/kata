@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, basename } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 import { validatePhases } from '../validation/index.js'
 
 interface TemplateValidationResult {
@@ -246,19 +246,19 @@ export async function validateTemplateCommand(args: string[]): Promise<void> {
 
   if (!parsed.path) {
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm validate-template <path-to-template.md> [--json]')
+    console.error('Usage: kata validate-template <path-to-template.md> [--json]')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Examples:')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm validate-template packages/workflow-management/templates/task.md')
+    console.error('  kata validate-template packages/workflow-management/templates/task.md')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm validate-template /tmp/my-custom-template.md --json')
+    console.error('  kata validate-template /tmp/my-custom-template.md --json')
     process.exit(1)
   }
 
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   const templatePath = parsed.path.startsWith('/')
     ? parsed.path
     : resolve(projectDir || process.cwd(), parsed.path)
@@ -326,7 +326,7 @@ export async function validateTemplateCommand(args: string[]): Promise<void> {
 
   if (result.valid) {
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.log('✅ Template is valid for use with wm enter --template=')
+    console.log('✅ Template is valid for use with kata enter --template=')
   } else {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.log('❌ Template has errors that must be fixed before use')

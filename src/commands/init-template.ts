@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve, dirname, basename } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 
 interface InitTemplateOptions {
   path: string
@@ -113,7 +113,7 @@ function parseArgs(args: string[]): InitTemplateOptions & { help?: boolean } {
 function showHelp(): void {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log(`
-Usage: wm init-template <path> [options]
+Usage: kata init-template <path> [options]
 
 Create a new workflow template file with boilerplate phases.
 
@@ -128,13 +128,13 @@ Options:
   --help, -h          Show this help message
 
 Examples:
-  wm init-template /tmp/my-workflow.md
-  wm init-template packages/workflow-management/templates/sprint-review.md --phases=5
-  wm init-template /tmp/simple.md --no-beads --phases=2
-  wm init-template ./custom.md --name="Custom Workflow" --mode=custom
+  kata init-template /tmp/my-workflow.md
+  kata init-template packages/workflow-management/templates/sprint-review.md --phases=5
+  kata init-template /tmp/simple.md --no-beads --phases=2
+  kata init-template ./custom.md --name="Custom Workflow" --mode=custom
 
 The generated template can be used with:
-  wm enter --template=/tmp/my-workflow.md
+  kata enter --template=/tmp/my-workflow.md
 `)
 }
 
@@ -152,24 +152,24 @@ export async function initTemplateCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm init-template <path> [options]')
+    console.error('Usage: kata init-template <path> [options]')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Examples:')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm init-template /tmp/my-workflow.md')
+    console.error('  kata init-template /tmp/my-workflow.md')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm init-template packages/workflow-management/templates/custom.md --phases=5')
+    console.error('  kata init-template packages/workflow-management/templates/custom.md --phases=5')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Run "wm init-template --help" for more options.')
+    console.error('Run "kata init-template --help" for more options.')
     process.exit(1)
   }
 
   // Resolve path
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   const templatePath = parsed.path.startsWith('/')
     ? parsed.path
     : resolve(projectDir || process.cwd(), parsed.path)
@@ -225,9 +225,9 @@ export async function initTemplateCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.log(`  1. Edit the template to customize phases and content`)
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.log(`  2. Validate: wm validate-template ${finalPath}`)
+    console.log(`  2. Validate: kata validate-template ${finalPath}`)
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.log(`  3. Use it:   wm enter --template=${finalPath}`)
+    console.log(`  3. Use it:   kata enter --template=${finalPath}`)
   } catch (err) {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error(`Error: Cannot write file: ${finalPath}`)

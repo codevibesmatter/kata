@@ -1,4 +1,4 @@
-// wm suggest - Detect mode from user message and output behavioral guidance
+// kata suggest - Detect mode from user message and output behavioral guidance
 import { loadModesConfig } from '../config/cache.js'
 import type { ModeConfig, ModesConfig, ModeBehavior } from '../state/schema.js'
 import { loadWmConfig } from '../config/wm-config.js'
@@ -396,7 +396,7 @@ function buildGuidance(
 }
 
 /**
- * wm suggest <message>
+ * kata suggest <message>
  * Detect mode from user message and output guidance
  */
 export async function suggest(args: string[]): Promise<void> {

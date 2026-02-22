@@ -120,7 +120,7 @@ export const ModeEnforcementScenarios: TestScenario[] = [
 
 /**
  * Pre-built scenarios for native tasks gate enforcement
- * (Tasks are auto-created on mode entry via `wm enter`)
+ * (Tasks are auto-created on mode entry via `kata enter`)
  */
 export const NativeTasksGateScenarios: TestScenario[] = [
   {
@@ -312,7 +312,7 @@ export const UserPromptSubmitScenarios: TestScenario[] = [
     },
     expected: {
       blocked: false,
-      stderrContains: ['wm enter planning'],
+      stderrContains: ['kata enter planning'],
     },
   },
   {
@@ -324,7 +324,7 @@ export const UserPromptSubmitScenarios: TestScenario[] = [
     },
     expected: {
       blocked: false,
-      stderrContains: ['wm enter implementation'],
+      stderrContains: ['kata enter implementation'],
     },
   },
   {
@@ -336,7 +336,7 @@ export const UserPromptSubmitScenarios: TestScenario[] = [
     },
     expected: {
       blocked: false,
-      stderrContains: ['wm enter debug'],
+      stderrContains: ['kata enter debug'],
     },
   },
 ]
@@ -372,7 +372,7 @@ export const PostToolUseScenarios: TestScenario[] = [
       hookType: 'PostToolUse',
       stdinData: {
         tool_name: 'Bash',
-        tool_input: { command: 'wm status' },
+        tool_input: { command: 'kata status' },
         tool_error: 'Error: Task not found',
       },
     },

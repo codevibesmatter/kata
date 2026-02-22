@@ -1,10 +1,10 @@
-// wm teardown - Remove wm from a project
-// Removes wm hook entries from .claude/settings.json
+// kata teardown - Remove kata from a project
+// Removes kata hook entries from .claude/settings.json
 // Deletes .claude/workflows/wm.yaml
-// Preserves .claude/sessions/ and all non-wm hooks
+// Preserves .claude/sessions/ and all non-kata hooks
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir, getProjectWmConfigPath, getProjectModesPath, getSessionsDir, getKataDir } from '../session/lookup.js'
 
 /**
  * Parse command line arguments for teardown command
@@ -56,7 +56,7 @@ interface SettingsJson {
 }
 
 /**
- * Remove wm hook entries from settings.json
+ * Remove kata hook entries from settings.json
  * Returns the cleaned settings and list of removed entries
  */
 function removeWmHooks(settings: SettingsJson): { cleaned: SettingsJson; removed: string[] } {
@@ -67,7 +67,7 @@ function removeWmHooks(settings: SettingsJson): { cleaned: SettingsJson; removed
   for (const [event, entries] of Object.entries(existingHooks)) {
     const kept: HookEntry[] = []
     for (const entry of entries) {
-      // Match on known wm subcommand names to avoid false positives from
+      // Match on known kata subcommand names to avoid false positives from
       // unrelated tools (lefthook, husky, custom scripts) that also contain 'hook'.
       const wmHookPattern =
         /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence)\b/
@@ -96,12 +96,12 @@ function removeWmHooks(settings: SettingsJson): { cleaned: SettingsJson; removed
 }
 
 /**
- * wm teardown [--yes] [--all] [--dry-run] [--cwd=PATH]
+ * kata teardown [--yes] [--all] [--dry-run] [--cwd=PATH]
  *
- * Remove wm from a project:
- * - Removes wm hook entries from .claude/settings.json (identified by 'wm hook' command substring)
+ * Remove kata from a project:
+ * - Removes kata hook entries from .claude/settings.json (identified by 'kata hook' command substring)
  * - Deletes .claude/workflows/wm.yaml
- * - Preserves .claude/sessions/ and all non-wm hooks
+ * - Preserves .claude/sessions/ and all non-kata hooks
  * - --yes: Skip confirmation
  * - --all: Also remove .claude/workflows/modes.yaml
  * - --dry-run: Show what would be removed without making changes
@@ -118,13 +118,13 @@ export async function teardown(args: string[]): Promise<void> {
   let projectRoot = parsed.cwd
   if (!parsed.explicitCwd) {
     try {
-      projectRoot = findClaudeProjectDir()
+      projectRoot = findProjectDir()
     } catch {
       // No .claude/ found up the tree — use cwd
     }
   }
 
-  // 1. Check for wm hooks in settings.json
+  // 1. Check for kata hooks in settings.json
   const settingsPath = join(projectRoot, '.claude', 'settings.json')
   let settingsContent: SettingsJson = {}
   let hasSettings = false
@@ -148,25 +148,27 @@ export async function teardown(args: string[]): Promise<void> {
   }
 
   // 2. Check for wm.yaml
-  const wmYamlPath = join(projectRoot, '.claude', 'workflows', 'wm.yaml')
+  const wmYamlPath = getProjectWmConfigPath(projectRoot)
   if (existsSync(wmYamlPath)) {
-    actions.push('Delete: .claude/workflows/wm.yaml')
+    const kd = getKataDir(projectRoot)
+    actions.push(`Delete: ${kd === '.kata' ? '.kata/wm.yaml' : '.claude/workflows/wm.yaml'}`)
   }
 
   // 3. Check for modes.yaml (only with --all)
-  const modesYamlPath = join(projectRoot, '.claude', 'workflows', 'modes.yaml')
+  const modesYamlPath = getProjectModesPath(projectRoot)
   if (parsed.all && existsSync(modesYamlPath)) {
-    actions.push('Delete: .claude/workflows/modes.yaml')
+    const kd = getKataDir(projectRoot)
+    actions.push(`Delete: ${kd === '.kata' ? '.kata/modes.yaml' : '.claude/workflows/modes.yaml'}`)
   }
 
   // No actions needed
   if (actions.length === 0) {
-    process.stdout.write('Nothing to teardown. wm is not configured in this project.\n')
+    process.stdout.write('Nothing to teardown. kata is not configured in this project.\n')
     return
   }
 
   // Show planned actions
-  process.stdout.write('wm teardown:\n')
+  process.stdout.write('kata teardown:\n')
   for (const action of actions) {
     process.stdout.write(`  ${parsed.dryRun ? '[DRY RUN] ' : ''}${action}\n`)
   }
@@ -178,14 +180,14 @@ export async function teardown(args: string[]): Promise<void> {
 
   // Confirm unless --yes
   if (!parsed.yes) {
-    process.stdout.write('\nThis will remove wm hooks and config. Sessions are preserved.\n')
+    process.stdout.write('\nThis will remove kata hooks and config. Sessions are preserved.\n')
     process.stdout.write('Run with --yes to confirm, or --dry-run to preview.\n')
     process.exitCode = 1
     return
   }
 
   // Execute teardown
-  // 1. Update settings.json (remove wm hooks)
+  // 1. Update settings.json (remove kata hooks)
   if (removed.length > 0 && hasSettings) {
     writeFileSync(settingsPath, `${JSON.stringify(cleaned, null, 2)}\n`, 'utf-8')
   }
@@ -200,5 +202,7 @@ export async function teardown(args: string[]): Promise<void> {
     unlinkSync(modesYamlPath)
   }
 
-  process.stdout.write('\nTeardown complete. Sessions preserved at .claude/sessions/\n')
+  const kd = getKataDir(projectRoot)
+  const sessDir = kd === '.kata' ? '.kata/sessions' : '.claude/sessions'
+  process.stdout.write(`\nTeardown complete. Sessions preserved at ${sessDir}/\n`)
 }

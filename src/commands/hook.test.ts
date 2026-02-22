@@ -85,7 +85,7 @@ describe('hook dispatch', () => {
   it('no hook name sets exit code 1', async () => {
     const stderr = await captureHookStderr([])
     expect(process.exitCode).toBe(1)
-    expect(stderr).toContain('Usage: wm hook <name>')
+    expect(stderr).toContain('Usage: kata hook <name>')
   })
 
   it('mode-gate allows when no session state exists (new project)', async () => {

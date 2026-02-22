@@ -1,6 +1,32 @@
 // Stop hook guidance messages
 // Centralized here so stop hook doesn't hardcode them
 import { loadWmConfig } from '../config/wm-config.js'
+import { getKataDir, findProjectDir, getSessionsDir } from '../session/lookup.js'
+
+/**
+ * Get relative paths for user-facing messages based on active layout.
+ * Returns paths like '.kata/verification-evidence' or '.claude/verification-evidence'.
+ */
+function getRelativePaths(): { verificationEvidence: string; wmYaml: string; sessionsDir: string } {
+  try {
+    const projectRoot = findProjectDir()
+    const kd = getKataDir(projectRoot)
+    if (kd === '.kata') {
+      return {
+        verificationEvidence: '.kata/verification-evidence',
+        wmYaml: '.kata/wm.yaml',
+        sessionsDir: '.kata/sessions',
+      }
+    }
+  } catch {
+    // No project dir — use old layout defaults
+  }
+  return {
+    verificationEvidence: '.claude/verification-evidence',
+    wmYaml: '.claude/workflows/wm.yaml',
+    sessionsDir: '.claude/sessions',
+  }
+}
 
 export interface ArtifactMessage {
   type: string
@@ -63,7 +89,7 @@ REQUIRED before completing tasks:
 2. \`git add . && git commit -m "..."\` - commit your changes
 
 **"Writing code" ≠ "Done". Code is NEVER done until tests pass and changes are committed.**`,
-        fixCommand: 'wm status',
+        fixCommand: 'kata status',
       }
     }
 
@@ -84,7 +110,7 @@ If \`bgh\` is not installed, install it first:
 pnpm install
 # bgh is available as: pnpm bgh finalize ${issueNum}
 \`\`\``,
-        fixCommand: `cat .claude/sessions/${sessionId}/state.json | jq '.githubFinalized'`,
+        fixCommand: `cat ${getRelativePaths().sessionsDir}/${sessionId}/state.json | jq '.githubFinalized'`,
       }
 
     case 'verification_not_run': {
@@ -107,15 +133,15 @@ ${verifyCmd}
 \`\`\`
 
 Verification reads the spec, checks implementation, and writes:
-  .claude/verification-evidence/${issueNum}.json
+  ${getRelativePaths().verificationEvidence}/${issueNum}.json
 
-### Alternatively, disable verification in .claude/workflows/wm.yaml
+### Alternatively, disable verification in ${getRelativePaths().wmYaml}
 
 \`\`\`yaml
 reviews:
   code_review: false
 \`\`\``,
-        fixCommand: `cat .claude/verification-evidence/${issueNum}.json | jq '.passed'`,
+        fixCommand: `cat ${getRelativePaths().verificationEvidence}/${issueNum}.json | jq '.passed'`,
       }
     }
 
@@ -133,7 +159,7 @@ reviews:
 
 Check the evidence file for details:
 \`\`\`bash
-cat .claude/verification-evidence/${issueNum}.json | jq '.'
+cat ${getRelativePaths().verificationEvidence}/${issueNum}.json | jq '.'
 \`\`\`
 
 **To fix:**
@@ -162,8 +188,8 @@ ${failedVerifyCmd}
 ${staleVerifyCmd}
 \`\`\`
 
-Evidence file: .claude/verification-evidence/${issueNum}.json`,
-        fixCommand: `cat .claude/verification-evidence/${issueNum}.json | jq '.verifiedAt'`,
+Evidence file: ${getRelativePaths().verificationEvidence}/${issueNum}.json`,
+        fixCommand: `cat ${getRelativePaths().verificationEvidence}/${issueNum}.json | jq '.verifiedAt'`,
       }
     }
 

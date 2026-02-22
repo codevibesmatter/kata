@@ -51,7 +51,7 @@ describe('teardown', () => {
   })
 
   /**
-   * Create a fully configured wm project at tmpDir
+   * Create a fully configured kata project at tmpDir
    */
   function createWmProject(): void {
     mkdirSync(join(tmpDir, '.claude', 'sessions', 'some-session'), { recursive: true })
@@ -60,7 +60,7 @@ describe('teardown', () => {
     // Write wm.yaml
     writeFileSync(join(tmpDir, '.claude', 'workflows', 'wm.yaml'), 'spec_path: planning/specs\n')
 
-    // Write settings.json with wm hooks and a non-wm hook
+    // Write settings.json with kata hooks and a non-kata hook
     writeFileSync(
       join(tmpDir, '.claude', 'settings.json'),
       JSON.stringify(
@@ -113,7 +113,7 @@ describe('teardown', () => {
     )
   }
 
-  it('removes wm hooks from settings.json', async () => {
+  it('removes kata hooks from settings.json', async () => {
     createWmProject()
 
     await captureTeardown(['--yes'], tmpDir)
@@ -125,11 +125,11 @@ describe('teardown', () => {
       hooks?: Record<string, unknown[]>
     }
 
-    // wm hooks should be removed
+    // kata hooks should be removed
     expect(settings.hooks?.UserPromptSubmit).toBeUndefined()
     expect(settings.hooks?.Stop).toBeUndefined()
 
-    // SessionStart should only have the custom hook (not the wm one)
+    // SessionStart should only have the custom hook (not the kata one)
     if (settings.hooks?.SessionStart) {
       const entries = settings.hooks.SessionStart as Array<{
         hooks: Array<{ command: string }>
@@ -139,7 +139,7 @@ describe('teardown', () => {
     }
   })
 
-  it('preserves non-wm hooks', async () => {
+  it('preserves non-kata hooks', async () => {
     createWmProject()
 
     await captureTeardown(['--yes'], tmpDir)
@@ -178,8 +178,8 @@ describe('teardown', () => {
     expect(existsSync(join(sessionsDir, 'some-session'))).toBe(true)
   })
 
-  it('is idempotent on project without wm', async () => {
-    // Create a project with no wm config
+  it('is idempotent on project without kata', async () => {
+    // Create a project with no kata config
     mkdirSync(join(tmpDir, '.claude'), { recursive: true })
 
     const output = await captureTeardown(['--yes'], tmpDir)

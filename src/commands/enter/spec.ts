@@ -2,7 +2,7 @@
 import { execSync } from 'node:child_process'
 import { readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { findClaudeProjectDir } from '../../session/lookup.js'
+import { findProjectDir } from '../../session/lookup.js'
 import { parseYamlFrontmatter, type SpecYaml } from '../../yaml/index.js'
 import { loadWmConfig } from '../../config/wm-config.js'
 
@@ -72,7 +72,7 @@ export function getSpecFileSize(specPath: string): number {
  * Looks for planning/specs/{issue}-*.md
  */
 export function findSpecFile(issueNum: number): string | null {
-  const projectRoot = findClaudeProjectDir()
+  const projectRoot = findProjectDir()
   const specsDir = resolve(projectRoot, loadWmConfig().spec_path ?? 'planning/specs')
 
   try {

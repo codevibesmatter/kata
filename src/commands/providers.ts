@@ -12,7 +12,7 @@ import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 
 export interface ProviderStatus {
   name: string
@@ -115,7 +115,7 @@ function printProviderStatus(statuses: ProviderStatus[]): void {
 function writeProviderConfig(statuses: ProviderStatus[]): void {
   let projectRoot: string
   try {
-    projectRoot = findClaudeProjectDir()
+    projectRoot = findProjectDir()
   } catch {
     process.stderr.write('No kata project found. Run: kata setup\n')
     process.exitCode = 1

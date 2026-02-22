@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir, getUserConfigDir, getPackageRoot } from '../session/lookup.js'
+import { findProjectDir, getUserConfigDir, getPackageRoot, getProjectWmConfigPath, getProjectTemplatesDir } from '../session/lookup.js'
 import { loadWmConfig, type WmConfig } from '../config/wm-config.js'
 import { loadModesConfig } from '../config/cache.js'
 
@@ -32,8 +32,8 @@ async function showConfig(): Promise<void> {
 
   let projectConfig: WmConfig | null = null
   try {
-    const projectRoot = findClaudeProjectDir()
-    const projectPath = join(projectRoot, '.claude', 'workflows', 'wm.yaml')
+    const projectRoot = findProjectDir()
+    const projectPath = getProjectWmConfigPath(projectRoot)
     projectConfig = loadYamlFile(projectPath)
   } catch {
     // No project
@@ -78,8 +78,8 @@ async function showConfig(): Promise<void> {
   const userTemplateDir = join(getUserConfigDir(), 'templates')
   const packageTemplateDir = join(getPackageRoot(), 'batteries', 'templates')
   try {
-    const projectRoot = findClaudeProjectDir()
-    const projTmplDir = join(projectRoot, '.claude', 'workflows', 'templates')
+    const projectRoot = findProjectDir()
+    const projTmplDir = getProjectTemplatesDir(projectRoot)
     process.stdout.write(`  project:  ${projTmplDir} ${existsSync(projTmplDir) ? '(exists)' : '(not found)'}\n`)
   } catch {
     process.stdout.write('  project:  (no project)\n')

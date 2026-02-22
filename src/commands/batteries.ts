@@ -2,7 +2,7 @@
 // Default: skips existing files. Use --update to overwrite with latest versions.
 // Use --user to seed user-level config at ~/.config/kata/ instead of project.
 import { scaffoldBatteries, scaffoldUserBatteries } from './scaffold-batteries.js'
-import { findClaudeProjectDir, getUserConfigDir } from '../session/lookup.js'
+import { findProjectDir, getUserConfigDir } from '../session/lookup.js'
 
 /**
  * kata batteries [--update] [--user] [--cwd=PATH]
@@ -43,7 +43,7 @@ export async function batteries(args: string[]): Promise<void> {
   let projectRoot = cwd
   if (!args.some((a) => a.startsWith('--cwd='))) {
     try {
-      projectRoot = findClaudeProjectDir()
+      projectRoot = findProjectDir()
     } catch {
       // No .claude/ found — use cwd
     }
@@ -70,7 +70,10 @@ export async function batteries(args: string[]): Promise<void> {
   }
 
   if (result.templates.length > 0) {
-    process.stdout.write(`\nMode templates → .claude/workflows/templates/\n`)
+    const { getKataDir } = await import('../session/lookup.js')
+    const kd = getKataDir(projectRoot)
+    const tmplDir = kd === '.kata' ? '.kata/templates' : '.claude/workflows/templates'
+    process.stdout.write(`\nMode templates → ${tmplDir}/\n`)
     for (const f of result.templates) process.stdout.write(`  ${f}\n`)
   }
   if (result.agents.length > 0) {

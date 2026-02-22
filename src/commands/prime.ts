@@ -1,4 +1,4 @@
-// wm prime - Output context injection block
+// kata prime - Output context injection block
 import { getCurrentSessionId, getStateFilePath, resolveTemplatePath } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { readFullTemplateContent } from '../yaml/index.js'
@@ -193,7 +193,7 @@ async function buildContextBlock(sessionId: string): Promise<string> {
 }
 
 /**
- * wm prime [--session=ID] [--hook-json]
+ * kata prime [--session=ID] [--hook-json]
  * Outputs context injection block (like bt prime, bpd prime)
  *
  * When --hook-json is passed, outputs valid Claude Code hook JSON:

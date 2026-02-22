@@ -1,8 +1,8 @@
 // scaffold-batteries.ts — copy batteries-included content to a project or user config dir
-// Called by `wm setup --batteries` after base setup completes.
+// Called by `kata setup --batteries` after base setup completes.
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { getPackageRoot, getUserConfigDir } from '../session/lookup.js'
+import { getPackageRoot, getUserConfigDir, getProjectTemplatesDir } from '../session/lookup.js'
 
 export interface BatteriesResult {
   templates: string[]
@@ -49,7 +49,7 @@ function copyDirectory(
 /**
  * Scaffold batteries-included content into a project.
  *
- * Copies from the wm package's batteries/ directory:
+ * Copies from the kata package's batteries/ directory:
  *   batteries/templates/              → .claude/workflows/templates/
  *   batteries/agents/                 → .claude/agents/
  *   batteries/spec-templates/         → planning/spec-templates/
@@ -72,10 +72,10 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     updated: [],
   }
 
-  // Mode templates → .claude/workflows/templates/
+  // Mode templates → .kata/templates/ (or .claude/workflows/templates/ for old layout)
   copyDirectory(
     join(batteryRoot, 'templates'),
-    join(projectRoot, '.claude', 'workflows', 'templates'),
+    getProjectTemplatesDir(projectRoot),
     result.templates,
     result.skipped,
     result.updated,

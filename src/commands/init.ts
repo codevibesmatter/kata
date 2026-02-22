@@ -1,4 +1,4 @@
-// wm init - Initialize session state
+// kata init - Initialize session state
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getCurrentSessionId, getStateFilePath } from '../session/lookup.js'
@@ -46,7 +46,7 @@ function createDefaultState(sessionId: string): SessionState {
 }
 
 /**
- * wm init [--session=SESSION_ID] [--force]
+ * kata init [--session=SESSION_ID] [--force]
  * Initialize session state (called by SessionStart hook)
  * --force: Reset to default state even if state exists
  */

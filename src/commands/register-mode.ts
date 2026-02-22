@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync } from 'node:fs'
-import { resolve, basename } from 'node:path'
+import { resolve, basename, join } from 'node:path'
 import jsYaml from 'js-yaml'
-import { findClaudeProjectDir } from '../session/lookup.js'
+import { findProjectDir, getProjectModesPath, getProjectTemplatesDir } from '../session/lookup.js'
 import { validatePhases } from '../validation/index.js'
 
 interface RegisterModeOptions {
@@ -67,7 +67,7 @@ function parseArgs(args: string[]): RegisterModeOptions & { help?: boolean; dryR
 function showHelp(): void {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log(`
-Usage: wm register-mode <template-path> [options]
+Usage: kata register-mode <template-path> [options]
 
 Register an existing template as a mode in modes.yaml.
 
@@ -90,23 +90,23 @@ Options:
 
 Examples:
   # Register template in-place (for templates already in .claude/workflows/templates/)
-  wm register-mode .claude/workflows/templates/my-workflow.md
+  kata register-mode .claude/workflows/templates/my-workflow.md
 
   # Register and copy external template
-  wm register-mode /tmp/my-workflow.md --copy
+  kata register-mode /tmp/my-workflow.md --copy
 
   # Register with custom name
-  wm register-mode /tmp/test.md --as=my-custom-mode --copy
+  kata register-mode /tmp/test.md --as=my-custom-mode --copy
 
   # Preview registration
-  wm register-mode /tmp/test.md --copy --dry-run
+  kata register-mode /tmp/test.md --copy --dry-run
 
 Workflow for one-off → saved mode:
-  wm init-template /tmp/my-workflow.md --phases=4   # Create template
+  kata init-template /tmp/my-workflow.md --phases=4   # Create template
   # ... test with --template flag ...
-  wm enter --template=/tmp/my-workflow.md --dry-run
+  kata enter --template=/tmp/my-workflow.md --dry-run
   # ... happy with it? register it ...
-  wm register-mode /tmp/my-workflow.md --copy --as=my-mode
+  kata register-mode /tmp/my-workflow.md --copy --as=my-mode
 `)
 }
 
@@ -124,23 +124,23 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: wm register-mode <template-path> [options]')
+    console.error('Usage: kata register-mode <template-path> [options]')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Examples:')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm register-mode packages/workflow-management/templates/my-workflow.md')
+    console.error('  kata register-mode packages/workflow-management/templates/my-workflow.md')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('  wm register-mode /tmp/my-workflow.md --copy')
+    console.error('  kata register-mode /tmp/my-workflow.md --copy')
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Run "wm register-mode --help" for more options.')
+    console.error('Run "kata register-mode --help" for more options.')
     process.exit(1)
   }
 
-  const projectDir = findClaudeProjectDir()
+  const projectDir = findProjectDir()
   if (!projectDir) {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Error: Could not find .claude directory')
@@ -170,7 +170,7 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('Templates must have frontmatter with phases defined.')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Use "wm validate-template" to check the template.')
+    console.error('Use "kata validate-template" to check the template.')
     process.exit(1)
   }
 
@@ -181,7 +181,7 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error('')
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Use "wm validate-template" to check the template.')
+    console.error('Use "kata validate-template" to check the template.')
     process.exit(1)
   }
 
@@ -226,9 +226,8 @@ export async function registerModeCommand(args: string[]): Promise<void> {
   }
 
   // Always write to project-level paths (npm installs have read-only package paths)
-  const workflowsDir = resolve(projectDir, '.claude', 'workflows')
-  const modesYamlPath = resolve(workflowsDir, 'modes.yaml')
-  const templatesDir = resolve(workflowsDir, 'templates')
+  const modesYamlPath = getProjectModesPath(projectDir)
+  const templatesDir = getProjectTemplatesDir(projectDir)
 
   // Determine final template location
   let finalTemplatePath = templatePath
@@ -353,8 +352,9 @@ export async function registerModeCommand(args: string[]): Promise<void> {
     }
   }
 
-  // Update modes.yaml (ensure project workflows dir exists)
-  mkdirSync(workflowsDir, { recursive: true })
+  // Update modes.yaml (ensure directory exists)
+  const modesDir = join(modesYamlPath, '..')
+  mkdirSync(modesDir, { recursive: true })
   try {
     let modesYaml: Record<string, unknown> = { modes: {}, categories: {} }
 
@@ -391,5 +391,5 @@ export async function registerModeCommand(args: string[]): Promise<void> {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log('The mode is now available:')
   // biome-ignore lint/suspicious/noConsole: CLI output
-  console.log(`  wm enter ${modeName}`)
+  console.log(`  kata enter ${modeName}`)
 }

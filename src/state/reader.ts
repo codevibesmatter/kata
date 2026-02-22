@@ -15,18 +15,18 @@ export async function readState(stateFile: string): Promise<SessionState> {
     return validated
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(`State file not found: ${stateFile}\nRun: wm doctor --fix`)
+      throw new Error(`State file not found: ${stateFile}\nRun: kata doctor --fix`)
     }
 
     if (error instanceof SyntaxError) {
       throw new Error(
-        `Failed to parse state file (invalid JSON): ${stateFile}\n${error.message}\nRun: wm doctor --fix`,
+        `Failed to parse state file (invalid JSON): ${stateFile}\n${error.message}\nRun: kata doctor --fix`,
       )
     }
 
     if (error instanceof Error && error.name === 'ZodError') {
       throw new Error(
-        `Invalid state file schema: ${stateFile}\n${error.message}\nRun: wm doctor --fix`,
+        `Invalid state file schema: ${stateFile}\n${error.message}\nRun: kata doctor --fix`,
       )
     }
 
