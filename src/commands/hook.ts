@@ -154,7 +154,7 @@ export async function handleSessionStart(input: Record<string, unknown>): Promis
   // Prepend tasks-disabled warning when CLAUDE_CODE_ENABLE_TASKS=false
   const tasksWarning = isNativeTasksEnabled()
     ? ''
-    : '\n⚠️ WARNING: CLAUDE_CODE_ENABLE_TASKS is disabled. kata workflow tracking (TaskList, TaskUpdate) will not work. Enable native tasks in ~/.claude/settings.json: set env.CLAUDE_CODE_ENABLE_TASKS to "true".\n'
+    : '\n⚠️ WARNING: CLAUDE_CODE_ENABLE_TASKS is disabled. kata workflow tracking (TaskList, TaskUpdate) will not work. To enable: set env.CLAUDE_CODE_ENABLE_TASKS to "true" in ~/.claude/settings.json, then restart Claude Code.\n'
 
   outputJson({
     hookSpecificOutput: {

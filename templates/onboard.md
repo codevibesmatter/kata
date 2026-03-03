@@ -8,9 +8,10 @@ phases:
     name: "Bootstrap"
     description: "Create .claude/ directory and verify prerequisites"
     task_config:
-      title: "P0: Bootstrap — verify Node.js and create .claude/"
+      title: "P0: Bootstrap — verify Node.js, native tasks, and create .claude/"
     tasks:
       - "Verify Node.js >= 18 is installed"
+      - "Check CLAUDE_CODE_ENABLE_TASKS is enabled (see ## Native Tasks Check below)"
       - "Create .claude/ directory if it does not exist"
       - "Check if kata is already configured (kata.yaml exists)"
   - id: p1
@@ -89,6 +90,34 @@ You are the agent running the kata setup interview. Ask questions, collect answe
 
 **Quick path (batteries):** p0 → p1 → p4 → p5 → p6. Skip p2 and p3.
 **Custom path:** p0 → p1 → p2 → p3 → p4 → p5 → p6.
+
+## Native Tasks Check
+
+In p0, check whether Claude Code native tasks are enabled:
+
+```bash
+node -e "
+const fs = require('fs'), os = require('os'), path = require('path');
+const f = path.join(os.homedir(), '.claude', 'settings.json');
+try {
+  const s = JSON.parse(fs.readFileSync(f, 'utf-8'));
+  console.log(s?.env?.CLAUDE_CODE_ENABLE_TASKS ?? '(not set — defaults to enabled)');
+} catch { console.log('(settings.json not found — defaults to enabled)'); }
+"
+```
+
+**If the value is `"false"`** — kata workflow tracking will not work. Inform the user:
+
+> ⚠️ Native tasks are disabled. kata requires `CLAUDE_CODE_ENABLE_TASKS=true` to track workflow progress with TaskList and TaskUpdate.
+>
+> To enable:
+> 1. Open `~/.claude/settings.json`
+> 2. Set `"env": { "CLAUDE_CODE_ENABLE_TASKS": "true" }`
+> 3. **Restart Claude Code** — the setting takes effect only after a restart.
+
+Ask the user to restart and re-run `kata enter onboard` before continuing.
+
+**If the value is `"true"` or not set** — native tasks are enabled, continue normally.
 
 ## What Gets Created
 

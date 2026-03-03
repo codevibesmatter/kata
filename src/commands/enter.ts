@@ -249,7 +249,7 @@ async function enterWithCustomTemplate(
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error('   kata workflow tracking requires native tasks. TaskList will not work.')
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json')
+      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json, then restart Claude Code.')
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error('')
     }
@@ -759,7 +759,7 @@ export async function enter(args: string[]): Promise<void> {
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error('   kata workflow tracking requires native tasks. TaskList will not work.')
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json')
+      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json, then restart Claude Code.')
       // biome-ignore lint/suspicious/noConsole: intentional CLI output
       console.error('')
     }
