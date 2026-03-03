@@ -14,7 +14,7 @@
     }
   },
   "bin": {
-    "kata": "./kata"
+    "kata": "kata"
   },
   "engines": {
     "node": ">=18"
@@ -51,11 +51,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/codevibesmatter/kata-wm.git"
+    "url": "git+https://github.com/codevibesmatter/kata.git"
   },
-  "homepage": "https://github.com/codevibesmatter/kata-wm#readme",
+  "homepage": "https://github.com/codevibesmatter/kata#readme",
   "bugs": {
-    "url": "https://github.com/codevibesmatter/kata-wm/issues"
+    "url": "https://github.com/codevibesmatter/kata/issues"
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
