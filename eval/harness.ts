@@ -208,7 +208,7 @@ export async function runScenario(
     // Initialize git repo so the inner agent has a working git context
     execSync(
       'git init -b main && ' +
-      'git config user.email "eval@kata-wm.test" && ' +
+      'git config user.email "eval@kata.test" && ' +
       'git config user.name "Kata Eval" && ' +
       'git add -A && git commit -m "Initial scaffold"',
       { cwd: projectDir, stdio: ['pipe', 'pipe', 'pipe'] },

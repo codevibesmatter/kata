@@ -20,7 +20,7 @@ export const onboardScenario: EvalScenario = {
   name: 'Fresh project onboard',
   fixture: 'tanstack-start-fresh',
   prompt:
-    'Help me get started with this project. kata-wm is installed globally.',
+    'Help me get started with this project. kata is installed globally.',
   maxTurns: 40,
   timeoutMs: 10 * 60 * 1000,
   checkpoints: onboardPresets,

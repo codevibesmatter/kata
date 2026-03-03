@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build kata-wm
+      - name: Build kata
         run: npm run build
 
       - name: Run eval suite

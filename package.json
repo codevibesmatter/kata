@@ -1,5 +1,5 @@
 {
-  "name": "kata-wm",
+  "name": "@codevibesmatter/kata",
   "version": "0.0.1",
   "description": "Structured workflow kata for Claude Code — modes, phases, tasks, and stop hooks for disciplined AI coding sessions",
   "type": "module",
@@ -22,9 +22,9 @@
   "files": [
     "dist/",
     "kata",
-    "modes.yaml",
     "templates/",
-    "batteries/"
+    "batteries/",
+    "src/providers/prompts/"
   ],
   "scripts": {
     "build": "tsup",

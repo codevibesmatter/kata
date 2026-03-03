@@ -19,7 +19,7 @@ The `kata` shell script at the repo root is the CLI entry point. It runs `dist/i
 
 ## Architecture
 
-**kata-wm** is a TypeScript CLI published as an npm package (`kata-wm`). It wraps Claude Code projects with structured session modes, phase task enforcement, and stop hooks.
+**kata-wm** is a TypeScript CLI published as an npm package (`@codevibesmatter/kata`). It wraps Claude Code projects with structured session modes, phase task enforcement, and stop hooks.
 
 ### Source layout (`src/`)
 
@@ -34,7 +34,7 @@ The `kata` shell script at the repo root is the CLI entry point. It runs `dist/i
 | `validation/` | Phase/template validation |
 | `yaml/` | YAML frontmatter parser for template files |
 | `utils/` | Workflow ID generation, session cleanup, timestamps |
-| `testing/` | Test utilities exported as `kata-wm/testing` — mock sessions, hook runners, assertions, pre-built scenarios |
+| `testing/` | Test utilities exported as `@codevibesmatter/kata/testing` — mock sessions, hook runners, assertions, pre-built scenarios |
 
 ### Build outputs
 

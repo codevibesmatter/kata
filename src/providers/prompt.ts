@@ -32,7 +32,7 @@ export function preparePrompt(
     return { text: prompt, cleanup: () => {} }
   }
 
-  const tempDir = join(tmpdir(), 'kata-wm-prompts')
+  const tempDir = join(tmpdir(), 'kata-prompts')
   mkdirSync(tempDir, { recursive: true })
   const filePath = join(tempDir, `prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.md`)
   writeFileSync(filePath, prompt, 'utf-8')

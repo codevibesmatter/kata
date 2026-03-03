@@ -28,7 +28,7 @@ Tests: `npm test` (vitest unit tests)
 
 ## Workflow Management
 
-kata-wm is installed globally. Use `kata` commands directly:
+kata is installed globally. Use `kata` commands directly:
 
 ```bash
 kata setup           # Set up kata for this project

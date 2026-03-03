@@ -25,11 +25,11 @@ npm install -g @codevibesmatter/kata
 
 ## Getting started
 
-After installing, prompt Claude:
+After installing, tell Claude:
 
-> run `npx kata setup` — do not use `--yes`, this starts an interactive setup interview
+> Set up kata for this project
 
-Claude will run the setup command, which registers hooks and enters the guided setup interview mode. Claude will walk you through configuring the project and ask questions along the way.
+Claude will run `kata setup`, register the hooks, and walk you through project configuration.
 
 ## Usage
 

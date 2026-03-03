@@ -419,7 +419,7 @@ export async function checkPhase(args: string[]): Promise<void> {
   try {
     projectRoot = findProjectDir()
   } catch {
-    console.error('Error: Not in a kata-wm project directory')
+    console.error('Error: Not in a kata project directory')
     process.exit(1)
   }
 
