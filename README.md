@@ -131,25 +131,193 @@ If `kata can-exit` reports unmet conditions (pending tasks, uncommitted changes,
 
 ### Mode lifecycle
 
-_(content coming in subsequent phases)_
+```mermaid
+flowchart TD
+    A["kata enter &lt;mode&gt; [--issue=N]"] --> B[Template loaded from .kata/templates/]
+    B --> C[Native tasks created with dependency chains]
+    C --> D[Claude works through tasks via TaskList]
+    D --> E{Claude tries to stop?}
+    E -- Yes --> F[Stop hook fires: kata hook stop-conditions]
+    F --> G{All conditions met?}
+    G -- No --> H[BLOCK: list what's missing]
+    H --> D
+    G -- Yes --> I[kata can-exit passes]
+    I --> J[kata exit]
+```
+
+A **mode** is a named workflow — `planning`, `implementation`, `task`, etc. — defined by a template file. Each template has YAML frontmatter that specifies phases, task titles, and the dependency chains between them. When you run `kata enter <mode>`, kata reads that template, creates one native Claude task per phase step, and wires up the dependencies so Phase 2 is blocked until Phase 1 is marked complete.
+
+**Native tasks** live in Claude's built-in task system at `~/.claude/tasks/{sessionId}/`. Claude discovers them via `TaskList` at the start of the session and advances through them with `TaskUpdate(taskId="X", status="completed")`. The dependency chains are real: Claude cannot mark a Phase 2 task complete while a Phase 1 task is still open. This is enforced either by Claude following the task metadata or, in strict mode, by the `task-deps` hook blocking the `TaskUpdate` call outright.
+
+The **stop hook** is the enforcement mechanism. Every time Claude tries to end the session — whether it thinks the work is done, the user said thanks, or it just ran out of things to do — the `Stop` event fires and `kata hook stop-conditions` intercepts it. The hook checks every stop condition registered for the current mode. If any condition is unmet, the session is blocked and Claude receives a clear message listing exactly what's missing. Claude must satisfy the conditions before it can exit.
+
+The **`--issue=N` flag** links a GitHub issue to the session for modes that require it (`planning`, `implementation`). This sets the `workflowId` to `GH#N`, enables the `feature_tests_added` check (which diffs against the issue branch to verify new test files were added), and populates the issue number into the session state. Checking issue linkage:
+
+```
+$ kata status
+Mode: implementation
+Phase: p1
+Workflow ID: GH#42
+Issue: #42
+Entered: 2026-03-05T17:02:02Z
+```
+
+If stop conditions are not met, `kata can-exit` reports it:
+
+```
+✗ Cannot exit:
+  2 task(s) still pending
+    - [8] GH#42: P2.2 - Core Reference Sections
+    - [9] GH#42: P2.2: TEST
+  Uncommitted changes in tracked files
+  Unpushed commits
+```
+
+---
 
 ### Context injection
 
-_(content coming in subsequent phases)_
+Every time a new Claude conversation starts, the `SessionStart` hook fires and calls `kata prime`. This is how Claude knows what mode it's in, what tasks are pending, and what project rules to follow — without being told any of this in the user's first message.
+
+`kata prime` outputs different content depending on session state:
+
+- **No active mode**: Outputs a mode selection guide listing all available modes, their intent keywords, and the `kata enter <mode>` command to start one. This surfaces at the start of conversations where no mode has been entered yet.
+- **Active mode**: Injects the full template instructions for the active mode, a session state ledger (mode, phase, workflow ID, pending tasks), and the project rules from `global_rules` and `task_rules` in `kata.yaml`.
+
+This is why Claude immediately knows its mode and task list on session resumption — the context is re-injected from disk state, not inferred from chat history. When the context window compacts during a long session, the next user message triggers a new `SessionStart`, which re-injects the complete context. Sessions survive compaction without losing their place.
+
+Example of what `kata prime` outputs for an active implementation session:
+
+```
+=== kata session context ===
+Mode: implementation
+Phase: p1
+Workflow ID: GH#42
+Issue: #42
+Pending tasks: 3
+
+=== Mode instructions ===
+You are in implementation mode. Execute the approved spec...
+[template content]
+
+=== Rules ===
+- Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate.
+- Run TaskList FIRST to discover pre-created tasks.
+```
+
+The `SessionStart` hook passes `--session=ID` explicitly when calling `kata prime` so the hook always reads from the correct session state file. Session ID is never inferred from environment variables at hook time.
+
+---
 
 ### Planning → Implementation pipeline
 
-_(content coming in subsequent phases)_
+```mermaid
+flowchart LR
+    A["kata enter planning --issue=42"] --> B[Research & spec phases]
+    B --> C["Spec written to\nplanning/specs/42-slug.md"]
+    C --> D[Spec reviewed & approved]
+    D --> E["kata enter implementation --issue=42"]
+    E --> F[Implementation reads spec\nphases from frontmatter]
+    F --> G[Impl + test + review per phase]
+    G --> H[Commit, push, PR, close issue]
+```
+
+**Planning mode** drives a structured sequence: research the problem, write the spec, review it, get it approved. The output is a spec file written to `planning/specs/{N}-{slug}.md` (configurable via `spec_path` in `kata.yaml`). The spec has YAML frontmatter that defines the implementation phases — this frontmatter is what the implementation mode reads.
+
+**Implementation mode** picks up where planning left off. When you run `kata enter implementation --issue=42`, kata finds `planning/specs/42-*.md`, reads its YAML frontmatter, and creates the implementation phase tasks from it. The phases in the spec drive the task list — implementation is parameterized by the plan, not hardcoded. This means the implementation agent works from the exact spec that was reviewed and approved, not its own interpretation.
+
+**The spec file is the explicit handoff artifact.** It is committed to the repo during the planning session so that the implementation agent can trust it as the approved plan. No verbal handoff, no re-deriving the approach from issue comments — the spec is the source of truth.
+
+`spec_path` is configurable in `kata.yaml` (`spec_path: planning/specs`). If your project stores specs elsewhere, set this field and kata will find them.
+
+For smaller work that doesn't need a separate planning phase, `kata enter task` handles both planning and implementation in one session. Task mode has lighter stop conditions (`tasks_complete`, `committed` — no `pushed`, no `tests_pass`, no `feature_tests_added`).
+
+Implementation mode enforces stricter stop conditions than planning: it adds `tests_pass` (the project's test command must exit 0) and `feature_tests_added` (at least one new test file must appear in the diff vs `origin/main`). Planning only requires `tasks_complete`, `committed`, and `pushed`.
+
+---
 
 ### Hook chain
 
-_(content coming in subsequent phases)_
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as Claude
+    participant K as kata hooks
+
+    U->>C: starts conversation
+    K->>C: SessionStart → kata prime injects mode context
+    U->>C: sends message
+    K->>C: UserPromptSubmit → detect mode intent
+    C->>C: tool calls (Edit, Write, TaskUpdate...)
+    K->>C: PreToolUse mode-gate → enforce active mode
+    C->>C: tries to stop
+    K->>C: Stop → check all stop conditions
+    C->>C: blocked if conditions unmet
+```
+
+See [Hooks reference](#hooks-reference) for details on each hook, registration tiers, and the full hook flow diagram.
 
 ---
 
 ## Stop conditions
 
-_(content coming in subsequent phases)_
+Stop conditions are checked by `kata hook stop-conditions` every time Claude tries to end a session. Each mode declares which conditions apply in `modes.yaml`. `kata can-exit` runs the same check on demand — useful before calling `kata exit` or from CI scripts.
+
+### Condition reference
+
+| Condition | What it checks | Modes that use it |
+|-----------|----------------|-------------------|
+| `tasks_complete` | All native tasks in `~/.claude/tasks/{sessionId}/` have `status: completed` | research, planning, implementation, task, verify, debug |
+| `committed` | No uncommitted changes in git working tree (`git status --porcelain` returns empty) | research, planning, implementation, task, verify, debug |
+| `pushed` | Current HEAD has been pushed to a remote branch | research, planning, implementation, verify, debug |
+| `tests_pass` | `project.test_command` from `kata.yaml` exits with code 0 | implementation only |
+| `feature_tests_added` | At least one new test file added in the diff vs `project.diff_base` (default: `origin/main`) | implementation only |
+
+`freeform` and `onboard` have no stop conditions — they can always exit.
+
+### How to satisfy each condition
+
+**`tasks_complete`** — Complete all phase tasks. In each phase, do the work and then call `TaskUpdate(taskId="X", status="completed")`. Run `TaskList` to see what's still pending.
+
+**`committed`** — Stage and commit all changes: `git add <files> && git commit -m "..."`. `kata can-exit` re-checks `git status --porcelain`; it must return empty.
+
+**`pushed`** — Push the current branch: `git push`. If the branch has no upstream yet: `git push -u origin <branch>`.
+
+**`tests_pass`** — Fix any failing tests. The test command is set in `kata.yaml` under `project.test_command`. Run it directly to see what's failing.
+
+**`feature_tests_added`** — Write at least one new test file in this implementation session. "New" means it appears in `git diff origin/main --name-only` and matches `project.test_file_pattern` (default: `**/*.test.ts`). Modifying existing test files does not satisfy this condition.
+
+### Example output
+
+Blocked:
+
+```
+✗ Cannot exit:
+  2 task(s) still pending
+    - [8] GH#42: P2.2 - Core Reference Sections
+    - [9] GH#42: P2.2: TEST
+  Uncommitted changes in tracked files
+  Unpushed commits
+```
+
+Passing:
+
+```
+✓ All tasks complete. Can exit.
+```
+
+Use `kata can-exit --json` for machine-readable output in CI or scripts:
+
+```json
+{
+  "canExit": false,
+  "reasons": ["2 task(s) still pending", "Changes not committed"],
+  "guidance": {
+    "nextStepMessage": "...",
+    "escapeHatch": "..."
+  }
+}
+```
 
 ---
 
