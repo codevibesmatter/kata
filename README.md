@@ -249,7 +249,9 @@ sequenceDiagram
     U->>C: sends message
     K->>C: UserPromptSubmit → detect mode intent
     C->>C: tool calls (Edit, Write, TaskUpdate...)
-    K->>C: PreToolUse mode-gate → enforce active mode
+    K->>C: PreToolUse [mode-gate] → enforce active mode
+    K->>C: PreToolUse [task-deps] → check dependency order (strict mode)
+    K->>C: PreToolUse [task-evidence] → require git evidence (strict mode)
     C->>C: tries to stop
     K->>C: Stop → check all stop conditions
     C->>C: blocked if conditions unmet
