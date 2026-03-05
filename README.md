@@ -29,15 +29,17 @@ Structured workflow CLI for [Claude Code](https://claude.ai/claude-code). Wraps 
 
 ## What kata does
 
-Claude sessions are unstructured by default. The agent can answer, stop, and close the session at any time — even mid-task, mid-phase, or before committing work.
+You ask Claude to implement a feature. It writes some code, says "looks good!", and stops — skipping the tests, skipping the commit, never opening the PR. Or it gets halfway through planning before context compaction wipes its memory and it starts over. Or it just... stops when it thinks it's done, which isn't when *you* think it's done.
 
-**kata enforces that sessions complete.** When you enter a mode, kata creates native phase tasks with dependency chains. A stop hook intercepts every attempt to end the session and blocks exit until all phase tasks are done, work is committed, and any additional stop conditions are met.
+The root problem: Claude has no obligation to finish. Sessions are fire-and-forget. There's no phase structure, no completion gate, no memory across compaction.
 
-Three concrete benefits:
+**kata adds the enforcement layer.** When you enter a mode (`kata enter planning`, `kata enter implementation`), kata:
 
-- **Phase tasks auto-created** — `kata enter planning` creates the research → spec → review → approved task chain. Claude sees these via `TaskList` and follows them in order.
-- **Stop hook blocks early exit** — Claude cannot end the session until all tasks are complete. No skipping the verify phase. No stopping before committing.
-- **Session state survives context compaction** — mode, phase, and workflow ID are persisted to disk. Long sessions don't lose their place when the context window rolls over.
+1. Creates native phase tasks with dependency chains — Claude sees them via `TaskList` and must complete them in order
+2. Registers a Stop hook that fires whenever Claude tries to end the session — if tasks are incomplete, changes uncommitted, or tests failing, the session is **blocked**
+3. Persists session state to disk so context compaction doesn't lose the mode, phase, or pending work
+
+The stop hook is the key mechanism. Claude cannot exit until every condition for that mode is met. No more half-done sessions.
 
 ---
 
