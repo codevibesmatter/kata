@@ -552,8 +552,8 @@ For a guided walkthrough, run `kata enter onboard` instead. This starts an agent
 | `kata config` | `[--show]` | Show resolved `kata.yaml` config with provenance (project vs. defaults) |
 | `kata validate-spec` | `--issue=N \| path.md` | Validate a spec file's phase format and required sections |
 | `kata validate-template` | `<path> [--json]` | Validate a template file's YAML frontmatter and structure |
-| `kata init-mode` | `<name>` | Create a new mode — generates a template file and registers it in `modes.yaml` |
-| `kata register-mode` | `<template-path>` | Register an existing template file as a mode in `modes.yaml` |
+| `kata init-mode` | `<name>` | Create a new mode — generates a template file and registers it in `kata.yaml` |
+| `kata register-mode` | `<template-path>` | Register an existing template file as a mode in `kata.yaml` |
 | `kata init-template` | `<path>` | Create a new blank template file with required frontmatter |
 | `kata check-phase` | `<phase-id> [--issue=N] [--force]` | Run per-phase process gates for the specified phase |
 | `kata review` | `--prompt=<name> [--provider=P]` | Run an ad-hoc agent review using a named review prompt |
@@ -751,10 +751,6 @@ phases:
         instruction: |      # Freeform markdown instructions for Claude
           ...
     depends_on: [<phase-id>]  # Phases that must complete before this one
-
-# Optional: global rules injected via kata prime
-rules:
-  - <string>
 ---
 ```
 
@@ -843,7 +839,7 @@ See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
 | `src/commands/enter/` | Sub-modules for the enter command: `task-factory.ts`, `guidance.ts`, `template.ts`, `spec.ts` |
 | `src/session/lookup.ts` | Project root discovery, session ID resolution, template path resolution |
 | `src/state/` | Zod schema (`schema.ts`), reader/writer for `SessionState` JSON |
-| `src/config/` | `kata-config.ts` loads `.kata/kata.yaml`; `cache.ts` loads and merges `modes.yaml` |
+| `src/config/` | `kata-config.ts` loads and validates `.kata/kata.yaml`; config helpers for interviews, setup profiles, and subphase patterns |
 | `src/validation/` | Phase/template validation |
 | `src/yaml/` | YAML frontmatter parser for template files |
 | `src/utils/` | Workflow ID generation, session cleanup, timestamps |
