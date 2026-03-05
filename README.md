@@ -210,7 +210,7 @@ Session state is persisted to disk after exit and can be inspected afterward. Us
 Shows the current session's mode, phase, workflow ID, and metadata.
 
 ```
-kata status [--json]
+kata status [--json] [--session=ID]
 ```
 
 Text output:
@@ -263,7 +263,7 @@ Blocked (text):
 Passing (text):
 
 ```
-✓ All stop conditions met — ready to exit
+✓ All tasks complete. Can exit.
 ```
 
 JSON output (`--json`):
@@ -273,8 +273,8 @@ JSON output (`--json`):
   "canExit": false,
   "reasons": ["2 task(s) still pending", "Changes not committed"],
   "guidance": {
-    "nextStepMessage": "Complete all pending tasks and commit your changes before exiting.",
-    "escapeHatch": "If you need to exit anyway, use kata exit --force (not recommended)."
+    "nextStepMessage": "**🎯 NEXT STEP (DO NOT SKIP):**\n1. DO THE ACTUAL WORK for this task\n2. When work is COMPLETE: TaskUpdate(taskId=\"X\", status=\"completed\")\n\n**Current task:** GH#42: P2.2 - Core Reference Sections",
+    "escapeHatch": "**🚨 ONLY IF GENUINELY BLOCKED:**\nIf you have a legitimate question that prevents progress, use `AskUserQuestion` to get clarification. The conversation will pause until user responds.\n**DO NOT abuse this to skip conditions.**"
   }
 }
 ```
@@ -334,11 +334,14 @@ Files scaffolded:
 | Source | Destination | Contents |
 |--------|-------------|----------|
 | `batteries/kata.yaml` | `.kata/kata.yaml` | Project config (project name, commands, spec paths, mode overrides) |
-| `batteries/templates/*.md` | `.kata/templates/*.md` | Mode templates for all 8 built-in modes |
+| `batteries/templates/*.md` | `.kata/templates/*.md` | Mode templates (research, planning, implementation, task, freeform, verify, debug) |
 | `batteries/agents/` | `.claude/agents/` | Agent definitions (review-agent, impl-agent, etc.) |
 | `batteries/spec-templates/` | `planning/spec-templates/` | Spec document stubs |
 | `batteries/interviews.yaml` | `.kata/interviews.yaml` | Onboard interview questions |
 | `batteries/subphase-patterns.yaml` | `.kata/subphase-patterns.yaml` | Phase pattern definitions |
+| `batteries/verification-tools.md` | `.kata/verification-tools.md` | Verification tools reference |
+| `batteries/github/ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` | GitHub issue templates |
+| `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by onboard mode) |
 
 `--update` overwrites existing project files with the latest versions from the installed package. Use this after `npm update @codevibesmatter/kata`. Commit your customizations first — `--update` overwrites them.
 
