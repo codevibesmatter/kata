@@ -348,17 +348,28 @@ phases:
           Use this frontmatter:
           ```yaml
           ---
-          initiative: {slug}
+          initiative: feat-{slug}        # kebab-case, prefix with feat-/fix-/refactor-
           type: project
           issue_type: feature
           status: draft
           priority: medium
-          github_issue: {number or null}
+          github_issue: {N}              # integer — not a string, not null
           created: {YYYY-MM-DD}
           updated: {YYYY-MM-DD}
-          phases: []
+          phases:
+            - id: p1                     # p1, p2, p3 … (p0 = research, skip in phases)
+              name: "Phase Name"
+              tasks:
+                - "Task description"
+                - "Another task"
           ---
           ```
+
+          Frontmatter rules:
+          - `github_issue` must be an integer (the issue number), never a string or null
+          - `initiative` should be kebab-case with a prefix (e.g., `feat-health-endpoint`)
+          - Phase IDs use `p1`, `p2`, `p3` pattern — `p0` is reserved for research, skip it here
+          - `phases:` lists implementation phases only (not research or interview)
 
           Then: Mark this task completed via TaskUpdate
 
@@ -410,7 +421,20 @@ phases:
 
             ## Implementation Phases
             Break into 2-5 phases with concrete tasks per phase.
-            Phases go in YAML frontmatter phases: array.
+            Phases go in YAML frontmatter phases: array. Example structure:
+            ```yaml
+            phases:
+              - id: p1
+                name: "Foundation"
+                tasks:
+                  - "Set up data model and schema"
+                  - "Wire basic API endpoint"
+              - id: p2
+                name: "UI"
+                tasks:
+                  - "Build list component"
+                  - "Connect to API"
+            ```
             Each phase gets test_cases: with 1-3 entries.
 
             ## Test Infrastructure
@@ -637,6 +661,29 @@ phases:
       labels: [phase, phase-4, finalize]
       depends_on: [p3]
     steps:
+      - id: validate-spec
+        title: "Validate spec before approval"
+        instruction: |
+          Run validation before marking approved. Block on any failures.
+
+          **Frontmatter checks:**
+          - [ ] `github_issue` is an integer (not null, not a string)
+          - [ ] `initiative` is kebab-case with prefix (`feat-`, `fix-`, `refactor-`)
+          - [ ] `phases:` array has at least one entry with `id`, `name`, `tasks`
+          - [ ] `status: draft` (will be changed to `approved` in next step)
+
+          **Content checks:**
+          - [ ] No placeholder text (TODO, TBD, `{placeholder}`, `[placeholder]`)
+          - [ ] Every behavior has: ID, Trigger, Expected, Verify
+          - [ ] Verification Plan has literal commands (not abstract descriptions)
+          - [ ] File paths in spec reference real files — spot-check with Glob/Grep
+
+          If the project has a spec validator (e.g., `pnpm run validate-spec`), run it now.
+
+          Fix all failures before proceeding. Do not approve a spec that fails validation.
+
+          Then: Mark this task completed via TaskUpdate
+
       - id: approve-spec
         title: "Mark spec approved and commit"
         instruction: |
