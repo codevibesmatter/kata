@@ -52,6 +52,7 @@ tsup produces ESM-only output with two entry points:
 | `.kata/wm.yaml` | `.claude/workflows/wm.yaml` | Project config (`WmConfig`) |
 | `.kata/modes.yaml` | `.claude/workflows/modes.yaml` | Project-level mode overrides |
 | `.kata/templates/` | `.claude/workflows/templates/` | Mode templates |
+| `.kata/prompts/` | `.claude/workflows/prompts/` | Review prompt templates (customizable) |
 | `.kata/verification-evidence/` | `.claude/verification-evidence/` | Verify-phase output |
 | `~/.claude/tasks/{sessionId}/` | (same) | Native task files (Claude-owned) |
 | `.claude/settings.json` | (same) | Hook registration (Claude-owned) |

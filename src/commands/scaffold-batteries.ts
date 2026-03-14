@@ -3,12 +3,13 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { getPackageRoot, getProjectTemplatesDir, getProjectInterviewsPath, getProjectSubphasePatternsPath, getProjectVerificationToolsPath, getKataDir } from '../session/lookup.js'
+import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectInterviewsPath, getProjectSubphasePatternsPath, getProjectVerificationToolsPath, getKataDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
   templates: string[]
   agents: string[]
+  prompts: string[]
   specTemplates: string[]
   githubTemplates: string[]
   interviews: string[]
@@ -99,6 +100,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
   const result: BatteriesResult = {
     templates: [],
     agents: [],
+    prompts: [],
     specTemplates: [],
     githubTemplates: [],
     interviews: [],
@@ -150,6 +152,17 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     result.updated,
     update,
     backupRoot ? join(backupRoot, 'agents') : undefined,
+  )
+
+  // Review prompts → .kata/prompts/ (or .claude/workflows/prompts/ for old layout)
+  copyDirectory(
+    join(batteryRoot, 'prompts'),
+    getProjectPromptsDir(projectRoot),
+    result.prompts,
+    result.skipped,
+    result.updated,
+    update,
+    backupRoot ? join(backupRoot, 'prompts') : undefined,
   )
 
   // Spec templates → planning/spec-templates/

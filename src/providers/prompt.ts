@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getPackageRoot } from '../session/lookup.js'
+import { getPackageRoot, getProjectPromptsDir, findProjectDir } from '../session/lookup.js'
 
 const DEFAULT_THRESHOLD = 4000
 
@@ -51,27 +51,66 @@ export function preparePrompt(
 }
 
 /**
+ * Get the batteries (package-level) prompts directory.
+ */
+function getBatteriesPromptsDir(): string {
+  return join(getPackageRoot(), 'batteries', 'prompts')
+}
+
+/**
  * Load a saved prompt template by name.
- * Looks in src/providers/prompts/{name}.md (compiled to dist/providers/prompts/).
+ * Checks project-level prompts first (.kata/prompts/ or .claude/workflows/prompts/),
+ * then falls back to package batteries/prompts/.
  */
 export function loadPrompt(name: string): string {
-  const promptPath = join(getPackageRoot(), 'src', 'providers', 'prompts', `${name}.md`)
-  if (!existsSync(promptPath)) {
+  // Check project-level first
+  try {
+    const projectDir = getProjectPromptsDir()
+    const projectPath = join(projectDir, `${name}.md`)
+    if (existsSync(projectPath)) {
+      return readFileSync(projectPath, 'utf-8')
+    }
+  } catch {
+    // No project dir found — fall through to batteries
+  }
+
+  // Fall back to package batteries
+  const batteriesPath = join(getBatteriesPromptsDir(), `${name}.md`)
+  if (!existsSync(batteriesPath)) {
     const available = listPrompts()
     throw new Error(
       `Prompt not found: ${name}. Available: ${available.join(', ')}`,
     )
   }
-  return readFileSync(promptPath, 'utf-8')
+  return readFileSync(batteriesPath, 'utf-8')
 }
 
 /**
  * List available saved prompt template names.
+ * Merges project-level and package-level prompts (project overrides package).
  */
 export function listPrompts(): string[] {
-  const promptDir = join(getPackageRoot(), 'src', 'providers', 'prompts')
-  if (!existsSync(promptDir)) return []
-  return readdirSync(promptDir)
-    .filter((f) => f.endsWith('.md'))
-    .map((f) => f.replace(/\.md$/, ''))
+  const names = new Set<string>()
+
+  // Package batteries prompts
+  const batteriesDir = getBatteriesPromptsDir()
+  if (existsSync(batteriesDir)) {
+    for (const f of readdirSync(batteriesDir)) {
+      if (f.endsWith('.md')) names.add(f.replace(/\.md$/, ''))
+    }
+  }
+
+  // Project-level prompts (may add new ones or override)
+  try {
+    const projectDir = getProjectPromptsDir()
+    if (existsSync(projectDir)) {
+      for (const f of readdirSync(projectDir)) {
+        if (f.endsWith('.md')) names.add(f.replace(/\.md$/, ''))
+      }
+    }
+  } catch {
+    // No project dir
+  }
+
+  return [...names].sort()
 }

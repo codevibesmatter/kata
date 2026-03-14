@@ -48,6 +48,7 @@ export async function batteries(args: string[]): Promise<void> {
   const newCount =
     result.templates.length +
     result.agents.length +
+    result.prompts.length +
     result.specTemplates.length +
     result.githubTemplates.length +
     result.interviews.length +
@@ -101,6 +102,13 @@ export async function batteries(args: string[]): Promise<void> {
   if (result.agents.length > 0) {
     process.stdout.write(`\nAgents → .claude/agents/\n`)
     for (const f of result.agents) process.stdout.write(`  ${f}\n`)
+  }
+  if (result.prompts.length > 0) {
+    const { getKataDir } = await import('../session/lookup.js')
+    const kd = getKataDir(projectRoot)
+    const promptDir = kd === '.kata' ? '.kata/prompts' : '.claude/workflows/prompts'
+    process.stdout.write(`\nReview prompts → ${promptDir}/\n`)
+    for (const f of result.prompts) process.stdout.write(`  ${f}\n`)
   }
   if (result.specTemplates.length > 0) {
     process.stdout.write(`\nSpec templates → planning/spec-templates/\n`)

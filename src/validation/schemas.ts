@@ -21,7 +21,7 @@ export const agentStepConfigSchema = z.object({
   provider: z.string().min(1, 'Agent provider cannot be empty'),
   /** Override model for the provider. Optional — uses provider default. */
   model: z.string().optional(),
-  /** Prompt template name (loads from src/providers/prompts/{name}.md) */
+  /** Prompt template name (loads from project .kata/prompts/ or batteries/prompts/{name}.md) */
   prompt: z.string().min(1, 'Agent prompt name cannot be empty'),
   /** Named context sources to assemble into the prompt */
   context: z.array(z.string()).optional(),
