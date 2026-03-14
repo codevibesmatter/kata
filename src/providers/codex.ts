@@ -3,7 +3,11 @@
  *
  * Spawns `codex exec` with the prompt via stdin, parses JSONL output
  * for agent messages. Uses --dangerously-bypass-approvals-and-sandbox for full autonomy.
- * Based on: baseplane/packages/agent-tools/src/codex/runner.ts
+ *
+ * Tool control: Codex CLI supports --full-auto (safe ops only) and
+ * --dangerously-bypass-approvals-and-sandbox (all ops). No per-tool filtering.
+ * When allowedTools is empty/undefined, we still bypass since the CLI has
+ * no text-only mode — the prompt itself must constrain behavior.
  */
 
 import { spawn } from 'node:child_process'
@@ -11,6 +15,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AgentProvider, AgentRunOptions, ModelOption, ThinkingLevel } from './types.js'
+import { isAllTools } from './types.js'
 
 const codexThinking: ThinkingLevel[] = [
   { id: 'low', description: 'Fast responses with lighter reasoning' },
@@ -22,6 +27,12 @@ const codexThinking: ThinkingLevel[] = [
 export const codexProvider: AgentProvider = {
   name: 'codex',
   defaultModel: undefined,
+  capabilities: {
+    toolFiltering: false,
+    maxTurns: false,
+    textOnly: false,
+    permissionBypass: 'cli-flag',
+  },
   models: [
     { id: 'gpt-5.3-codex', description: 'Latest frontier agentic coding model', default: true, thinkingLevels: codexThinking },
     { id: 'gpt-5.3-codex-spark', description: 'Ultra-fast coding model' },
@@ -66,6 +77,13 @@ export const codexProvider: AgentProvider = {
   async run(prompt: string, options: AgentRunOptions): Promise<string> {
     const model = options.model ?? this.defaultModel
     const timeoutMs = options.timeoutMs ?? 300_000
+
+    // Warn if user requested specific tool filtering (not supported)
+    if (options.allowedTools?.length && !isAllTools(options.allowedTools)) {
+      process.stderr.write(
+        `codex: per-tool filtering not supported, running with full access (--dangerously-bypass-approvals-and-sandbox)\n`,
+      )
+    }
 
     const args = [
       'exec',

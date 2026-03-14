@@ -3,17 +3,29 @@
  *
  * Spawns `gemini` with --yolo for autonomous execution.
  * Prompt delivered via -p flag (stdin not supported by gemini CLI).
- * Based on: baseplane/packages/agent-tools/src/gemini/index.ts
+ *
+ * Tool control: Gemini CLI doesn't support per-tool filtering.
+ * --yolo enables all tools with auto-approval. Without --yolo,
+ * the CLI prompts for each tool use (not usable headless).
+ * When allowedTools is empty/undefined, we still pass --yolo since
+ * the CLI has no text-only mode — the prompt itself must constrain behavior.
  */
 
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import type { AgentProvider, AgentRunOptions, ModelOption } from './types.js'
+import { isAllTools } from './types.js'
 import { preparePrompt } from './prompt.js'
 
 export const geminiProvider: AgentProvider = {
   name: 'gemini',
   defaultModel: undefined,
+  capabilities: {
+    toolFiltering: false,
+    maxTurns: false,
+    textOnly: false,
+    permissionBypass: 'cli-flag',
+  },
   models: [
     { id: 'gemini-3.1-pro-preview', description: 'Latest generation pro model (preview)' },
     { id: 'gemini-3-pro-preview', description: 'Gen 3 pro model (preview)' },
@@ -46,6 +58,13 @@ export const geminiProvider: AgentProvider = {
   async run(prompt: string, options: AgentRunOptions): Promise<string> {
     const model = options.model ?? this.defaultModel
     const timeoutMs = options.timeoutMs ?? 300_000
+
+    // Warn if user requested specific tool filtering (not supported)
+    if (options.allowedTools?.length && !isAllTools(options.allowedTools)) {
+      process.stderr.write(
+        `gemini: per-tool filtering not supported, running with all tools (--yolo)\n`,
+      )
+    }
 
     // For large prompts, write to temp file then read back for -p delivery
     const prepared = preparePrompt(prompt, { thresholdChars: 0 })

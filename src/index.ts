@@ -354,6 +354,7 @@ export {
   runAgentStep,
   extractScore,
 } from './providers/index.js'
-export type { AgentProvider, AgentRunOptions } from './providers/types.js'
+export type { AgentProvider, AgentRunOptions, ProviderCapabilities } from './providers/types.js'
+export { CANONICAL_TOOLS, isAllTools } from './providers/types.js'
 export type { PreparedPrompt } from './providers/prompt.js'
 export type { StepContext, StepRunResult } from './providers/step-runner.js'

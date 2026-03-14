@@ -10,6 +10,7 @@
 
 import { createRequire } from 'node:module'
 import type { AgentProvider, AgentRunOptions, ModelOption, ThinkingLevel } from './types.js'
+import { isAllTools } from './types.js'
 
 /** Resolve the SDK's bundled cli.js so nested query() calls find the executable. */
 function resolveClaudeExecutable(): string | undefined {
@@ -30,6 +31,12 @@ const claudeThinking: ThinkingLevel[] = [
 export const claudeProvider: AgentProvider = {
   name: 'claude',
   defaultModel: undefined,
+  capabilities: {
+    toolFiltering: true,
+    maxTurns: true,
+    textOnly: true,
+    permissionBypass: 'sdk',
+  },
   models: [
     { id: 'claude-opus-4-6', description: 'Flagship model, deep reasoning, 1M context', thinkingLevels: claudeThinking },
     { id: 'claude-sonnet-4-6', description: 'Best balance of speed and intelligence', default: true, thinkingLevels: claudeThinking },
@@ -81,9 +88,12 @@ export const claudeProvider: AgentProvider = {
     const savedEnv = clearNestingEnvVars()
 
     try {
+      // 'all' means omit allowedTools so the SDK grants everything
+      const tools = isAllTools(options.allowedTools) ? undefined : (options.allowedTools ?? [])
+
       const queryOpts: Record<string, unknown> = {
         maxTurns: options.maxTurns ?? 3,
-        allowedTools: options.allowedTools ?? ([] as string[]),
+        ...(tools !== undefined && { allowedTools: tools }),
         permissionMode: options.permissionMode ?? 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         cwd: options.cwd,

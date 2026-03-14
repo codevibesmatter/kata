@@ -19,6 +19,20 @@ export interface ModelOption {
   thinkingLevels?: ThinkingLevel[]
 }
 
+/**
+ * Provider capability flags — lets the runner know what each provider supports.
+ */
+export interface ProviderCapabilities {
+  /** Supports per-tool filtering via allowedTools. */
+  toolFiltering: boolean
+  /** Supports maxTurns control. */
+  maxTurns: boolean
+  /** Supports text-only mode (no tools at all). */
+  textOnly: boolean
+  /** How the provider handles permission bypass. */
+  permissionBypass: 'sdk' | 'cli-flag' | 'always'
+}
+
 export interface AgentProvider {
   /** Provider identifier: 'claude' | 'gemini' | 'codex' */
   name: string
@@ -26,6 +40,8 @@ export interface AgentProvider {
   defaultModel?: string
   /** Hardcoded known models for this provider. */
   models: ModelOption[]
+  /** What this provider supports. */
+  capabilities: ProviderCapabilities
   /**
    * Fetch live model list from CLI cache or API.
    * Falls back to static `models` array if unavailable.
@@ -47,7 +63,13 @@ export interface AgentRunOptions {
 
   // ── Full-agent session options (defaults preserve text-only behavior) ──
 
-  /** Tools the agent can use. Default: [] (text-only, no tools). */
+  /**
+   * Tools the agent can use. Uses kata canonical names (Claude Code names).
+   * Special values:
+   *   - undefined/[]: text-only, no tools
+   *   - ['all']: give all available tools (yolo mode)
+   *   - ['Read', 'Grep', ...]: specific tools
+   */
   allowedTools?: string[]
   /** Max agentic turns. Default: 3 (judge/review mode). */
   maxTurns?: number
@@ -61,4 +83,22 @@ export interface AgentRunOptions {
   abortController?: AbortController
   /** Streaming callback — receives every SDK message as it arrives. */
   onMessage?: (message: unknown) => void
+}
+
+/**
+ * Canonical tool names (aligned with Claude Code).
+ * These are the names users pass to --tools; each provider maps them internally.
+ */
+export const CANONICAL_TOOLS = [
+  'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
+  'Agent', 'NotebookEdit', 'WebFetch', 'WebSearch',
+  'TaskCreate', 'TaskUpdate', 'TaskGet', 'TaskList',
+  'AskUserQuestion',
+] as const
+
+export type CanonicalTool = (typeof CANONICAL_TOOLS)[number]
+
+/** Check if tools list means "give all tools". */
+export function isAllTools(tools?: string[]): boolean {
+  return tools?.length === 1 && tools[0] === 'all'
 }
