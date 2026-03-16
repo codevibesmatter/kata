@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AgentProvider, AgentRunOptions, ModelOption, ThinkingLevel } from './types.js'
 import { isAllTools } from './types.js'
+import { withRetry } from './retry.js'
 
 const codexThinking: ThinkingLevel[] = [
   { id: 'low', description: 'Fast responses with lighter reasoning' },
@@ -94,7 +95,7 @@ export const codexProvider: AgentProvider = {
     if (model) args.push('--model', model)
     args.push('-')  // read prompt from stdin
 
-    return new Promise<string>((resolve, reject) => {
+    return withRetry(() => new Promise<string>((resolve, reject) => {
       let timer: ReturnType<typeof setTimeout> | undefined
 
       try {
@@ -192,6 +193,6 @@ export const codexProvider: AgentProvider = {
         if (timer) clearTimeout(timer)
         reject(err instanceof Error ? err : new Error(String(err)))
       }
-    })
+    }), { label: 'codex' })
   },
 }

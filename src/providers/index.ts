@@ -16,6 +16,7 @@ export { createCliProvider, loadProviderPlugins } from './cli-provider.js'
 export type { CliProviderConfig } from './cli-provider.js'
 export { runAgentStep, extractScore } from './step-runner.js'
 export type { StepContext, StepRunResult } from './step-runner.js'
+export { withRetry, isRateLimitError } from './retry.js'
 
 import type { AgentProvider } from './types.js'
 import { claudeProvider } from './claude.js'

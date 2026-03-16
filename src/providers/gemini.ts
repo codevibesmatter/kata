@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import type { AgentProvider, AgentRunOptions, ModelOption } from './types.js'
 import { isAllTools } from './types.js'
 import { preparePrompt } from './prompt.js'
+import { withRetry } from './retry.js'
 
 export const geminiProvider: AgentProvider = {
   name: 'gemini',
@@ -74,31 +75,33 @@ export const geminiProvider: AgentProvider = {
       const args = ['-p', promptText, '--yolo']
       if (model) args.push('-m', model)
 
-      const result = spawnSync('gemini', args, {
-        cwd: options.cwd,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        encoding: 'utf-8',
-        timeout: timeoutMs,
-        env: options.env ?? process.env as Record<string, string>,
-      })
+      return await withRetry(async () => {
+        const result = spawnSync('gemini', args, {
+          cwd: options.cwd,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          encoding: 'utf-8',
+          timeout: timeoutMs,
+          env: options.env ?? process.env as Record<string, string>,
+        })
 
-      if (result.error) {
-        if ((result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+        if (result.error) {
+          if ((result.error as NodeJS.ErrnoException).code === 'ENOENT') {
+            throw new Error(
+              'gemini CLI not found. Install: npm i -g @google/gemini-cli',
+            )
+          }
+          throw new Error(`gemini: ${result.error.message}`)
+        }
+
+        if (result.status !== 0 && result.status !== null) {
+          const stderr = result.stderr?.trim() || ''
           throw new Error(
-            'gemini CLI not found. Install: npm i -g @google/gemini-cli',
+            `gemini exited with code ${result.status}${stderr ? `: ${stderr}` : ''}`,
           )
         }
-        throw new Error(`gemini: ${result.error.message}`)
-      }
 
-      if (result.status !== 0 && result.status !== null) {
-        const stderr = result.stderr?.trim() || ''
-        throw new Error(
-          `gemini exited with code ${result.status}${stderr ? `: ${stderr}` : ''}`,
-        )
-      }
-
-      return result.stdout || ''
+        return result.stdout || ''
+      }, { label: 'gemini' })
     } finally {
       prepared.cleanup()
     }

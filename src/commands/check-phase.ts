@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { getCurrentSessionId, findProjectDir, getStateFilePath, getVerificationDir } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 import { loadKataConfig } from '../config/kata-config.js'
+import { getProvider } from '../providers/index.js'
 
 interface StepResult {
   name: string
@@ -246,16 +247,18 @@ function readdirSyncGlob(dir: string, issueNumber: number): string[] {
 
 /**
  * Run LLM micro-review on phase diff (scoped to security/perf/scope).
+ * Uses the provider system — no hardcoded CLI flags.
  * Skipped if no code_reviewer configured.
  */
-function runMicroReview(
+async function runMicroReview(
   phaseId: string,
   issueNumber: number,
   diffBase: string,
   testPatterns: string[],
   specSection: string,
   reviewer: string | null | undefined,
-): StepResult {
+  cwd: string,
+): Promise<StepResult> {
   if (!reviewer) {
     return {
       name: 'micro-review',
@@ -266,6 +269,8 @@ function runMicroReview(
   }
 
   try {
+    const provider = getProvider(reviewer)
+
     // Get diff of non-test files
     const allChanged = execSync(
       `git diff --name-only "${diffBase}...HEAD" 2>/dev/null || true`,
@@ -314,23 +319,10 @@ ${specCtx}
 DIFF:
 ${diff}`
 
-    // Invoke configured reviewer
-    const result = spawnSync(reviewer, ['--inline', prompt], {
-      shell: true,
-      encoding: 'utf-8',
-      stdio: 'pipe',
-      timeout: 120_000,
+    const output = await provider.run(prompt, {
+      cwd,
+      timeoutMs: 120_000,
     })
-
-    const output = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
-
-    if (result.status !== 0 || result.error) {
-      return {
-        name: 'micro-review',
-        passed: false,
-        output: `Review timed out or errored — re-run check-phase to retry. ${output}`.trim(),
-      }
-    }
 
     // Check for critical issues marker
     const passed = !output.includes('🔴')
@@ -483,13 +475,14 @@ export async function checkPhase(args: string[]): Promise<void> {
       `  [warn] spec section for phase ${parsed.phaseId} not found — micro-review runs without spec context`,
     )
   }
-  const reviewStep = runMicroReview(
+  const reviewStep = await runMicroReview(
     parsed.phaseId,
     issueNumber,
     diffBase,
     testPatterns,
     specSection,
     cfg.reviews?.code_reviewer,
+    projectRoot,
   )
   steps.push(reviewStep)
   printStep(reviewStep)
