@@ -31,6 +31,7 @@ import jsYaml from 'js-yaml'
 import { z } from 'zod'
 import type { AgentProvider, AgentRunOptions, ModelOption, ProviderCapabilities } from './types.js'
 import { isAllTools } from './types.js'
+import { withRetry } from './retry.js'
 
 // ─── Schema ──────────────────────────────────────────────────────────────────
 
@@ -118,10 +119,10 @@ export function createCliProvider(config: CliProviderConfig): AgentProvider {
         args.push(config.prompt_flag, prompt)
       }
 
-      if (config.output_format === 'jsonl') {
-        return runJsonl(config.command, args, prompt, config.prompt_delivery, timeoutMs, options)
-      }
-      return runText(config.command, args, prompt, config.prompt_delivery, timeoutMs, options)
+      const runner = config.output_format === 'jsonl'
+        ? () => runJsonl(config.command, args, prompt, config.prompt_delivery, timeoutMs, options)
+        : async () => runText(config.command, args, prompt, config.prompt_delivery, timeoutMs, options)
+      return withRetry(runner, { label: config.name })
     },
   }
 }
