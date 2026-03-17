@@ -27,6 +27,7 @@ export {
   countPendingNativeTasks,
   getPendingNativeTaskTitles,
   getFirstPendingNativeTask,
+  areAllOpenTasksInProgress,
   buildSpecTasks,
   buildPhaseTasks,
   extractVerificationPlan,

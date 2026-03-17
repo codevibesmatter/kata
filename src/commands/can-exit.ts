@@ -12,6 +12,7 @@ import {
 import {
   countPendingNativeTasks,
   getFirstPendingNativeTask,
+  areAllOpenTasksInProgress,
   getNativeTasksDir,
   getPendingNativeTaskTitles,
 } from './enter/task-factory.js'
@@ -325,14 +326,29 @@ function buildStopGuidance(
   let nextPhase: StopGuidance['nextPhase']
   let nextStepMessage: string | undefined
   if (hasOpenTasks && usingTasks) {
-    const firstTask = getFirstPendingNativeTask(sessionId)
-    if (firstTask) {
-      nextPhase = {
-        beadId: firstTask.id, // Using beadId field for task id (legacy field name)
-        title: firstTask.title,
+    // Check if all open tasks are in_progress (being worked by background agents)
+    const { allInProgress, inProgressCount } = areAllOpenTasksInProgress(sessionId)
+
+    if (allInProgress) {
+      // All open tasks are in_progress — agents are working, don't tell CC to "do next task"
+      nextStepMessage = `\n**⏳ ${inProgressCount} task(s) in progress — background agents are working.**
+Do NOT try to do this work yourself. Do NOT attempt to stop or exit.
+Wait for agent completion notifications by running:
+\`\`\`bash
+sleep 30  # Keep session alive while agents work
+\`\`\`
+Then check results with \`TaskOutput\`. Repeat sleep + check until agents complete.
+The stop hook will allow exit once all tasks are done.`
+    } else {
+      const firstTask = getFirstPendingNativeTask(sessionId)
+      if (firstTask) {
+        nextPhase = {
+          beadId: firstTask.id, // Using beadId field for task id (legacy field name)
+          title: firstTask.title,
+        }
+        // Include pre-formatted message - use TaskUpdate for native tasks
+        nextStepMessage = `\n**Next task:** [${firstTask.id}] ${firstTask.title}\n\nComplete with: TaskUpdate(taskId="${firstTask.id}", status="completed")`
       }
-      // Include pre-formatted message - use TaskUpdate for native tasks
-      nextStepMessage = `\n**Next task:** [${firstTask.id}] ${firstTask.title}\n\nComplete with: TaskUpdate(taskId="${firstTask.id}", status="completed")`
     }
   }
 

@@ -533,3 +533,18 @@ export function getFirstPendingNativeTask(
   if (!pending) return undefined
   return { id: pending.id, title: pending.subject }
 }
+
+/**
+ * Check if all non-completed tasks are in_progress (being worked by agents)
+ * Used by can-exit to provide "wait for agents" guidance instead of "do next task"
+ */
+export function areAllOpenTasksInProgress(sessionId: string): { allInProgress: boolean; inProgressCount: number } {
+  const tasks = readNativeTaskFiles(sessionId)
+  const nonCompleted = tasks.filter((t) => t.status !== 'completed')
+  if (nonCompleted.length === 0) return { allInProgress: false, inProgressCount: 0 }
+  const inProgressCount = nonCompleted.filter((t) => t.status === 'in_progress').length
+  return {
+    allInProgress: inProgressCount === nonCompleted.length,
+    inProgressCount,
+  }
+}
