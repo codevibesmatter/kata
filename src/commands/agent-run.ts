@@ -33,6 +33,7 @@ import { CANONICAL_TOOLS } from '../providers/types.js'
 
 interface AgentRunArgs {
   prompt?: string
+  custom?: string
   provider: string
   model?: string
   output?: string
@@ -70,6 +71,8 @@ function parseAgentRunArgs(args: string[]): AgentRunArgs {
       result.allowedTools = ['all']
     } else if (arg.startsWith('--prompt=')) {
       result.prompt = arg.split('=')[1]
+    } else if (arg.startsWith('--custom=')) {
+      result.custom = arg.slice('--custom='.length)
     } else if (arg.startsWith('--provider=')) {
       result.provider = arg.split('=')[1]
     } else if (arg.startsWith('--model=')) {
@@ -137,12 +140,14 @@ export async function agentRun(args: string[]): Promise<void> {
     return
   }
 
-  if (!parsed.prompt) {
+  if (!parsed.prompt && !parsed.custom) {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.error(`Usage: kata agent-run --prompt=<name> [options]
+       kata agent-run --custom="<inline prompt>" [options]
 
 Options:
-  --prompt=<name>        Prompt template name (required)
+  --prompt=<name>        Prompt template name (loads from .kata/prompts/)
+  --custom=<text>        Inline prompt text (alternative to --prompt)
   --provider=<name>      Provider: claude, gemini, codex (default: claude)
   --model=<model>        Override provider's default model
   --tools=<t1,t2,...>    Tools: specific names, or 'all' (default: none = text-only)
@@ -156,6 +161,13 @@ Options:
   --dry-run              Show assembled config without running
   --list                 List available prompt templates
   --list-tools           List canonical tool names and provider support`)
+    process.exitCode = 1
+    return
+  }
+
+  if (parsed.prompt && parsed.custom) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error('Error: --prompt and --custom are mutually exclusive. Use one or the other.')
     process.exitCode = 1
     return
   }
@@ -181,7 +193,7 @@ Options:
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.log(`Model:     ${parsed.model ?? '(default)'}`)
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.log(`Prompt:    ${parsed.prompt}`)
+    console.log(`Prompt:    ${parsed.custom ? `(custom) ${parsed.custom.slice(0, 80)}${parsed.custom.length > 80 ? '...' : ''}` : parsed.prompt}`)
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.log(`Context:   ${parsed.context.join(', ') || '(none)'}`)
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -199,14 +211,16 @@ Options:
     return
   }
 
+  const promptLabel = parsed.custom ? '(custom)' : parsed.prompt
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Running ${parsed.prompt} via ${parsed.provider} (tools: ${formatTools(parsed.allowedTools)})...`)
+  console.error(`Running ${promptLabel} via ${parsed.provider} (tools: ${formatTools(parsed.allowedTools)})...`)
 
   const result = await runAgentStep(
     {
       provider: parsed.provider,
       model: parsed.model,
-      prompt: parsed.prompt,
+      prompt: parsed.prompt ?? '__custom__',
+      raw_prompt: parsed.custom,
       context: parsed.context.length > 0 ? parsed.context : undefined,
       output: parsed.output,
       gate: parsed.gate || undefined,

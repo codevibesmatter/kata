@@ -249,7 +249,8 @@ Usage:
   kata batteries [--update] [--cwd=PATH]           Scaffold batteries-included starter content
   kata config [--show]                            Show resolved config with provenance
   kata providers [list|setup] [--json]             Check/configure agent providers
-  kata agent-run --prompt=<name> [options]           Run agent with prompt + tools
+  kata agent-run --prompt=<name> [options]           Run agent with named prompt
+  kata agent-run --custom="<text>" [options]          Run agent with inline prompt
   kata review --prompt=<name> [--provider=P]       Review shortcut (auto-context)
   kata projects <subcommand> [options]             Multi-project management
   kata teardown [--yes] [--all] [--dry-run]      Remove kata from a project

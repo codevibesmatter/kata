@@ -189,8 +189,8 @@ export async function runAgentStep(
   const providerName = resolveProvider(config.provider)
   const provider = getProvider(providerName)
 
-  // 2. Load prompt template
-  const promptTemplate = loadPrompt(config.prompt)
+  // 2. Load prompt template (or use raw prompt if provided)
+  const promptTemplate = config.raw_prompt ?? loadPrompt(config.prompt)
 
   // 3. Assemble context from named sources + extra context
   const namedContext = config.context?.length

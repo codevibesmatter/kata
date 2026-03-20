@@ -23,6 +23,8 @@ export const agentStepConfigSchema = z.object({
   model: z.string().optional(),
   /** Prompt template name (loads from project .kata/prompts/ or batteries/prompts/{name}.md) */
   prompt: z.string().min(1, 'Agent prompt name cannot be empty'),
+  /** Raw inline prompt text (alternative to named prompt template, used by --custom CLI flag) */
+  raw_prompt: z.string().optional(),
   /** Named context sources to assemble into the prompt */
   context: z.array(z.string()).optional(),
   /** Output artifact path (relative to project root). Supports {date} placeholder. */
