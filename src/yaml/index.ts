@@ -2,8 +2,10 @@
 export {
   parseYamlFrontmatter,
   parseYamlFrontmatterFromString,
+  parseYamlFrontmatterWithError,
   readFullTemplateContent,
 } from './parser.js'
+export type { YamlParseResult } from './parser.js'
 export type {
   TemplateYaml,
   SpecYaml,

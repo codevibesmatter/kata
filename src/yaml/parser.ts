@@ -18,6 +18,27 @@ export function parseYamlFrontmatter<T>(filePath: string): T | null {
   }
 }
 
+export type YamlParseResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string }
+
+/**
+ * Parse YAML frontmatter with error details instead of silently returning null.
+ * Use this when you need to surface parse errors to the user.
+ */
+export function parseYamlFrontmatterWithError<T>(filePath: string): YamlParseResult<T> {
+  try {
+    const content = readFileSync(filePath, 'utf-8')
+    const match = content.match(/^---\n([\s\S]*?)\n---/)
+    if (!match) return { ok: false, error: 'No YAML frontmatter found (missing --- delimiters)' }
+    const data = jsYaml.load(match[1], { schema: jsYaml.CORE_SCHEMA }) as T
+    return { ok: true, data }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg }
+  }
+}
+
 /**
  * Read full template file content (YAML frontmatter + markdown body)
  * Returns null if file not found or read error

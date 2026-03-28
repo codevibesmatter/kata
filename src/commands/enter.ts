@@ -14,7 +14,7 @@ import { generateWorkflowId, generateWorkflowIdForIssue } from '../utils/workflo
 import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import type { SessionState } from '../state/schema.js'
 import { validatePhases, formatValidationErrors } from '../validation/index.js'
-import { readFullTemplateContent, type SpecPhase } from '../yaml/index.js'
+import { readFullTemplateContent, parseYamlFrontmatterWithError, type SpecPhase, type SpecYaml } from '../yaml/index.js'
 import { loadSubphasePatterns } from '../config/subphase-patterns.js'
 import type { SubphasePattern } from '../validation/schemas.js'
 
@@ -78,7 +78,7 @@ function outputFullTemplateContent(
     // Template read error - silently ignore, guidance already output above
   }
 }
-import { findSpecFile, parseSpecYaml } from './enter/spec.js'
+import { findSpecFile } from './enter/spec.js'
 import {
   type Task,
   buildSpecTasks,
@@ -460,135 +460,42 @@ export async function enter(args: string[]): Promise<void> {
   if (hasContainerPhase && issueNum) {
     specPath = findSpecFile(issueNum)
     if (specPath) {
-      const specYaml = parseSpecYaml(specPath)
-      if (specYaml?.phases?.length) {
-        specPhases = specYaml.phases
+      const parseResult = parseYamlFrontmatterWithError<SpecYaml>(specPath)
+
+      if (parseResult.ok && parseResult.data?.phases?.length) {
+        specPhases = parseResult.data.phases
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
         console.error(`Found spec with ${specPhases.length} phases: ${specPath}`)
 
         // ENFORCEMENT: Check that at least one phase has tasks
         const totalTasks = specPhases.reduce((sum, p) => sum + (p.tasks?.length ?? 0), 0)
         if (totalTasks === 0) {
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(
-            '═══════════════════════════════════════════════════════════════════════════════',
-          )
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`🛑 SPEC VALIDATION FAILED: Cannot enter ${canonical} mode`)
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(
-            '═══════════════════════════════════════════════════════════════════════════════',
-          )
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`Spec file found: ${specPath}`)
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`Phases found: ${specPhases.length}`)
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('PROBLEM: Phases exist but none have tasks defined.')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('Each phase needs a "tasks" array with task descriptions.')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('Example:')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('  phases:')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('    - id: phase-1')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('      name: "Store & State"')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('      tasks:')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('        - "Add login form validation"')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('        - "Create user settings page"')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('TO FIX:')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('  1. Add tasks arrays to each phase in the spec YAML frontmatter')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`  2. Run: kata validate-spec ${specPath}`)
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`  3. Then retry: kata enter ${canonical} --issue=${issueNum}`)
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error('')
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(
-            '═══════════════════════════════════════════════════════════════════════════════',
-          )
+          printSpecError(canonical, specPath, issueNum, [
+            `Phases found: ${specPhases.length}`,
+            '',
+            'PROBLEM: Phases exist but none have tasks defined.',
+            'Each phase needs a "tasks" array with task descriptions.',
+            '',
+            ...specExampleLines(issueNum),
+          ])
           process.exit(1)
         }
       } else {
         // ENFORCEMENT: Spec exists but has no valid phases - fail with clear error
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(
-          '═══════════════════════════════════════════════════════════════════════════════',
-        )
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`🛑 SPEC VALIDATION FAILED: Cannot enter ${canonical} mode`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(
-          '═══════════════════════════════════════════════════════════════════════════════',
-        )
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`Spec file found: ${specPath}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('PROBLEM: Spec has no valid "phases" section in YAML frontmatter.')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('Modes with container phases require specs to define phases like:')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('  ---')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  github_issue: ${issueNum}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('  phases:')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('    - id: p1')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('      name: "Phase 1 Name"')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('      beads:')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('        - title: "P1: IMPL - Task description"')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('          type: task')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('  ---')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('TO FIX:')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('  1. Add phases to the spec YAML frontmatter')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  2. Run: kata validate-spec ${specPath}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  3. Then retry: kata enter ${canonical} --issue=${issueNum}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error('')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(
-          '═══════════════════════════════════════════════════════════════════════════════',
-        )
+        const problemLines: string[] = []
+        if (!parseResult.ok) {
+          problemLines.push('PROBLEM: Failed to parse YAML frontmatter.')
+          problemLines.push('')
+          problemLines.push(`Parse error: ${parseResult.error}`)
+        } else {
+          problemLines.push('PROBLEM: Spec has no "phases" section in YAML frontmatter.')
+        }
+        problemLines.push('')
+        problemLines.push('Modes with container phases require specs to define phases like:')
+        problemLines.push('')
+        problemLines.push(...specExampleLines(issueNum))
+
+        printSpecError(canonical, specPath, issueNum, problemLines)
         process.exit(1)
       }
     }
@@ -844,4 +751,58 @@ export async function enter(args: string[]): Promise<void> {
       2,
     ),
   )
+}
+
+function specExampleLines(issueNum: number): string[] {
+  return [
+    '  ---',
+    `  github_issue: ${issueNum}`,
+    '  phases:',
+    '    - id: p1',
+    '      name: "Phase 1 Name"',
+    '      tasks:',
+    '        - "Task description"',
+    '  ---',
+  ]
+}
+
+function printSpecError(
+  mode: string,
+  specPath: string,
+  issueNum: number,
+  problemLines: string[],
+): void {
+  const bar = '═══════════════════════════════════════════════════════════════════════════════'
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(bar)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`🛑 SPEC VALIDATION FAILED: Cannot enter ${mode} mode`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(bar)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`Spec file found: ${specPath}`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  for (const line of problemLines) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(line)
+  }
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('TO FIX:')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('  1. Fix the spec YAML frontmatter')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`  2. Run: kata validate-spec ${specPath}`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`  3. Then retry: kata enter ${mode} --issue=${issueNum}`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(bar)
 }
