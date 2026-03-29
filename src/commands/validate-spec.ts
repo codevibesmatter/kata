@@ -16,7 +16,7 @@ interface ValidationResult {
 /**
  * Find spec file by issue number
  */
-function findSpecFile(issueNum: number): string | null {
+export function findSpecFile(issueNum: number): string | null {
   const projectDir = findProjectDir()
   if (!projectDir) return null
 
@@ -36,7 +36,7 @@ function findSpecFile(issueNum: number): string | null {
 /**
  * Parse and validate spec YAML frontmatter
  */
-function validateSpec(specPath: string): ValidationResult {
+export function validateSpec(specPath: string): ValidationResult {
   const result: ValidationResult = {
     valid: true,
     specPath,

@@ -48,6 +48,7 @@ modes:
     issue_label: "feature"
     stop_conditions:
       - tasks_complete
+      - spec_valid
       - committed
       - pushed
     intent_keywords:

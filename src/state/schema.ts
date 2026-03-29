@@ -11,6 +11,7 @@ export const STOP_CONDITION_TYPES = [
   'pushed',
   'tests_pass',
   'feature_tests_added',
+  'spec_valid',
 ] as const
 
 export type StopCondition = (typeof STOP_CONDITION_TYPES)[number]

@@ -17,6 +17,7 @@ import {
   getPendingNativeTaskTitles,
 } from './enter/task-factory.js'
 import { loadKataConfig } from '../config/kata-config.js'
+import { findSpecFile, validateSpec } from './validate-spec.js'
 
 /**
  * Parse command line arguments for can-exit command
@@ -207,6 +208,31 @@ function checkFeatureTestsAdded(): { passed: boolean; newTestCount?: number } {
 }
 
 /**
+ * Check that the spec file for the given issue passes structural validation
+ * (frontmatter has phases with tasks). Runs the same logic as `kata validate-spec`.
+ */
+function checkSpecValid(issueNumber: number): { passed: boolean; reason?: string } {
+  const specPath = findSpecFile(issueNumber)
+  if (!specPath) {
+    return {
+      passed: false,
+      reason: `No spec file found for issue #${issueNumber}. Expected: planning/specs/${issueNumber}-*.md`,
+    }
+  }
+
+  const result = validateSpec(specPath)
+  if (!result.valid) {
+    const errorSummary = result.errors.join('; ')
+    return {
+      passed: false,
+      reason: `Spec validation failed: ${errorSummary}. Fix and re-run: kata validate-spec --issue=${issueNumber}`,
+    }
+  }
+
+  return { passed: true }
+}
+
+/**
  * Check if exit conditions are met based on the mode's stop_conditions from modes.yaml.
  * Each mode declares which checks to run — no hardcoded mode names.
  */
@@ -288,6 +314,14 @@ function validateCanExit(
         reasons.push(
           'At least one new test function required (it/test/describe). See: arXiv 2402.13521',
         )
+      }
+    }
+
+    // ── spec_valid ──
+    if (checks.has('spec_valid') && issueNumber) {
+      const specCheck = checkSpecValid(issueNumber)
+      if (!specCheck.passed && specCheck.reason) {
+        reasons.push(specCheck.reason)
       }
     }
 
