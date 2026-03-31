@@ -29,7 +29,7 @@ Replace the current batteries/setup system with:
 
 #### Step 1: `kata setup` (CLI, mechanical)
 
-Creates the bare skeleton. No agent needed.
+Creates the skeleton with seed files. No agent needed.
 
 ```bash
 kata setup
@@ -38,26 +38,37 @@ kata setup
 Produces:
 ```
 .kata/
-  kata.yaml              # skeleton with auto-detected project settings
-  templates/             # empty dir (agent will populate)
-  prompts/               # empty dir (agent will populate)
-  spec-templates/        # empty dir (agent will populate)
+  kata.yaml              # full config with auto-detected project settings + default modes
+  templates/             # seed templates copied from package (identical to upstream)
+    planning.md, task.md, debug.md, research.md, implementation.md, verify.md, freeform.md, onboard.md
+  prompts/               # seed prompts copied from package
+    code-review.md, spec-review.md, ...
+  spec-templates/        # seed spec scaffolds copied from package
+    feature.md, bug.md, epic.md
   sessions/              # runtime dir
 .claude/
-  agents/                # empty dir (agent will populate)
+  agents/                # seed agent definitions copied from package
+    impl-agent.md, review-agent.md, test-agent.md
   settings.json          # hook registrations
 ```
 
-`kata.yaml` at this point has only auto-detected basics:
+`kata.yaml` has auto-detected project settings + full default modes/interviews/patterns:
 ```yaml
+kata_version: "1.5.0"     # tracks which package version seeded this
 project:
-  name: "my-app"              # from package.json
-  test_command: "pnpm test"   # detected
-  build_command: null          # detected or null
-  ci: "github-actions"        # detected or null
+  name: "my-app"           # from package.json
+  test_command: "pnpm test" # detected
+  build_command: null       # detected or null
+  ci: "github-actions"     # detected or null
+
+# Full default modes, interviews, subphase_patterns included
+# (same content as current batteries/kata.yaml + interviews.yaml + subphase-patterns.yaml)
+modes: { ... }
+interviews: { ... }
+subphase_patterns: { ... }
 ```
 
-No modes, no interviews, no subphase patterns yet. Just the mechanical scaffolding.
+All templates have `kata_version` in frontmatter. Files are usable immediately — the onboard agent customizes them further but isn't required.
 
 #### Step 2: `kata enter onboard` (agent-driven)
 
@@ -87,11 +98,11 @@ Based on research findings, asks targeted questions:
   - Monorepo → "Which packages should kata manage?"
 - Asks about team workflow (PR-based? trunk-based? solo?)
 
-**Phase 2: Generate customized config**
+**Phase 2: Customize existing files**
 
-The agent writes files tailored to the project:
+The agent patches the seed files (already created by `kata setup`) with project-specific content. It does NOT generate from scratch — it modifies what's there:
 
-**`kata.yaml`** — fully populated with:
+**`kata.yaml`** — patches the seed config with:
 - Project settings (confirmed/overridden during interview)
 - Mode definitions with project-appropriate stop conditions
 - Interview categories tailored to the domain (no UI design questions for a CLI tool)
@@ -99,7 +110,7 @@ The agent writes files tailored to the project:
 - Global rules derived from the codebase (e.g., "This project uses pnpm — always use pnpm, not npm")
 - Per-mode rules (e.g., for a Next.js project: "Run `pnpm build` after changes — route types are generated at build time")
 
-**Templates** — customized per-project:
+**Templates** — patches step instructions in existing seed templates:
 - Step instructions reference actual project files and patterns
   - Instead of generic "run tests": `Run pnpm vitest run --reporter=verbose`
   - Instead of generic "check existing patterns": `Check src/lib/api.ts for the API client pattern used in this project`
@@ -385,7 +396,7 @@ kata migrate
 
 1. **Onboard agent scope** — how deep should the research phase go? Just `package.json` + directory structure, or also read actual source files to understand patterns? Recommendation: read key files (main entry point, API router, schema) to produce meaningful rules and instructions.
 
-2. **Seed templates** — the onboard agent needs a starting point for templates. Should seed templates live in the package as internal resources (not user-facing), or should the agent generate templates from scratch based on its understanding? Recommendation: internal seed templates that the agent customizes, not generates from scratch.
+2. **Seed templates as base** — the onboard agent does NOT generate templates from scratch. `kata setup` copies seed templates (from package) into `.kata/templates/` as-is. The onboard agent then patches the behavioral parts (step instructions, rules) with project-specific content while leaving structural parts (phases, dependencies, step ids/titles) untouched. This means templates always have a known-good structure from upstream, the agent only customizes instructions, and `kata update` can cleanly merge upstream structural improvements while preserving the agent's customizations. The `kata_version` stamp records which seed version the file started from.
 
 3. **Re-running onboard** — if a project's stack changes (add a database, switch frameworks), can you re-run onboard? Recommendation: yes, `kata enter onboard` should detect existing config and offer to update/regenerate specific sections.
 
