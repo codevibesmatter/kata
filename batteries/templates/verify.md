@@ -451,6 +451,17 @@ specifically targets hasty-fix failure modes rather than general code style.
 **If REQUEST CHANGES:** fix the issues, commit, and re-run the review.
 **If APPROVE:** proceed to P3 Evidence.
 
+## Observability Tools
+
+```bash
+pnpm at tail gateway                     # Live-stream worker logs (staging)
+pnpm at tail web dataforge               # Tail multiple workers
+pnpm at tail gateway --env=preview       # Tail your PR preview slot
+pnpm at tail gateway --status=500        # Filter by HTTP status
+pnpm at logs -w gateway -l error         # Query historical logs (Loki)
+pnpm at traces -w web --since 30m        # Query traces (Tempo)
+```
+
 ## Stop Conditions
 
 - All VP steps executed and recorded

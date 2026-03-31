@@ -297,6 +297,19 @@ P3: Verify
     └── Commit + close issue
 ```
 
+## Observability Tools
+
+```bash
+pnpm at tail gateway                     # Live-stream worker logs (staging)
+pnpm at tail web dataforge               # Tail multiple workers
+pnpm at tail gateway --env=preview       # Tail your PR preview slot
+pnpm at tail gateway --env=production    # Tail production
+pnpm at tail web --search="timeout"      # Filter by text
+pnpm at tail gateway --status=500        # Filter by HTTP status
+pnpm at logs -w gateway -l error         # Query historical logs (Loki)
+pnpm at traces -w web --since 30m        # Query traces (Tempo)
+```
+
 ## Rules
 
 - **Reproduce first** — never fix what you haven't reproduced
