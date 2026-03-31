@@ -70,7 +70,7 @@ phases:
 # Consolidated Config: Setup Overhaul, Upstream Merge, and Batteries Removal
 
 > GitHub Issue: [#35](https://github.com/codevibesmatter/kata-wm/issues/35)
-> Depends on: [#30 — Unified kata.yaml](./30-unified-kata-yaml.md) (approved, covers schema consolidation)
+> Supersedes: [#30 — Unified kata.yaml](./30-unified-kata-yaml.md)
 
 ## Overview
 
