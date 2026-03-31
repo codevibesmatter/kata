@@ -22,6 +22,9 @@ phases:
           # Search for related open issues
           gh issue list --search "{bug keywords}" --state open --limit 5
 
+          # Search recently closed issues (regressions from recent work)
+          gh issue list --search "{bug keywords}" --state closed --limit 5
+
           # Check recent commits in the affected area
           git log --oneline --since="2 weeks ago" -- {affected paths if known}
           ```
