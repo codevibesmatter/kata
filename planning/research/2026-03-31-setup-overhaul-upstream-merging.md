@@ -1,6 +1,6 @@
 ---
 date: 2026-03-31
-topic: Setup overhaul — simpler structure, project-owned files, tighter config surface
+topic: Setup overhaul — agent-driven onboard, consolidated config, upstream merging
 status: complete
 github_issue: null
 ---
@@ -9,23 +9,294 @@ github_issue: null
 
 ## Goal
 
-Simpler system where every project owns its files, with a tighter config surface, more flexible customization, and a clean path for upstream improvements.
+Replace the current batteries/setup system with:
+1. **Bare-minimum CLI** (`kata setup`) that creates the skeleton
+2. **Agent-driven onboard cycle** that researches the project, interviews the user, and produces truly customized config and templates
+3. **Validation command** at the end to verify everything
+4. **Consolidated config** under `.kata/` with one `kata.yaml`
+5. **Upstream merge** that works with project-customized files
 
 ## Problems with current system
 
-1. **Too many file categories** — batteries scatters 10+ categories across `.kata/`, `.claude/`, `planning/`, `.github/`
-2. **Dual system is confusing** — package has `batteries/`, project has copies, 2-tier lookup decides which wins, `--update` clobbers local changes
-3. **Customization requires copying entire files** — to change one step instruction you own a 33KB template
-4. **Config is fragmented** — interviews.yaml, subphase-patterns.yaml, verification-tools.md, kata.yaml are all separate files with separate merge logic
+1. **Generic output** — every project gets identical files regardless of framework, language, or architecture
+2. **Batteries concept is confusing** — dual system (package vs project), 2-tier lookup, `--update` clobbers
+3. **Config scattered across 10+ file categories** — kata.yaml, interviews.yaml, subphase-patterns.yaml, verification-tools.md, templates, prompts, agents, spec-templates, github templates, providers
+4. **Onboard mode is shallow** — asks questions but doesn't research the codebase, doesn't customize templates
 
-## Design: Project-owned, consolidated under `.kata/`
+## Design
 
-### Directory layout
+### Two-step setup
+
+#### Step 1: `kata setup` (CLI, mechanical)
+
+Creates the bare skeleton. No agent needed.
+
+```bash
+kata setup
+```
+
+Produces:
+```
+.kata/
+  kata.yaml              # skeleton with auto-detected project settings
+  templates/             # empty dir (agent will populate)
+  prompts/               # empty dir (agent will populate)
+  spec-templates/        # empty dir (agent will populate)
+  sessions/              # runtime dir
+.claude/
+  agents/                # empty dir (agent will populate)
+  settings.json          # hook registrations
+```
+
+`kata.yaml` at this point has only auto-detected basics:
+```yaml
+project:
+  name: "my-app"              # from package.json
+  test_command: "pnpm test"   # detected
+  build_command: null          # detected or null
+  ci: "github-actions"        # detected or null
+```
+
+No modes, no interviews, no subphase patterns yet. Just the mechanical scaffolding.
+
+#### Step 2: `kata enter onboard` (agent-driven)
+
+This is where the real setup happens. The onboard agent runs a **research → plan → apply** cycle:
+
+**Phase 0: Research the project**
+
+The agent explores the codebase autonomously:
+- Reads `package.json` — dependencies, scripts, framework detection
+- Scans directory structure — `src/`, `app/`, `pages/`, `lib/`, `tests/`, monorepo structure
+- Reads existing config — `tsconfig.json`, `.eslintrc`, `vitest.config.ts`, etc.
+- Identifies the tech stack — Next.js? Express? CLI tool? Library? Monorepo?
+- Checks for existing patterns — test conventions, import aliases, API structure
+- Detects dev server setup — port, health endpoint, auth patterns
+
+Output: a project profile that informs all subsequent decisions.
+
+**Phase 1: Interview the user**
+
+Based on research findings, asks targeted questions:
+- Confirms detected settings (test command, build command, etc.)
+- Asks about review preferences (code review? which providers?)
+- Asks about workflow strictness (strict hooks?)
+- Asks domain-specific questions informed by the codebase:
+  - Next.js project → "Do you use App Router or Pages Router?"
+  - API project → "What's your API base URL for verification?"
+  - Monorepo → "Which packages should kata manage?"
+- Asks about team workflow (PR-based? trunk-based? solo?)
+
+**Phase 2: Generate customized config**
+
+The agent writes files tailored to the project:
+
+**`kata.yaml`** — fully populated with:
+- Project settings (confirmed/overridden during interview)
+- Mode definitions with project-appropriate stop conditions
+- Interview categories tailored to the domain (no UI design questions for a CLI tool)
+- Subphase patterns appropriate for the workflow
+- Global rules derived from the codebase (e.g., "This project uses pnpm — always use pnpm, not npm")
+- Per-mode rules (e.g., for a Next.js project: "Run `pnpm build` after changes — route types are generated at build time")
+
+**Templates** — customized per-project:
+- Step instructions reference actual project files and patterns
+  - Instead of generic "run tests": `Run pnpm vitest run --reporter=verbose`
+  - Instead of generic "check existing patterns": `Check src/lib/api.ts for the API client pattern used in this project`
+- Context-search steps know where to look in THIS project
+- Implementation steps reference the project's architecture
+- Debug steps know the project's logging/observability setup
+
+**Prompts** — review prompts with project context:
+- Code review prompt knows the project's conventions
+- Spec review prompt knows the project's architecture patterns
+
+**Spec templates** — tailored to the project:
+- Feature spec template includes the project's layer structure (UI/API/Data or just API, etc.)
+- Bug template references the project's test infrastructure
+
+**Agents** — agent definitions with project awareness:
+- impl-agent instructions reference the project's build/test commands
+- review-agent knows the project's quality standards
+
+**Phase 3: GitHub setup**
+
+Same as current onboard: gh CLI check, auth, labels, issue templates.
+
+**Phase 4: Validate**
+
+```bash
+kata doctor
+```
+
+Verifies:
+- kata.yaml is valid (schema validation)
+- All referenced templates exist
+- All referenced prompts exist
+- Hooks are registered correctly
+- Test command works
+- Build command works (if set)
+
+### What the agent produces (concrete example)
+
+For a **Next.js + tRPC + Drizzle** project, the agent would produce:
+
+**kata.yaml** (abbreviated):
+```yaml
+project:
+  name: "my-saas-app"
+  test_command: "pnpm vitest run"
+  build_command: "pnpm build"
+  typecheck_command: "pnpm tsc --noEmit"
+  dev_server_command: "pnpm dev"
+  dev_server_health: "http://localhost:3000/api/health"
+  api_base: "http://localhost:3000/api/trpc"
+  diff_base: "main"
+
+reviews:
+  code_review: true
+  code_reviewers: ["gemini"]
+
+global_rules:
+  - "This project uses pnpm — always use pnpm, never npm or yarn"
+  - "Run pnpm build after changes — Next.js route types are generated at build time"
+  - "Database schema is in src/db/schema.ts — always check for existing tables before creating new ones"
+  - "API routes use tRPC — routers are in src/server/routers/"
+
+interviews:
+  requirements:
+    name: "Requirements"
+    rounds:
+      - header: "Problem"
+        question: "What user problem does this solve?"
+        options:
+          - {label: "User workflow gap", description: "Missing capability"}
+          - {label: "Performance issue", description: "Slow or unreliable"}
+          - {label: "New capability", description: "Something users can't do today"}
+      # ... more rounds
+  architecture:
+    name: "Architecture"
+    rounds:
+      - header: "Layers"
+        question: "Which layers does this feature touch?"
+        options:
+          - {label: "Frontend only", description: "React components, no API changes"}
+          - {label: "Full stack", description: "UI + tRPC router + Drizzle schema"}
+          - {label: "Backend only", description: "tRPC router + Drizzle, no UI"}
+          - {label: "Schema migration", description: "Drizzle schema change with migration"}
+      # ... project-specific rounds
+  testing:
+    name: "Testing"
+    rounds:
+      - header: "Test types"
+        question: "What tests should we write?"
+        options:
+          - {label: "Unit tests", description: "Vitest — isolated component/function tests"}
+          - {label: "API tests", description: "tRPC router tests with test client"}
+          - {label: "E2E tests", description: "Playwright browser tests"}
+  # No "design" category — agent detected this project doesn't have custom UI components
+
+modes:
+  task:
+    rules:
+      - "After code changes, always run: pnpm build && pnpm vitest run"
+    # ... rest inherited from template defaults
+
+subphase_patterns:
+  impl-test-verify:
+    steps:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        instruction: |
+          SPAWN impl-agent with project context:
+          - tRPC routers: src/server/routers/
+          - Drizzle schema: src/db/schema.ts
+          - React components: src/components/
+          ...
+      # ... rest of pattern
+```
+
+**`.kata/templates/task.md`** (abbreviated, showing customized parts):
+```yaml
+steps:
+  - id: context-search
+    title: "Quick context search"
+    instruction: |
+      SPAWN a fast Explore agent:
+      Task(subagent_type="Explore", prompt="
+        Find code patterns for: {task description}
+        Key locations in this project:
+        - tRPC routers: src/server/routers/
+        - Drizzle schema: src/db/schema.ts
+        - React components: src/components/
+        - API client: src/lib/trpc.ts
+        Check for existing patterns to follow.
+      ", model="haiku")
+```
+
+Compare this to today's generic "Search with Glob and Grep for relevant files."
+
+### For a CLI tool project, the same agent would produce completely different output:
+
+No dev server config, no UI design interviews, implementation steps reference CLI argument parsing patterns, debug template knows about stdio/exit codes instead of HTTP endpoints, etc.
+
+### Upstream merge with customized files
+
+Since the agent produces customized files, upstream merge needs to be smart about it.
+
+**Version tracking:** Every generated file gets `kata_version: "X.Y.Z"` in its frontmatter/metadata. This records which version of kata's seed templates were used as the starting point.
+
+**`kata update` flow:**
+
+```bash
+kata update --preview    # show what changed upstream
+kata update              # apply changes
+```
+
+1. For each file with `kata_version`:
+   - Get the package's seed version at that old version (the "base")
+   - Get the package's current seed version (the "upstream")
+   - Get the project's current file (the "local")
+
+2. **Structural merge for templates (YAML frontmatter):**
+   - New phases added upstream → added to local (at the position upstream specified)
+   - Phase dependencies changed upstream → updated if local hasn't changed them
+   - Step instructions changed upstream → merged only if local still has the original text
+   - Step instructions customized locally → preserved (upstream change shown as info)
+
+3. **Structural merge for kata.yaml:**
+   - New modes added upstream → added to local
+   - New config fields added upstream → added with defaults
+   - Existing mode defaults changed upstream → shown as diff, user decides
+   - Project-specific fields (project.*, reviews.*, global_rules) → never touched
+
+4. **Simple files (prompts, agents, spec-templates):**
+   - If local matches old base exactly → replace with new upstream
+   - If local differs → skip, show diff for manual review
+
+**Key principle:** The agent's customizations (project-specific instructions, tailored interview questions) are treated as local changes. Upstream structural improvements (new phases, better dependency chains, new modes) merge in without overwriting the customization.
+
+### How the merge knows what's "structural" vs "customized"
+
+Template frontmatter has two kinds of content:
+
+**Structural** (upstream-owned): phase ids, phase order, dependencies, step ids, step titles, container flags, subphase pattern references, labels
+
+**Behavioral** (project-customized): step instructions, mode rules, interview questions, global rules
+
+The merge engine treats structural changes as safe to apply and behavioral changes as local customizations to preserve.
+
+For instructions specifically, the merge can detect:
+- Instruction unchanged from upstream seed → safe to update
+- Instruction has project-specific additions → preserve local, show upstream diff as info
+- Instruction completely rewritten → preserve local
+
+### Directory layout (final)
 
 ```
 .kata/
-  kata.yaml                    # unified config: project settings + modes + interviews + patterns
-  templates/                   # mode templates (project-owned, editable)
+  kata.yaml                    # unified config (project + modes + interviews + patterns)
+  templates/                   # mode templates (project-owned, agent-customized)
     planning.md
     task.md
     debug.md
@@ -34,413 +305,100 @@ Simpler system where every project owns its files, with a tighter config surface
     verify.md
     freeform.md
     onboard.md
-  prompts/                     # review/eval prompts
+  prompts/                     # review prompts (agent-customized)
     code-review.md
     spec-review.md
     ...
-  spec-templates/              # spec document scaffolds
+  spec-templates/              # spec scaffolds (agent-customized)
     feature.md
     bug.md
     epic.md
-  sessions/                    # runtime session state (internal)
+  sessions/                    # runtime state
 
-.claude/                       # Claude Code conventions (not kata-owned)
-  agents/                      # agent definitions
+.claude/                       # Claude conventions
+  agents/                      # agent definitions (agent-customized)
     impl-agent.md
     review-agent.md
     test-agent.md
-  settings.json                # hook registrations
+  settings.json                # hooks
 
 .github/                       # GitHub conventions
-  ISSUE_TEMPLATE/              # issue templates (optional)
+  ISSUE_TEMPLATE/              # issue templates
 ```
 
-### What changes from today
+### Setup flow summary
 
-| Today | Proposed | Why |
-|-------|----------|-----|
-| `batteries/` in package + copies in project | Project owns files directly, no batteries concept | Simpler, no dual system |
-| `kata batteries --update` with backup dirs | `kata update` with smart merge | No clobbering |
-| `.kata/interviews.yaml` (separate file) | Absorbed into `kata.yaml` `interviews:` section | Fewer files |
-| `.kata/subphase-patterns.yaml` (separate file) | Absorbed into `kata.yaml` `subphase_patterns:` section | Fewer files |
-| `.kata/verification-tools.md` (freeform markdown) | Absorbed into `kata.yaml` `project:` structured fields | Fewer files, validated |
-| `planning/spec-templates/` | Moved to `.kata/spec-templates/` | Consolidated under `.kata/` |
-| `.kata/providers/` (example files) | Absorbed into `kata.yaml` `providers:` section | Fewer files |
-| `kata setup --batteries` (separate flag) | `kata setup` does everything | No batteries concept |
-| `.kata/batteries-backup/` | Gone | No backup-on-update needed |
-
-### `kata.yaml` — the unified config
-
-Everything that was scattered across 5+ files consolidates into one:
-
-```yaml
-# ─── Project settings ───
-project:
-  name: "my-app"
-  test_command: "pnpm test"
-  build_command: "pnpm build"
-  typecheck_command: "pnpm typecheck"
-  dev_server_command: "pnpm dev"
-  dev_server_health: "http://localhost:3000/health"
-  api_base: "http://localhost:3000/api"
-  diff_base: "main"
-
-spec_path: planning/specs
-research_path: planning/research
-session_retention_days: 7
-
-# ─── Reviews ───
-reviews:
-  code_review: true
-  code_reviewers: ["gemini"]
-
-# ─── Global rules (injected into every mode) ───
-global_rules:
-  - "Use conventional commit format: type(scope): description"
-  - "Always run typecheck before committing"
-
-# ─── Task system rules ───
-task_rules:
-  - "Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate."
-  - "Run TaskList FIRST to discover pre-created tasks and their dependency chains."
-  - "Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate."
-  - "Follow the dependency chain — blocked tasks cannot start until dependencies complete."
-
-# ─── Providers ───
-providers:
-  default: claude
-  available: [claude, gemini]
-  judge_provider: gemini
-  judge_model: null
-
-# ─── Subphase patterns (was subphase-patterns.yaml) ───
-subphase_patterns:
-  impl-test-verify:
-    description: "Implement, test process gates, then verify against real services"
-    steps:
-      - id_suffix: impl
-        title_template: "IMPL - {task_summary}"
-        todo_template: "Implement {task_summary}"
-        active_form: "Implementing {phase_name}"
-        labels: [impl]
-        instruction: |
-          ⛔ DO NOT implement this phase yourself. SPAWN an impl-agent.
-          ...
-      - id_suffix: test
-        title_template: "TEST - {phase_name}"
-        depends_on_previous: true
-        instruction: |
-          Run the process gate:
-          kata check-phase {phase_label} --issue={issue}
-      - id_suffix: verify
-        title_template: "VERIFY - {phase_name}"
-        depends_on_previous: true
-        instruction: |
-          Spawn a FRESH verification agent...
-
-  impl-test:
-    description: "Implement then run process gates"
-    steps:
-      - id_suffix: impl
-        title_template: "IMPL - {task_summary}"
-        instruction: "..."
-      - id_suffix: test
-        title_template: "TEST - {phase_name}"
-        depends_on_previous: true
-        instruction: "..."
-
-  impl-test-review:
-    description: "Implement, test, then code review"
-    steps:
-      - id_suffix: impl
-        title_template: "IMPL - {task_summary}"
-        instruction: "..."
-      - id_suffix: test
-        title_template: "TEST - {phase_name}"
-        depends_on_previous: true
-        instruction: "..."
-      - id_suffix: review
-        title_template: "REVIEW - {reviewers}"
-        depends_on_previous: true
-        instruction: "..."
-
-# ─── Interview categories (was interviews.yaml) ───
-interviews:
-  requirements:
-    name: "Requirements"
-    description: "User journey, happy path, scope boundaries, edge cases"
-    rounds:
-      - header: "Problem"
-        question: "What user problem does this solve?"
-        options:
-          - {label: "User workflow gap", description: "Missing capability"}
-          - {label: "Performance issue", description: "Current approach too slow"}
-          - {label: "New capability", description: "Something users can't do today"}
-      - header: "Happy Path"
-        question: "What does the ideal success flow look like?"
-        options:
-          - {label: "I'll describe it", description: "Free-form description"}
-      # ... more rounds
-
-  architecture:
-    name: "Architecture"
-    description: "Integration points, error handling, performance"
-    rounds:
-      - header: "Integration"
-        question: "What existing systems or APIs does this touch?"
-        options:
-          - {label: "I'll list them", description: "Free-form list"}
-      # ... more rounds
-
-  testing:
-    name: "Testing Strategy"
-    rounds:
-      # ...
-
-  design:
-    name: "UI Design"
-    rounds:
-      # ...
-
-# ─── Mode definitions ───
-modes:
-  research:
-    name: "Research"
-    description: "Explore and synthesize findings"
-    template: "research.md"
-    stop_conditions: [tasks_complete, committed, pushed]
-    intent_keywords: ["research", "explore", "learn about"]
-
-  planning:
-    name: "Planning"
-    description: "Research, spec, review, approved"
-    template: "planning.md"
-    issue_handling: "required"
-    issue_label: "feature"
-    stop_conditions: [tasks_complete, spec_valid, committed, pushed]
-    intent_keywords: ["plan feature", "spec", "design", "write spec"]
-
-  implementation:
-    name: "Implementation"
-    description: "Execute approved specs"
-    template: "implementation.md"
-    issue_handling: "required"
-    issue_label: "feature"
-    stop_conditions: [tasks_complete, committed, pushed, tests_pass, feature_tests_added]
-    intent_keywords: ["implement", "build", "code", "develop"]
-
-  task:
-    name: "Task"
-    description: "Combined planning + implementation for small tasks"
-    template: "task.md"
-    issue_handling: "none"
-    stop_conditions: [tasks_complete, committed]
-    intent_keywords: ["task:", "chore", "small task", "quick change"]
-    workflow_prefix: "TK"
-    aliases: ["chore", "small"]
-
-  freeform:
-    name: "Freeform"
-    description: "Quick questions and discussion (no phases)"
-    template: "freeform.md"
-    stop_conditions: []
-    intent_keywords: ["question", "how does", "what is", "explain"]
-    workflow_prefix: "FF"
-    aliases: ["question", "ask", "help"]
-
-  verify:
-    name: "Verify"
-    description: "Execute Verification Plan steps"
-    template: "verify.md"
-    stop_conditions: [tasks_complete, committed, pushed]
-    intent_keywords: ["verify", "run verification"]
-    workflow_prefix: "VF"
-
-  debug:
-    name: "Debug"
-    description: "Systematic hypothesis-driven debugging"
-    template: "debug.md"
-    stop_conditions: [tasks_complete, committed, pushed]
-    intent_keywords: ["debug", "investigate", "bug", "broken"]
-    workflow_prefix: "DB"
-    aliases: ["investigate"]
-
-  onboard:
-    name: "Onboard"
-    description: "Configure kata for a new project"
-    template: "onboard.md"
-    stop_conditions: []
-    intent_keywords: ["onboard", "setup kata"]
 ```
-
-This is long but it's **one file** that contains everything. Projects can read it, customize any section, and understand the full config at a glance. Compare to today where the same information is spread across `kata.yaml` + `interviews.yaml` + `subphase-patterns.yaml` + `verification-tools.md` + `providers/ollama.yaml.example`.
-
-### Templates stay as markdown files
-
-Templates keep their current format — YAML frontmatter (phases, steps, instructions) + markdown body (Claude context). They live in `.kata/templates/` and the project owns them.
-
-**Key difference from today:** no batteries copy. `kata setup` creates them directly from the package seed. The project edits them freely.
-
-### `kata setup` — one command, everything scaffolded
-
-```bash
-kata setup
+kata setup                     # bare skeleton: .kata/ dir, hooks, minimal kata.yaml
+  ↓
+kata enter onboard             # agent-driven cycle:
+  ↓
+  P0: Research project         # explore codebase, detect stack, read configs
+  P1: Interview user           # targeted questions based on research
+  P2: Generate config          # write customized kata.yaml, templates, prompts, agents
+  P3: GitHub setup             # gh CLI, auth, labels
+  P4: Validate                 # kata doctor
+  ↓
+Project fully configured with customized, project-aware files
+  ↓
+(later)
+kata update                    # merge upstream improvements preserving customizations
 ```
-
-Creates:
-1. `.kata/kata.yaml` — full config with auto-detected project settings
-2. `.kata/templates/*.md` — all mode templates
-3. `.kata/prompts/*.md` — review prompts
-4. `.kata/spec-templates/*.md` — spec scaffolds
-5. `.claude/agents/*.md` — agent definitions
-6. `.claude/settings.json` — hook registrations
-7. `.github/ISSUE_TEMPLATE/` — issue templates (if `--github` flag)
-
-**Auto-detection during setup:**
-- Project name from `package.json` or directory name
-- Test command from `package.json` scripts
-- Build command from `package.json` scripts
-- CI system from `.github/workflows/` or similar
-
-**No flags needed.** No `--batteries`, no `--yes`, no `--strict`. Opinionated defaults. The project can adjust `kata.yaml` after.
-
-### `kata update` — upstream improvements
-
-Since projects own files, upstream improvements need a clean merge path.
-
-**Mechanism:** version-tracked smart merge.
-
-Each generated file gets a `kata_version` field (in YAML frontmatter for templates, in kata.yaml metadata):
-
-```yaml
-# .kata/templates/task.md frontmatter
----
-id: task
-name: Task Mode
-kata_version: "1.5.0"   # version of kata that generated this file
-# ...
----
-```
-
-```bash
-kata update --preview    # show what upstream changed since your version
-kata update              # apply upstream changes, create git commit
-kata update --force      # overwrite without merge (escape hatch)
-```
-
-**How `kata update` works:**
-
-1. Read `kata_version` from each file
-2. Diff the file against the package's version at that old version
-3. Diff the package's old version against the current package version (upstream delta)
-4. If file is unchanged from old version → replace with new version (clean update)
-5. If file has local changes AND upstream changed → three-way merge attempt
-6. If conflict → mark with conflict markers, user resolves
-
-**For kata.yaml specifically:**
-- Structured YAML merge: new keys added, existing keys preserved
-- New modes added automatically
-- Changed mode defaults shown as diff for review
-- Project overrides never lost
-
-**For templates:**
-- Frontmatter (YAML) merged structurally
-- Markdown body merged via text diff
-- Conflicts marked clearly
-
-### What about per-mode customization?
-
-Since projects own templates directly, customization is straightforward:
-
-**Change a step instruction:** Edit `.kata/templates/task.md`, find the step, change the instruction.
-
-**Add a phase:** Add a new phase entry in the template's YAML frontmatter.
-
-**Add project-specific rules to a mode:** Add `rules:` to the mode in `kata.yaml`:
-
-```yaml
-modes:
-  task:
-    rules:
-      - "Always run pnpm lint before committing"
-      - "Keep changes under 100 lines"
-```
-
-These get injected into session context alongside global_rules.
-
-**Customize interview questions:** Edit the `interviews:` section in `kata.yaml`.
-
-**Change subphase patterns:** Edit the `subphase_patterns:` section in `kata.yaml`.
-
-No overlay system, no step_overrides, no `{inherit}` placeholders. Just edit the file you own.
 
 ### Code changes required
 
 **Remove:**
-- `src/commands/batteries.ts` — no more batteries command
-- `src/commands/scaffold-batteries.ts` — no more scaffolding logic
-- `batteries/` directory — seeds move into setup logic
-- 2-tier template lookup in `resolveTemplatePath()` — project path only
-- 2-tier merge in `interviews.ts` and `subphase-patterns.ts` — single source (kata.yaml)
-- `batteries-backup/` logic
+- `src/commands/batteries.ts`
+- `src/commands/scaffold-batteries.ts`
+- `batteries/` directory (seeds move into onboard agent's knowledge)
+- 2-tier template lookup (project files only)
+- 2-tier merge for interviews/subphase-patterns (single source: kata.yaml)
 
-**Modify:**
-- `src/commands/setup.ts` — scaffolds everything directly, auto-detects project settings
-- `src/config/kata-config.ts` — schema expands to include interviews + subphase_patterns sections
-- `loadKataConfig()` — loads single file, no merge
-- `loadInterviewConfig()` → reads from `kata.yaml` `interviews:` section
-- `loadSubphasePatterns()` → reads from `kata.yaml` `subphase_patterns:` section
-- Template resolution — just `.kata/templates/{name}`, no fallback
+**Simplify:**
+- `src/commands/setup.ts` — just creates skeleton, no scaffolding
+- `src/config/kata-config.ts` — expanded schema (interviews, subphase_patterns), single file load
+
+**Rewrite:**
+- `.kata/templates/onboard.md` — much richer: research phase, project-aware interview, customized file generation
 
 **Add:**
-- `src/commands/update.ts` — `kata update` with version-tracked merge
+- `src/commands/update.ts` — version-tracked smart merge
+- `src/commands/doctor.ts` enhancements — validate generated files
+- Per-mode `rules: string[]` in KataModeConfigSchema
 - `kata_version` tracking in generated files
-- Per-mode `rules:` field in `KataModeConfigSchema`
-- Migration command for existing projects
 
-### Migration from current system
+### Migration for existing projects
 
 ```bash
 kata migrate
 ```
 
-1. Reads existing `.kata/kata.yaml` (or `.claude/workflows/kata.yaml`)
-2. Reads `.kata/interviews.yaml` → merges into kata.yaml `interviews:` section
-3. Reads `.kata/subphase-patterns.yaml` → merges into kata.yaml `subphase_patterns:` section
-4. Reads `.kata/verification-tools.md` → extracts values into `project:` fields
-5. Moves `planning/spec-templates/` → `.kata/spec-templates/`
+1. Absorbs `interviews.yaml` → `kata.yaml` interviews section
+2. Absorbs `subphase-patterns.yaml` → `kata.yaml` subphase_patterns section
+3. Absorbs `verification-tools.md` → `kata.yaml` project fields
+4. Moves `planning/spec-templates/` → `.kata/spec-templates/`
+5. Stamps `kata_version` on all files
 6. Removes old files
-7. Stamps `kata_version` on all files
-8. Outputs summary of what moved
-
-### File count comparison
-
-| | Today | Proposed |
-|--|-------|----------|
-| Config files | 5 (kata.yaml, interviews, subphase-patterns, verification-tools, providers) | **1** (kata.yaml) |
-| Template files | 7-8 in `.kata/templates/` | **7-8** in `.kata/templates/` (same, but no batteries dual) |
-| Prompt files | 5 in `.kata/prompts/` | **5** in `.kata/prompts/` (same) |
-| Spec templates | 3 in `planning/spec-templates/` | **3** in `.kata/spec-templates/` (moved) |
-| Agent files | 3 in `.claude/agents/` | **3** in `.claude/agents/` (same) |
-| GitHub files | 3-4 in `.github/` | **3-4** in `.github/` (same) |
-| Backup dirs | 1+ in `.kata/batteries-backup/` | **0** |
-| **Total config surface** | **5 config + batteries system** | **1 config file** |
+7. Optionally: runs onboard agent to re-customize templates with project awareness
 
 ## Open questions
 
-1. **kata.yaml size** — with interviews + subphase_patterns inlined, kata.yaml gets long (~300 lines). Is that OK since it's one file? Or should interviews/patterns stay as separate files under `.kata/` but with no batteries dual?
+1. **Onboard agent scope** — how deep should the research phase go? Just `package.json` + directory structure, or also read actual source files to understand patterns? Recommendation: read key files (main entry point, API router, schema) to produce meaningful rules and instructions.
 
-2. **Template version tracking format** — `kata_version: "1.5.0"` in frontmatter works for templates. For kata.yaml, use a top-level `_kata_version: "1.5.0"` field?
+2. **Seed templates** — the onboard agent needs a starting point for templates. Should seed templates live in the package as internal resources (not user-facing), or should the agent generate templates from scratch based on its understanding? Recommendation: internal seed templates that the agent customizes, not generates from scratch.
 
-3. **Update conflict resolution** — for templates (mixed YAML + markdown), should conflicts use git-style markers? Or should `kata update` refuse to merge and show a diff instead?
+3. **Re-running onboard** — if a project's stack changes (add a database, switch frameworks), can you re-run onboard? Recommendation: yes, `kata enter onboard` should detect existing config and offer to update/regenerate specific sections.
 
-4. **Onboard template** — is inherently project-specific (created during setup interview). Should it be excluded from `kata update`?
+4. **kata.yaml size** — with interviews + subphase patterns + modes, kata.yaml gets long. Is that OK? Recommendation: yes — one long file is better than many scattered files. YAML sections with comments make it navigable.
 
-5. **Setup interview vs auto-detect** — should `kata setup` ask questions interactively, or just auto-detect and let the user edit kata.yaml after? Recommendation: auto-detect, print what was detected, user edits.
+5. **Validation depth** — should `kata doctor` actually run the test command and build command, or just check they're set? Recommendation: run them, to verify they work.
+
+6. **Merge granularity** — for template instruction merging, what's the unit? Whole instruction block? Individual lines? Recommendation: whole instruction block per step. If the instruction was customized, preserve it entirely.
 
 ## Next steps
 
-1. **Spec Phase 1:** New kata.yaml schema (absorb interviews + subphase_patterns) + simplified setup
-2. **Spec Phase 2:** Remove batteries system, single-source template resolution
-3. **Spec Phase 3:** `kata update` with version-tracked merge
-4. **Spec Phase 4:** Migration tool for existing projects
+1. **Spec Phase 1:** New kata.yaml schema (absorb interviews, subphase patterns, add per-mode rules)
+2. **Spec Phase 2:** Simplified `kata setup` (skeleton only)
+3. **Spec Phase 3:** Rewritten onboard template with research → interview → generate → validate cycle
+4. **Spec Phase 4:** `kata update` with version-tracked structural merge
+5. **Spec Phase 5:** Migration tool for existing projects
