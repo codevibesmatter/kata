@@ -1,314 +1,80 @@
 ---
 date: 2026-03-31
-topic: Setup overhaul — tighter config surface, more flexible customization, upstream merging
+topic: Setup overhaul — simpler structure, project-owned files, tighter config surface
 status: complete
 github_issue: null
 ---
 
-# Research: Setup Overhaul — Tighter Surface, More Flexible Customization
+# Research: Setup Overhaul
 
-## Context
+## Goal
 
-The current `kata setup --batteries` and `kata batteries --update` system has three problems:
-1. **Configuration surface is too wide** — batteries scatter 10+ file categories across the project (templates, agents, prompts, interviews, subphase patterns, verification tools, spec templates, github templates, kata.yaml)
-2. **Customization is inflexible** — to change one step instruction in a mode, you must copy and own the entire 33KB template file
-3. **Upstream updates don't merge** — `--update` overwrites all files, destroying local changes
+Simpler system where every project owns its files, with a tighter config surface, more flexible customization, and a clean path for upstream improvements.
 
-**Goal:** Tighter configuration surface (fewer files to manage) with MORE flexible per-project customization AND clean upstream merging.
+## Problems with current system
 
-## Questions Explored
+1. **Too many file categories** — batteries scatters 10+ categories across `.kata/`, `.claude/`, `planning/`, `.github/`
+2. **Dual system is confusing** — package has `batteries/`, project has copies, 2-tier lookup decides which wins, `--update` clobbers local changes
+3. **Customization requires copying entire files** — to change one step instruction you own a 33KB template
+4. **Config is fragmented** — interviews.yaml, subphase-patterns.yaml, verification-tools.md, kata.yaml are all separate files with separate merge logic
 
-1. What does each batteries file actually do at runtime? Which are structural config vs. behavioral instructions?
-2. Can the scattered config files be consolidated into fewer, more powerful files?
-3. What customization patterns do projects actually need?
-4. How should upstream improvements merge with project customizations?
+## Design: Project-owned, consolidated under `.kata/`
 
-## Findings
+### Directory layout
 
-### How Templates Work at Runtime
+```
+.kata/
+  kata.yaml                    # unified config: project settings + modes + interviews + patterns
+  templates/                   # mode templates (project-owned, editable)
+    planning.md
+    task.md
+    debug.md
+    research.md
+    implementation.md
+    verify.md
+    freeform.md
+    onboard.md
+  prompts/                     # review/eval prompts
+    code-review.md
+    spec-review.md
+    ...
+  spec-templates/              # spec document scaffolds
+    feature.md
+    bug.md
+    epic.md
+  sessions/                    # runtime session state (internal)
 
-Templates serve a dual purpose in `enter.ts`:
+.claude/                       # Claude Code conventions (not kata-owned)
+  agents/                      # agent definitions
+    impl-agent.md
+    review-agent.md
+    test-agent.md
+  settings.json                # hook registrations
 
-**1. Structural (YAML frontmatter → task creation):**
-- `parseAndValidateTemplatePhases()` extracts `phases[]` with ids, dependencies, steps
-- `buildPhaseTasks()` creates native tasks from phases + steps
-- Each step's `title` and `instruction` become task subject + description
-- `container: true` + `subphase_pattern` expands spec phases into subtasks
-
-**2. Behavioral (full content → Claude context injection):**
-- `outputFullTemplateContent()` dumps the ENTIRE template (frontmatter + markdown body) to stderr
-- Claude reads this as workflow instructions — the markdown body provides "when to use," "when NOT to use," flow diagrams, etc.
-- Step `instruction` fields are both: task descriptions (structured) AND Claude guidance (prose)
-
-**This dual nature is why templates are hard to customize** — they mix machine-parsed structure with human-written prose in a single file.
-
-### Current Batteries Inventory (10 categories)
-
-| # | Category | Files | Runtime role | Customization need |
-|---|----------|-------|-------------|-------------------|
-| 1 | `kata.yaml` | 1 × 164 lines | Mode definitions + project settings | **Every project** (project settings + mode tweaks) |
-| 2 | Mode templates | 7 × 2-33KB `.md` | Task creation + Claude instructions | **Rare** — most projects don't customize |
-| 3 | `interviews.yaml` | 1 × 109 lines | Planning interview questions | Moderate — project-specific questions |
-| 4 | `subphase-patterns.yaml` | 1 × 220 lines | Container phase expansion | Rare |
-| 5 | `verification-tools.md` | 1 × 4.2KB | VP tool config (fill-in-blank) | **Every project** — project-specific |
-| 6 | Agents | 3 `.md` files | Claude agent definitions | Moderate — custom agents |
-| 7 | Prompts | 5 `.md` files | Review prompt templates | Rare |
-| 8 | Spec templates | 3 `.md` files | Spec document scaffolds | Moderate |
-| 9 | GitHub templates | 2 dirs + labels | Issue templates + labels | Once at setup |
-| 10 | Provider examples | 1 `.yaml.example` | Provider config | Rare |
-
-**Key observation:** Categories 2, 3, and 4 already have 2-tier resolution at runtime:
-- Templates: `resolveTemplatePath()` checks project → package (`src/session/lookup.ts:309-344`)
-- Interviews: `loadInterviewConfig()` merges package base + project overlay (`src/config/interviews.ts:68-103`)
-- Subphase patterns: `loadSubphasePatterns()` merges package base + project overlay (`src/config/subphase-patterns.ts:63-98`)
-
-**But `kata.yaml` — the most important config — does NOT have 2-tier merge.** And despite templates having 2-tier lookup, batteries still copies them all into the project.
-
-### What Projects Actually Customize (Evidence)
-
-Diffing this project's `.kata/templates/` against `batteries/templates/`:
-- `task.md`: 4 line diff (stale `wm` → `kata` renames)
-- `research.md`: 4 line diff (same)
-- `implementation.md`: 9 line diff (same)
-- `freeform.md`: 10 line diff (same)
-- `debug.md`: 46 line diff (upstream added issue search + observability sections)
-- `verify.md`: 49 line diff (upstream added observability section)
-
-**Projects DON'T meaningfully customize templates.** The diffs are either stale renames or upstream improvements the project hasn't picked up. The current system forces ownership of files nobody wants to own.
-
-**What projects DO want to customize:**
-1. Project settings (name, test command, build command)
-2. Which stop conditions apply to which modes
-3. Interview questions specific to their domain
-4. Adding project-specific rules/instructions to modes
-5. Verification tool setup (dev server, API URLs, auth)
-6. Adding custom agents for project-specific tasks
-
-### The Consolidation Opportunity
-
-Today's 10 categories can be collapsed into a tighter surface:
-
-**What if `kata.yaml` was the ONLY config file projects need to touch?**
-
-Currently `kata.yaml` has: `project`, `spec_path`, `research_path`, `session_retention_days`, `reviews`, `providers`, `global_rules`, `task_rules`, `modes`.
-
-It could absorb:
-- **Interview customizations** → `modes.planning.interviews` (per-mode interview overrides)
-- **Subphase pattern customizations** → `modes.implementation.subphase_pattern` (already partially there — templates reference patterns by name)
-- **Mode-specific rules** → `modes.task.rules: ["Always run lint before committing"]`
-- **Verification tool config** → `project.dev_server`, `project.api_base`, `project.auth` (structured, not fill-in-the-blank markdown)
-- **Stop condition overrides** → already in `modes.*.stop_conditions`
-
-What stays separate:
-- **Agent definitions** — `.claude/agents/` is a Claude Code convention, not kata-owned
-- **Prompts** — referenced by name in review steps, need to be files
-- **Spec templates** — scaffolds for output documents, inherently content
-- **GitHub templates** — GitHub convention, one-time setup
-- **Mode templates** — the structural/behavioral dual-purpose files (discussed below)
-
-### The Template Problem
-
-Templates are the hardest piece because they serve two roles:
-
-**Role 1: Structural config** (parseable, machine-consumed):
-```yaml
-phases:
-  - id: p0
-    name: Quick Planning
-    task_config:
-      title: "P0: Plan - scope, approach"
-    steps:
-      - id: understand-task
-        title: "Understand and classify"
+.github/                       # GitHub conventions
+  ISSUE_TEMPLATE/              # issue templates (optional)
 ```
 
-**Role 2: Behavioral instructions** (prose, Claude-consumed):
-```yaml
-        instruction: |
-          Read the user's request carefully.
-          **Classify:**
-          - [ ] Chore — refactoring, cleanup...
-          **If larger scope detected:** Tell the user...
-```
+### What changes from today
 
-**Role 3: Documentation** (markdown body after frontmatter):
-```markdown
-# Task Mode
+| Today | Proposed | Why |
+|-------|----------|-----|
+| `batteries/` in package + copies in project | Project owns files directly, no batteries concept | Simpler, no dual system |
+| `kata batteries --update` with backup dirs | `kata update` with smart merge | No clobbering |
+| `.kata/interviews.yaml` (separate file) | Absorbed into `kata.yaml` `interviews:` section | Fewer files |
+| `.kata/subphase-patterns.yaml` (separate file) | Absorbed into `kata.yaml` `subphase_patterns:` section | Fewer files |
+| `.kata/verification-tools.md` (freeform markdown) | Absorbed into `kata.yaml` `project:` structured fields | Fewer files, validated |
+| `planning/spec-templates/` | Moved to `.kata/spec-templates/` | Consolidated under `.kata/` |
+| `.kata/providers/` (example files) | Absorbed into `kata.yaml` `providers:` section | Fewer files |
+| `kata setup --batteries` (separate flag) | `kata setup` does everything | No batteries concept |
+| `.kata/batteries-backup/` | Gone | No backup-on-update needed |
 
-**For small tasks and chores** — combined planning + implementation...
+### `kata.yaml` — the unified config
 
-## When to Use
-- Chores (refactoring, cleanup, config, docs)
-...
-```
-
-Three options for handling this:
-
-#### A. Keep templates as-is, add override mechanism in kata.yaml
-
-Templates stay as monolithic `.md` files in the package. Projects customize via `kata.yaml`:
+Everything that was scattered across 5+ files consolidates into one:
 
 ```yaml
-modes:
-  task:
-    # Override specific step instructions
-    step_overrides:
-      p0:context-search:
-        instruction: |
-          Also check our internal docs API at docs.internal/...
-          {upstream}  # placeholder: insert upstream instruction here
-
-    # Add rules injected into all steps
-    rules:
-      - "Always run pnpm lint before committing"
-
-    # Add a custom phase
-    extra_phases:
-      - id: p3
-        name: "Deploy Preview"
-        after: p2
-        steps:
-          - id: deploy
-            title: "Deploy to preview"
-            instruction: "Run deploy-preview.sh"
-
-    # Remove a phase
-    skip_phases: [p1]  # skip implementation phase (useful for dry-run modes)
-```
-
-**Pros:** Single config file for all customization. Templates stay in package.
-**Cons:** YAML gets deep and complex. Instruction overrides in YAML are awkward for long prose.
-
-#### B. Template inheritance with instruction files
-
-Templates define structure. Instructions are separate files that can be overridden:
-
-```
-batteries/templates/task.md          # structure (phases, steps, titles)
-batteries/instructions/task/         # default instructions per step
-  p0-understand-task.md
-  p0-context-search.md
-  p1-make-changes.md
-  ...
-
-.kata/instructions/task/             # project overrides (optional)
-  p0-context-search.md              # overrides just this one step
-```
-
-Template frontmatter references instructions by convention:
-```yaml
-steps:
-  - id: context-search
-    title: "Quick context search"
-    # instruction loaded from: instructions/{mode}/{phase}-{step}.md
-    # project override checked first, then package default
-```
-
-**Pros:** Fine-grained override without copying entire template. Clean separation.
-**Cons:** Many small files (opposite of "tighter surface"). New convention to learn.
-
-#### C. Composable template layers
-
-Package provides a base template. Projects provide a thin overlay YAML that patches specific fields:
-
-```yaml
-# .kata/overlays/task.yaml
-extends: task  # base template from package
-
-phases:
-  p0:
-    steps:
-      context-search:
-        instruction: |
-          {inherit}
-
-          Also check internal docs at docs.internal/api
-
-  p3:  # new phase, inserted after p2
-    name: "Deploy Preview"
-    after: p2
-    steps:
-      - id: deploy
-        title: "Deploy to preview"
-        instruction: "..."
-
-skip_phases: []
-extra_rules:
-  - "Always run pnpm lint before committing"
-```
-
-**Pros:** Explicit overlay file, clear what's customized. Inherits upstream base.
-**Cons:** New overlay schema. `{inherit}` placeholder needs implementation.
-
-#### D. kata.yaml absorbs everything (maximum consolidation)
-
-ALL mode customization goes into `kata.yaml`. Templates become internal implementation details — projects never see or think about them.
-
-```yaml
-project:
-  name: "my-app"
-  test_command: "pnpm test"
-  build_command: "pnpm build"
-  dev_server: "pnpm dev"
-  api_base: "http://localhost:3000"
-
-reviews:
-  code_review: true
-  code_reviewers: ["gemini"]
-
-# Mode configuration — everything in one place
-modes:
-  task:
-    template: task.md  # still references a template, but users don't edit it
-    stop_conditions: [tasks_complete, committed, pushed]
-    rules:
-      - "Always run pnpm lint before committing"
-      - "Use conventional commit format"
-    step_overrides:
-      p0.context-search:
-        append: |
-          Also check internal docs at https://docs.internal/api
-    extra_phases:
-      - id: p3
-        name: "Deploy Preview"
-        after: p2
-        steps:
-          - id: deploy
-            title: "Deploy to preview env"
-            instruction: "Run ./scripts/deploy-preview.sh"
-
-  planning:
-    interviews:
-      # Override specific categories
-      architecture:
-        rounds:
-          - header: "Microservices"
-            question: "Which services does this touch?"
-            options:
-              - {label: "Gateway only", description: "..."}
-              - {label: "Multi-service", description: "..."}
-
-  implementation:
-    subphase_pattern: impl-test-review  # already configurable
-```
-
-**Pros:** TRUE single config surface. Projects manage ONE file. Upstream templates are internal.
-**Cons:** kata.yaml can get large for heavily customized projects. Deep nesting. Long instruction text in YAML is ugly.
-
-### Recommendation: Option A (kata.yaml overrides) + selective D (absorb structured config)
-
-The sweet spot is:
-
-1. **`kata.yaml` becomes the override layer** — 2-tier merge with package defaults. Project only specifies what differs.
-2. **Templates stay in the package** — projects don't copy them. 2-tier lookup (already works) handles fallback.
-3. **Structured config absorbed into kata.yaml** — `interviews`, `subphase_pattern` references, `verification` tool config, per-mode `rules`
-4. **Instruction overrides via kata.yaml** — `step_overrides` with `append`, `prepend`, or `replace` semantics
-5. **Template ejection optional** — `kata eject task` copies template to `.kata/templates/` for full control, `kata uneject task` removes it
-
-### Proposed kata.yaml schema (expanded)
-
-```yaml
-# ─── Project settings (every project fills these) ───
+# ─── Project settings ───
 project:
   name: "my-app"
   test_command: "pnpm test"
@@ -321,6 +87,7 @@ project:
 
 spec_path: planning/specs
 research_path: planning/research
+session_retention_days: 7
 
 # ─── Reviews ───
 reviews:
@@ -332,82 +99,348 @@ global_rules:
   - "Use conventional commit format: type(scope): description"
   - "Always run typecheck before committing"
 
-# ─── Mode overrides (merged over package defaults) ───
-# Only include modes you want to customize. Unmentioned modes inherit fully.
+# ─── Task system rules ───
+task_rules:
+  - "Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate."
+  - "Run TaskList FIRST to discover pre-created tasks and their dependency chains."
+  - "Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate."
+  - "Follow the dependency chain — blocked tasks cannot start until dependencies complete."
+
+# ─── Providers ───
+providers:
+  default: claude
+  available: [claude, gemini]
+  judge_provider: gemini
+  judge_model: null
+
+# ─── Subphase patterns (was subphase-patterns.yaml) ───
+subphase_patterns:
+  impl-test-verify:
+    description: "Implement, test process gates, then verify against real services"
+    steps:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        todo_template: "Implement {task_summary}"
+        active_form: "Implementing {phase_name}"
+        labels: [impl]
+        instruction: |
+          ⛔ DO NOT implement this phase yourself. SPAWN an impl-agent.
+          ...
+      - id_suffix: test
+        title_template: "TEST - {phase_name}"
+        depends_on_previous: true
+        instruction: |
+          Run the process gate:
+          kata check-phase {phase_label} --issue={issue}
+      - id_suffix: verify
+        title_template: "VERIFY - {phase_name}"
+        depends_on_previous: true
+        instruction: |
+          Spawn a FRESH verification agent...
+
+  impl-test:
+    description: "Implement then run process gates"
+    steps:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        instruction: "..."
+      - id_suffix: test
+        title_template: "TEST - {phase_name}"
+        depends_on_previous: true
+        instruction: "..."
+
+  impl-test-review:
+    description: "Implement, test, then code review"
+    steps:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        instruction: "..."
+      - id_suffix: test
+        title_template: "TEST - {phase_name}"
+        depends_on_previous: true
+        instruction: "..."
+      - id_suffix: review
+        title_template: "REVIEW - {reviewers}"
+        depends_on_previous: true
+        instruction: "..."
+
+# ─── Interview categories (was interviews.yaml) ───
+interviews:
+  requirements:
+    name: "Requirements"
+    description: "User journey, happy path, scope boundaries, edge cases"
+    rounds:
+      - header: "Problem"
+        question: "What user problem does this solve?"
+        options:
+          - {label: "User workflow gap", description: "Missing capability"}
+          - {label: "Performance issue", description: "Current approach too slow"}
+          - {label: "New capability", description: "Something users can't do today"}
+      - header: "Happy Path"
+        question: "What does the ideal success flow look like?"
+        options:
+          - {label: "I'll describe it", description: "Free-form description"}
+      # ... more rounds
+
+  architecture:
+    name: "Architecture"
+    description: "Integration points, error handling, performance"
+    rounds:
+      - header: "Integration"
+        question: "What existing systems or APIs does this touch?"
+        options:
+          - {label: "I'll list them", description: "Free-form list"}
+      # ... more rounds
+
+  testing:
+    name: "Testing Strategy"
+    rounds:
+      # ...
+
+  design:
+    name: "UI Design"
+    rounds:
+      # ...
+
+# ─── Mode definitions ───
 modes:
-  task:
+  research:
+    name: "Research"
+    description: "Explore and synthesize findings"
+    template: "research.md"
     stop_conditions: [tasks_complete, committed, pushed]
-    rules:  # mode-specific rules (in addition to global_rules)
-      - "Keep changes under 100 lines"
-    step_overrides:
-      p0.context-search:
-        append: |
-          Also search our internal API docs at docs.internal/api
+    intent_keywords: ["research", "explore", "learn about"]
 
   planning:
-    interviews:
-      # Add domain-specific interview category
-      microservices:
-        name: "Microservices"
-        description: "Which services are affected"
-        rounds:
-          - header: "Services"
-            question: "Which services does this feature touch?"
-            options:
-              - {label: "Gateway", description: "API gateway only"}
-              - {label: "Auth service", description: "Authentication service"}
-              - {label: "Multi-service", description: "Spans multiple services"}
+    name: "Planning"
+    description: "Research, spec, review, approved"
+    template: "planning.md"
+    issue_handling: "required"
+    issue_label: "feature"
+    stop_conditions: [tasks_complete, spec_valid, committed, pushed]
+    intent_keywords: ["plan feature", "spec", "design", "write spec"]
+
+  implementation:
+    name: "Implementation"
+    description: "Execute approved specs"
+    template: "implementation.md"
+    issue_handling: "required"
+    issue_label: "feature"
+    stop_conditions: [tasks_complete, committed, pushed, tests_pass, feature_tests_added]
+    intent_keywords: ["implement", "build", "code", "develop"]
+
+  task:
+    name: "Task"
+    description: "Combined planning + implementation for small tasks"
+    template: "task.md"
+    issue_handling: "none"
+    stop_conditions: [tasks_complete, committed]
+    intent_keywords: ["task:", "chore", "small task", "quick change"]
+    workflow_prefix: "TK"
+    aliases: ["chore", "small"]
+
+  freeform:
+    name: "Freeform"
+    description: "Quick questions and discussion (no phases)"
+    template: "freeform.md"
+    stop_conditions: []
+    intent_keywords: ["question", "how does", "what is", "explain"]
+    workflow_prefix: "FF"
+    aliases: ["question", "ask", "help"]
+
+  verify:
+    name: "Verify"
+    description: "Execute Verification Plan steps"
+    template: "verify.md"
+    stop_conditions: [tasks_complete, committed, pushed]
+    intent_keywords: ["verify", "run verification"]
+    workflow_prefix: "VF"
+
+  debug:
+    name: "Debug"
+    description: "Systematic hypothesis-driven debugging"
+    template: "debug.md"
+    stop_conditions: [tasks_complete, committed, pushed]
+    intent_keywords: ["debug", "investigate", "bug", "broken"]
+    workflow_prefix: "DB"
+    aliases: ["investigate"]
+
+  onboard:
+    name: "Onboard"
+    description: "Configure kata for a new project"
+    template: "onboard.md"
+    stop_conditions: []
+    intent_keywords: ["onboard", "setup kata"]
 ```
 
-### What gets removed from batteries copy
+This is long but it's **one file** that contains everything. Projects can read it, customize any section, and understand the full config at a glance. Compare to today where the same information is spread across `kata.yaml` + `interviews.yaml` + `subphase-patterns.yaml` + `verification-tools.md` + `providers/ollama.yaml.example`.
 
-| Currently copied | Proposed |
-|-----------------|----------|
-| Mode templates (7 `.md` files) | **Stop copying** — 2-tier lookup already works |
-| `kata.yaml` (full 164-line copy) | **Stop copying** — 2-tier merge, project only stores overrides |
-| `interviews.yaml` | **Stop copying** — 2-tier merge already works, overrides go in kata.yaml |
-| `subphase-patterns.yaml` | **Stop copying** — 2-tier merge already works |
-| `verification-tools.md` | **Absorb into kata.yaml** — `project.dev_server_command` etc. |
+### Templates stay as markdown files
 
-| Still copied (eject-and-own) |
-|-----|
-| Agents (`.claude/agents/*.md`) — Claude convention |
-| Prompts (`.kata/prompts/*.md`) — referenced by name |
-| Spec templates (`planning/spec-templates/`) — content scaffolds |
-| GitHub templates (`.github/`) — one-time setup |
+Templates keep their current format — YAML frontmatter (phases, steps, instructions) + markdown body (Claude context). They live in `.kata/templates/` and the project owns them.
 
-**Result:** batteries goes from ~25 files copied to ~12. Project config surface narrows from 10+ scattered files to just `kata.yaml` + optional eject-and-own content.
+**Key difference from today:** no batteries copy. `kata setup` creates them directly from the package seed. The project edits them freely.
 
-### Implementation priority
+### `kata setup` — one command, everything scaffolded
 
-1. **kata.yaml 2-tier merge** — load package `batteries/kata.yaml` as base, merge project overrides. ~50 lines in `kata-config.ts`. Immediate win: projects get new upstream modes automatically.
+```bash
+kata setup
+```
 
-2. **Stop copying mode templates** — remove template copying from `scaffoldBatteries()`. Already works via 2-tier lookup.
+Creates:
+1. `.kata/kata.yaml` — full config with auto-detected project settings
+2. `.kata/templates/*.md` — all mode templates
+3. `.kata/prompts/*.md` — review prompts
+4. `.kata/spec-templates/*.md` — spec scaffolds
+5. `.claude/agents/*.md` — agent definitions
+6. `.claude/settings.json` — hook registrations
+7. `.github/ISSUE_TEMPLATE/` — issue templates (if `--github` flag)
 
-3. **Per-mode `rules`** — add `rules: string[]` to `KataModeConfigSchema`, inject into session context. Simple addition to guidance output.
+**Auto-detection during setup:**
+- Project name from `package.json` or directory name
+- Test command from `package.json` scripts
+- Build command from `package.json` scripts
+- CI system from `.github/workflows/` or similar
 
-4. **`step_overrides`** — add `step_overrides` to mode config, apply during `buildPhaseTasks()`. Supports `append`, `prepend`, `replace` on instruction text.
+**No flags needed.** No `--batteries`, no `--yes`, no `--strict`. Opinionated defaults. The project can adjust `kata.yaml` after.
 
-5. **Absorb verification tools** — move from freeform markdown to structured `project.*` fields in kata.yaml.
+### `kata update` — upstream improvements
 
-6. **Interview overrides in kata.yaml** — move from separate `interviews.yaml` to `modes.planning.interviews`.
+Since projects own files, upstream improvements need a clean merge path.
 
-7. **Eject/uneject commands** — `kata eject <mode>` for full template control when needed.
+**Mechanism:** version-tracked smart merge.
 
-## Open Questions
+Each generated file gets a `kata_version` field (in YAML frontmatter for templates, in kata.yaml metadata):
 
-1. **`step_overrides` key format** — `p0.context-search` (dot-separated) vs `p0:context-search` (colon) vs nested YAML? Dot-separated is simplest for flat override map.
+```yaml
+# .kata/templates/task.md frontmatter
+---
+id: task
+name: Task Mode
+kata_version: "1.5.0"   # version of kata that generated this file
+# ...
+---
+```
 
-2. **`{inherit}` placeholder** — when appending to instructions, should we support inserting upstream content at a specific position? Or just append/prepend? Start with append/prepend, add `{inherit}` if needed.
+```bash
+kata update --preview    # show what upstream changed since your version
+kata update              # apply upstream changes, create git commit
+kata update --force      # overwrite without merge (escape hatch)
+```
 
-3. **Per-mode interviews in kata.yaml** — should interview overrides be in `modes.planning.interviews` or top-level `interviews`? Mode-level is more consistent but nests deeper.
+**How `kata update` works:**
 
-4. **Agent 2-tier lookup** — `.claude/agents/` is Claude-owned convention. Should we add package fallback for agents too? Agents are already loaded from `.claude/agents/` by Claude Code itself, not by kata.
+1. Read `kata_version` from each file
+2. Diff the file against the package's version at that old version
+3. Diff the package's old version against the current package version (upstream delta)
+4. If file is unchanged from old version → replace with new version (clean update)
+5. If file has local changes AND upstream changed → three-way merge attempt
+6. If conflict → mark with conflict markers, user resolves
 
-5. **Migration** — existing projects have full-copy templates + full kata.yaml. Need `kata migrate` to detect and strip unnecessary copies.
+**For kata.yaml specifically:**
+- Structured YAML merge: new keys added, existing keys preserved
+- New modes added automatically
+- Changed mode defaults shown as diff for review
+- Project overrides never lost
 
-## Next Steps
+**For templates:**
+- Frontmatter (YAML) merged structurally
+- Markdown body merged via text diff
+- Conflicts marked clearly
 
-1. **Spec Phase 1:** kata.yaml 2-tier merge + stop copying templates + per-mode rules
-2. **Spec Phase 2:** step_overrides + absorb verification config + interview overrides
-3. **Spec Phase 3:** eject/uneject + migration tool
+### What about per-mode customization?
+
+Since projects own templates directly, customization is straightforward:
+
+**Change a step instruction:** Edit `.kata/templates/task.md`, find the step, change the instruction.
+
+**Add a phase:** Add a new phase entry in the template's YAML frontmatter.
+
+**Add project-specific rules to a mode:** Add `rules:` to the mode in `kata.yaml`:
+
+```yaml
+modes:
+  task:
+    rules:
+      - "Always run pnpm lint before committing"
+      - "Keep changes under 100 lines"
+```
+
+These get injected into session context alongside global_rules.
+
+**Customize interview questions:** Edit the `interviews:` section in `kata.yaml`.
+
+**Change subphase patterns:** Edit the `subphase_patterns:` section in `kata.yaml`.
+
+No overlay system, no step_overrides, no `{inherit}` placeholders. Just edit the file you own.
+
+### Code changes required
+
+**Remove:**
+- `src/commands/batteries.ts` — no more batteries command
+- `src/commands/scaffold-batteries.ts` — no more scaffolding logic
+- `batteries/` directory — seeds move into setup logic
+- 2-tier template lookup in `resolveTemplatePath()` — project path only
+- 2-tier merge in `interviews.ts` and `subphase-patterns.ts` — single source (kata.yaml)
+- `batteries-backup/` logic
+
+**Modify:**
+- `src/commands/setup.ts` — scaffolds everything directly, auto-detects project settings
+- `src/config/kata-config.ts` — schema expands to include interviews + subphase_patterns sections
+- `loadKataConfig()` — loads single file, no merge
+- `loadInterviewConfig()` → reads from `kata.yaml` `interviews:` section
+- `loadSubphasePatterns()` → reads from `kata.yaml` `subphase_patterns:` section
+- Template resolution — just `.kata/templates/{name}`, no fallback
+
+**Add:**
+- `src/commands/update.ts` — `kata update` with version-tracked merge
+- `kata_version` tracking in generated files
+- Per-mode `rules:` field in `KataModeConfigSchema`
+- Migration command for existing projects
+
+### Migration from current system
+
+```bash
+kata migrate
+```
+
+1. Reads existing `.kata/kata.yaml` (or `.claude/workflows/kata.yaml`)
+2. Reads `.kata/interviews.yaml` → merges into kata.yaml `interviews:` section
+3. Reads `.kata/subphase-patterns.yaml` → merges into kata.yaml `subphase_patterns:` section
+4. Reads `.kata/verification-tools.md` → extracts values into `project:` fields
+5. Moves `planning/spec-templates/` → `.kata/spec-templates/`
+6. Removes old files
+7. Stamps `kata_version` on all files
+8. Outputs summary of what moved
+
+### File count comparison
+
+| | Today | Proposed |
+|--|-------|----------|
+| Config files | 5 (kata.yaml, interviews, subphase-patterns, verification-tools, providers) | **1** (kata.yaml) |
+| Template files | 7-8 in `.kata/templates/` | **7-8** in `.kata/templates/` (same, but no batteries dual) |
+| Prompt files | 5 in `.kata/prompts/` | **5** in `.kata/prompts/` (same) |
+| Spec templates | 3 in `planning/spec-templates/` | **3** in `.kata/spec-templates/` (moved) |
+| Agent files | 3 in `.claude/agents/` | **3** in `.claude/agents/` (same) |
+| GitHub files | 3-4 in `.github/` | **3-4** in `.github/` (same) |
+| Backup dirs | 1+ in `.kata/batteries-backup/` | **0** |
+| **Total config surface** | **5 config + batteries system** | **1 config file** |
+
+## Open questions
+
+1. **kata.yaml size** — with interviews + subphase_patterns inlined, kata.yaml gets long (~300 lines). Is that OK since it's one file? Or should interviews/patterns stay as separate files under `.kata/` but with no batteries dual?
+
+2. **Template version tracking format** — `kata_version: "1.5.0"` in frontmatter works for templates. For kata.yaml, use a top-level `_kata_version: "1.5.0"` field?
+
+3. **Update conflict resolution** — for templates (mixed YAML + markdown), should conflicts use git-style markers? Or should `kata update` refuse to merge and show a diff instead?
+
+4. **Onboard template** — is inherently project-specific (created during setup interview). Should it be excluded from `kata update`?
+
+5. **Setup interview vs auto-detect** — should `kata setup` ask questions interactively, or just auto-detect and let the user edit kata.yaml after? Recommendation: auto-detect, print what was detected, user edits.
+
+## Next steps
+
+1. **Spec Phase 1:** New kata.yaml schema (absorb interviews + subphase_patterns) + simplified setup
+2. **Spec Phase 2:** Remove batteries system, single-source template resolution
+3. **Spec Phase 3:** `kata update` with version-tracked merge
+4. **Spec Phase 4:** Migration tool for existing projects
