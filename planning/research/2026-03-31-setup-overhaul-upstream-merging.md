@@ -1,6 +1,6 @@
 ---
 date: 2026-03-31
-topic: Setup overhaul — project customization and upstream template merging
+topic: Setup overhaul — project customization, upstream merging, and configuration surface
 status: complete
 github_issue: null
 ---
@@ -13,192 +13,359 @@ The current `kata setup --batteries` and `kata batteries --update` system has tw
 1. **Setup produces generic config** — every project gets identical `kata.yaml` and template files with no project-specific customization
 2. **Update clobbers customizations** — `--update` overwrites all files (with backup), destroying local template modifications
 
-This research explores design options for a system where setup is project-aware and upstream improvements merge cleanly with local customizations.
+A third problem emerged during research:
+3. **Configuration surface is too wide** — batteries scatter 10+ file categories across the project, each with different merge/override behaviors
+
+This research explores design options for a system where setup is project-aware, upstream improvements merge cleanly, and the config surface is narrowed.
 
 ## Questions Explored
 
 1. How does the current setup/batteries flow work, and where do customizations get lost?
-2. How do other CLI tools handle upstream config + local overrides?
-3. What merge strategies exist for YAML/markdown templates with frontmatter?
-4. Should templates use inheritance/layering vs. full copies with diff tracking?
+2. What are the distinct categories of batteries content, and what customization patterns does each need?
+3. How do other CLI tools handle upstream config + local overrides?
+4. How can the configuration surface be narrowed while preserving flexibility?
+5. Should templates use inheritance/layering vs. full copies with diff tracking?
 
 ## Findings
 
-### Codebase
+### Current Batteries Inventory: Three Categories
 
-**Current flow** (`src/commands/setup.ts`, `src/commands/scaffold-batteries.ts`):
+Batteries content falls into three distinct categories, each with different customization needs:
 
-- `kata setup --yes` → `applySetup()`: auto-detects project name/test command via `getDefaultProfile()`, writes `kata.yaml`, seeds `onboard.md`, registers hooks in `.claude/settings.json`
-- `kata setup --batteries` → also calls `scaffoldBatteries()`: flat-copies from `batteries/` into project directories
-- `scaffoldBatteries()` copies ~10 categories: templates, agents, prompts, providers, spec-templates, github templates, interviews.yaml, subphase-patterns.yaml, verification-tools.md, kata.yaml
-- Default behavior: **skip existing files**. With `--update`: **overwrite all, backup old copies** to timestamped `batteries-backup/` dir
-- `kata.yaml` (`batteries/kata.yaml`): copied verbatim with `project.name: ""`, commented-out build/test commands, full modes section duplicating all defaults
-- Templates are monolithic markdown files (5-33KB) with YAML frontmatter defining phases, steps, instructions — **no separation between upstream structure and project customizations**
-- `buildKataConfig()` in `setup.ts` does merge existing `kata.yaml` values over profile defaults, but this only helps on re-running setup, not on batteries update
+#### Category 1: Config (YAML — structured, machine-parsed)
 
-**Key pain points** (file:line references):
-- `scaffold-batteries.ts:31-62` — `copyDirectory()` is binary: skip or overwrite, no merge
-- `scaffold-batteries.ts:117-135` — `kata.yaml` copy has same skip/overwrite binary
-- `setup.ts:261-314` — `buildKataConfig()` tries to preserve existing config on re-setup, but `batteries --update` bypasses this entirely
-- `kata-config.ts:71-103` — `KataConfigSchema` has no concept of "inherited from package defaults" vs "explicitly set by project"
+| File | Purpose | Current merge | Customization frequency |
+|------|---------|--------------|----------------------|
+| `kata.yaml` | Project settings + mode definitions | Copy, no merge on update | Every project (project settings) |
+| `interviews.yaml` | Planning interview questions | **Already 2-tier merge** | Rare |
+| `subphase-patterns.yaml` | Container phase expansion | **Already 2-tier merge** | Rare |
+| `verification-tools.md` | VP tool config (fill-in-the-blank) | Copy, skip existing | Every project |
 
-### External Patterns
+**Key finding:** `interviews.ts` and `subphase-patterns.ts` already implement the ideal pattern — 2-tier merge (package base + project overlay, project wins per-key). But `kata.yaml` doesn't, and it's the most important config file.
 
-**ESLint Flat Config** (composition model):
-- Shared configs are JS arrays; user spreads them into their config and adds overrides after
-- Merge is explicit: later entries override earlier ones
-- Recent `extends` keyword makes this even simpler
-- Takeaway: **explicit composition with override-by-position is intuitive**
+#### Category 2: Mode Templates (Markdown with YAML frontmatter — workflow structure)
 
-**Kustomize** (base + overlay model):
-- Base resources are read-only; overlays contain patches
-- Strategic merge: existing fields untouched unless patch addresses them, new fields added, explicit fields overwrite
-- Directory structure: `base/` + `overlays/staging/`, `overlays/production/`
-- Takeaway: **clean separation of upstream (base) and local (overlay), upstream updates never conflict**
+| File | Size | Purpose | Customization frequency |
+|------|------|---------|----------------------|
+| `planning.md` | 33KB | Feature planning phases | Rarely customized |
+| `implementation.md` | 9KB | Spec execution phases | Rarely customized |
+| `task.md` | 5.9KB | Small task phases | Rarely customized |
+| `research.md` | 9.9KB | Research phases | Rarely customized |
+| `debug.md` | 10KB | Debug phases | Rarely customized |
+| `verify.md` | 18KB | Verification phases | Rarely customized |
+| `freeform.md` | 2.3KB | No-structure mode | Almost never |
+| `onboard.md` | 18KB | Setup interview (project-specific) | **Always** customized |
+| `eval.md` | 3.2KB | Eval mode (project-only) | Project-only |
 
-**Create React App** (eject vs. override):
-- Eject: full config copied into project, no more upstream updates — **this is what kata currently does**
-- CRACO/react-app-rewired: intercept build pipeline, apply transforms to config without owning it
-- Takeaway: **ejection is simple but creates a dead-end for upstream improvements**
+**Key finding:** Diffing this project's `.kata/templates/` against `batteries/templates/` shows the project copies are **nearly identical** — the only differences are stale `wm` → `kata` renames and minor upstream improvements that weren't merged back. Real-world customization is near-zero.
 
-**Yeoman** (generator update):
-- `update-yeoman-generator`: applies upstream changes as git-style merge, requires manual conflict resolution
-- Standard Yeoman: re-running generator shows conflict prompts per file
-- Takeaway: **three-way merge works but is complex and creates user-facing conflicts**
+Templates are **already resolved via 2-tier lookup** (`resolveTemplatePath()` in `src/session/lookup.ts:309-344`): project tier → package batteries tier. If the project doesn't have a copy, the package version is used automatically.
 
-**Codex CLI** (config layering):
-- Loads config from multiple `.codex/` folders in directory hierarchy
-- Higher-precedence locations override lower-precedence ones
-- Takeaway: **simple layering with deep merge, project only needs to specify overrides**
+This means: **most projects don't need template copies at all.** The batteries step of copying templates is creating unnecessary files that then drift from upstream.
 
-**Docker Compose** (multi-file merge):
-- Multiple compose files merged in order, later overrides earlier, non-conflicting combined
-- Takeaway: **ordered file merge is well-understood and predictable**
+#### Category 3: Doc Templates (Markdown — content scaffolds for output)
+
+| File(s) | Purpose | Customization frequency |
+|---------|---------|----------------------|
+| `agents/*.md` (3 files) | Agent definitions (impl, review, test) | Moderate (project adds custom agents) |
+| `prompts/*.md` (5 files) | Review prompts (code-review, spec-review, etc.) | Rare |
+| `spec-templates/*.md` (3 files) | Spec document scaffolds (feature, bug, epic) | Moderate |
+| `.github/ISSUE_TEMPLATE/` | GitHub issue templates | Rarely after setup |
+| `.github/wm-labels.json` | Label definitions | Rarely after setup |
+
+**Key finding:** These are "eject and own" files — they're scaffolds that projects customize as content, not config. The current copy-and-skip behavior is actually appropriate for this category. They don't need upstream merging because the project's customized versions are the correct ones.
+
+### Existing 2-Tier Merge (Already Working)
+
+Two config files already implement the ideal pattern:
+
+**`src/config/interviews.ts:49-56`:**
+```typescript
+function mergeInterviewConfig(base, overlay) {
+  return {
+    interview_categories: {
+      ...base.interview_categories,   // package defaults
+      ...overlay.interview_categories, // project overrides
+    },
+  }
+}
+```
+
+**`src/config/subphase-patterns.ts:41-51`:**
+```typescript
+function mergeSubphasePatternConfig(base, overlay) {
+  return {
+    subphase_patterns: {
+      ...base.subphase_patterns,   // package defaults
+      ...overlay.subphase_patterns, // project overrides
+    },
+  }
+}
+```
+
+Both use: package `batteries/` as base, project `.kata/` as overlay, shallow merge per top-level key. This is the right pattern — it just needs to be applied consistently.
+
+### Template Resolution (Already Working)
+
+**`src/session/lookup.ts:309-344`** — `resolveTemplatePath()`:
+1. Check `.kata/templates/{name}` (project override)
+2. Check `batteries/templates/{name}` (package fallback)
+
+**This already means templates don't need to be copied during setup.** If the project has no `.kata/templates/task.md`, `kata enter task` falls through to the package version automatically.
+
+### External Patterns (Summary)
+
+| Pattern | Used By | Applicability |
+|---------|---------|--------------|
+| **Config layering** (deep merge, higher precedence wins) | Codex CLI, Docker Compose, ESLint flat config | **Config category** — perfect fit |
+| **Base + overlay** (base read-only, overlay patches) | Kustomize | **Mode templates** — overkill given 2-tier lookup already exists |
+| **Eject and own** (copy once, project maintains) | CRA, Yeoman | **Doc templates** — already the right approach |
+| **Three-way merge** (track base version, diff on update) | Git, Yeoman updater | Complex, fragile — avoid |
+
+### The Real Problem: kata.yaml
+
+The biggest gap is `kata.yaml`. Today every project gets a 164-line copy of the full mode definitions, which means:
+- New upstream modes don't appear unless the user manually adds them
+- Mode improvements (new stop_conditions, intent_keywords) are lost
+- Project `kata.yaml` is 90% upstream defaults and 10% project settings
+
+**What projects actually need in kata.yaml:**
+```yaml
+project:
+  name: "my-app"
+  test_command: "npm test"
+  build_command: "npm run build"
+
+reviews:
+  code_review: true
+  code_reviewers: ["gemini"]
+
+# Only mode OVERRIDES — rest inherited from package
+modes:
+  task:
+    stop_conditions: [tasks_complete, committed, pushed]  # add pushed
+```
+
+vs what they get today: full duplication of all 8 mode definitions.
+
+## Narrowed Configuration Surface
+
+### Proposal: Categorize and simplify
+
+**Stop copying things that don't need to be copied:**
+
+| Category | Current behavior | Proposed behavior |
+|----------|-----------------|-------------------|
+| `kata.yaml` | Full copy (164 lines) | **2-tier merge** — project only stores overrides |
+| `interviews.yaml` | Full copy → project | **Already 2-tier merge** — stop copying, project creates only if customizing |
+| `subphase-patterns.yaml` | Full copy → project | **Already 2-tier merge** — stop copying, project creates only if customizing |
+| `verification-tools.md` | Copy → project | **Keep** — project-specific fill-in-the-blank |
+| Mode templates (7 files) | Full copy → `.kata/templates/` | **Stop copying** — 2-tier lookup already works, project creates only if customizing |
+| `onboard.md` | Copy → `.kata/templates/` | **Keep** — project-specific by nature |
+| Agents (3 files) | Copy → `.claude/agents/` | **Keep** — eject-and-own |
+| Prompts (5 files) | Copy → `.kata/prompts/` | **Keep** — eject-and-own |
+| Spec templates (3 files) | Copy → `planning/spec-templates/` | **Keep** — eject-and-own |
+| GitHub templates | Copy → `.github/` | **Keep** — eject-and-own |
+
+**Result:** `kata setup --batteries` goes from copying ~25 files to copying ~14. Mode templates, interviews.yaml, and subphase-patterns.yaml stop being copied entirely. Projects start leaner and get upstream improvements automatically.
+
+### What `kata.yaml` becomes
+
+```yaml
+# Project-specific settings (the only required section)
+project:
+  name: "my-app"
+  test_command: "npm test"
+  build_command: "npm run build"
+
+spec_path: planning/specs       # defaults work for most projects
+research_path: planning/research
+
+# Optional: mode overrides (merged over package defaults)
+# modes:
+#   task:
+#     stop_conditions: [tasks_complete, committed, pushed]
+```
+
+**No modes section needed** unless the project wants to override something. All 8 default modes come from the package `batteries/kata.yaml` at load time.
 
 ## Recommendations
 
-### Option A: Base + Overlay (Kustomize-inspired) — RECOMMENDED
+### Option A: Minimal Changes (Config Layering Only) — RECOMMENDED FIRST STEP
 
-Split templates into upstream base (read-only, package-managed) + project overlay (user-owned patches).
+Apply the existing 2-tier merge pattern to `kata.yaml`. No template overlay system needed because template 2-tier lookup already exists.
 
-**How it works:**
-- Package `batteries/templates/task.md` is the canonical base — never copied to project
-- Project creates `.kata/overlays/task.yaml` with targeted patches:
-  ```yaml
-  # .kata/overlays/task.yaml
-  phases:
-    p0:
-      steps:
-        context-search:
-          instruction: |
-            # Custom: also check our internal docs API
-            ... (replaces just this step's instruction)
-    p3:  # Add a new phase
-      name: "Deploy Preview"
-      steps:
-        - id: deploy
-          title: "Deploy to preview env"
-          instruction: "..."
-  remove_phases: [p2]  # Remove upstream phase p2 entirely
-  ```
-- At runtime, `kata enter task` loads base template + overlay, merges them
-- `kata batteries --update` only updates base reference (package version bump), overlays untouched
-- `kata.yaml` modes section becomes **optional overrides only** — defaults come from package
+**Changes:**
+1. `loadKataConfig()` loads package `batteries/kata.yaml` as base, project `kata.yaml` as overlay
+2. Shallow merge for `modes:` section (per-mode override), deep merge for `project:`, `reviews:`
+3. `kata setup --batteries` writes a minimal `kata.yaml` (project settings only, no modes section)
+4. `kata setup --batteries` stops copying mode templates, interviews.yaml, subphase-patterns.yaml
+5. `kata batteries --update` only updates doc templates (agents, prompts, spec-templates, github)
 
 **Pros:**
-- Clean separation: upstream base is never modified by user, overlay is never modified by upstream
-- Updates are always safe — no conflicts, no merge needed
-- Overlays are small — only what changed, easy to review
-- Familiar pattern (Kustomize, Docker Compose)
+- Follows existing pattern (interviews.ts, subphase-patterns.ts already work this way)
+- Template 2-tier lookup already works — no changes needed
+- Dramatically narrows config surface
+- Upstream mode improvements appear automatically
+- Simple to implement (maybe 50 lines of merge logic in kata-config.ts)
 
 **Cons:**
-- Need to build a merge engine for template frontmatter (phases/steps)
-- Need to define patch semantics (add/remove/replace phases and steps)
-- Two-file model is less immediately obvious than editing a single template
-- Migration from current full-copy model requires work
+- Per-mode merge is shallow (override entire mode, not individual fields within a mode)
+- No way to add a phase to an upstream template without full copy
+- Projects that DO want to customize a template still eject the whole file
 
-### Option B: Three-Way Merge with Version Tracking
+### Option B: Deep Mode Merge + Template Overlay
 
-Track which package version each template was seeded from; compute diffs on update.
+Extends Option A with field-level mode merging and template phase patching.
 
-**How it works:**
-- Templates have `source_version: 1.2.3` in frontmatter
-- `kata batteries --update` stores old base alongside, computes three-way diff (old base → new base → local file)
-- Clean merges applied automatically; conflicts reported for manual resolution
+**Changes (on top of A):**
+1. Deep merge within individual modes (e.g., override just `stop_conditions` without restating the whole mode)
+2. `.kata/overlays/task.yaml` patches individual phases/steps in templates
+3. `kata customize <mode>` scaffolds an overlay file
 
 **Pros:**
-- Users edit templates directly in familiar `.kata/templates/task.md`
-- Upstream improvements merge in automatically when no conflict
-- Single-file mental model
+- Fine-grained control without ejecting
+- Upstream phase improvements merge cleanly even when project has overlays
 
 **Cons:**
-- Complex three-way merge for structured YAML frontmatter + markdown body
-- Need to store base copies for diffing (`.kata/.base-templates/`)
-- Conflicts are hard for users to resolve in mixed YAML/markdown files
-- Fragile when upstream makes large structural changes (phase reordering, renames)
+- Significant implementation: template merge engine, overlay schema, merge semantics
+- Complexity may not be justified given how rarely templates are customized
+- New concept for users to learn
 
-### Option C: Config Layering (Codex-inspired)
+### Option C: Full Eject Control
 
-Multiple YAML files merged in precedence order.
+Add `kata eject <mode>` that copies a template to `.kata/templates/` for full editing, and `kata uneject <mode>` to delete the local copy and fall back to package.
 
-**How it works:**
-- Package provides `batteries/kata.yaml` with all default mode definitions
-- Project `.kata/kata.yaml` only contains overrides (project settings, mode tweaks)
-- Deep merge at load time: project values win, missing keys inherit from package
+**Changes (on top of A):**
+1. `kata eject task` → copies `batteries/templates/task.md` to `.kata/templates/task.md`
+2. `kata uneject task` → deletes `.kata/templates/task.md` (falls back to package)
+3. `kata diff task` → shows diff between local and upstream
 
 **Pros:**
-- Simplest to implement
-- `kata.yaml` becomes much smaller — only what's project-specific
-- Familiar pattern, easy to reason about
+- Simple mental model: "eject to customize, uneject to get upstream updates"
+- No new merge system needed
+- Explicit user control
 
 **Cons:**
-- Only works for YAML config (modes, settings), doesn't help with template `.md` content
-- Deep merge semantics can surprise (arrays: replace or append?)
-- Need to document which fields are "inherited" vs "overridden"
+- Ejected templates still get stale (same problem as today, but opt-in)
+- Need `kata diff` to know what upstream changed
 
-### Option D: Hybrid (A + C) — BEST OVERALL
+### Recommended Path: A → C → B
 
-Combine Option C for `kata.yaml` with Option A for templates.
+1. **Phase 1 (Option A):** Config layering for kata.yaml + stop copying mode templates/config that has 2-tier loaders. Biggest bang for lowest effort.
+2. **Phase 2 (Option C):** Add explicit eject/uneject/diff commands. Gives users tools to manage template customization.
+3. **Phase 3 (Option B):** Only if real demand emerges for fine-grained template patching. Don't build until needed.
 
-**Config layering (kata.yaml):**
-- Package provides default modes, project only overrides what it needs
-- `kata.yaml` shrinks from 164 lines to ~20 (just project settings + any mode tweaks)
-- Adding a new upstream mode = automatic, no project action needed
+## Detailed Design: Option A (Config Layering)
 
-**Template overlay (templates):**
-- Base templates live in package, loaded at runtime
-- Project overlays in `.kata/overlays/` patch specific phases/steps
-- `kata batteries --update` becomes near-trivial (just update package version)
+### `loadKataConfig()` changes
 
-**Setup customization:**
-- `kata setup --batteries` runs an interview (or uses `--yes` with auto-detection) to populate project-specific fields in `kata.yaml`
-- Template overlays are optional — most projects start with no overlays
-- `kata customize <mode>` command to generate an overlay skeleton for a specific mode
+```typescript
+// Current: load single file, hard error if missing
+// Proposed: load package base + project overlay, merge
 
-**Migration:**
-- `kata migrate` command detects full-copy templates, diffs against current package base, generates overlays for the differences
-- Projects with no customizations: just delete `.kata/templates/`, modes from `kata.yaml`
+function loadKataConfig(projectRoot?: string): KataConfig {
+  const root = projectRoot ?? findProjectDir()
 
-| Criterion | A (Overlay) | B (3-way) | C (Layering) | D (Hybrid) |
-|-----------|:-----------:|:---------:|:------------:|:----------:|
-| Setup customization | Medium | Low | High | High |
-| Upstream merge safety | High | Medium | High | High |
-| Implementation complexity | Medium | High | Low | Medium |
-| User mental model | Medium | High | High | Medium-High |
-| Template customization | High | High | Low | High |
-| Migration effort | Medium | Low | Low | Medium |
+  // 1. Load package base (batteries/kata.yaml)
+  const packagePath = join(getPackageRoot(), 'batteries', 'kata.yaml')
+  const base = parseAndValidate(packagePath)
+
+  // 2. Load project overlay (.kata/kata.yaml) — optional
+  const projectPath = getKataConfigPath(root)
+  if (!existsSync(projectPath)) {
+    return base  // Package defaults only — totally fine
+  }
+  const overlay = parseAndValidate(projectPath)
+
+  // 3. Merge: project wins for scalar fields, per-key for maps
+  return mergeKataConfig(base, overlay)
+}
+
+function mergeKataConfig(base: KataConfig, overlay: Partial<KataConfig>): KataConfig {
+  return {
+    ...base,
+    ...overlay,
+    project: { ...base.project, ...overlay.project },
+    reviews: { ...base.reviews, ...overlay.reviews },
+    providers: { ...base.providers, ...overlay.providers },
+    modes: {
+      ...base.modes,
+      ...overlay.modes,  // Per-mode override (shallow: override entire mode definition)
+    },
+    // Arrays: project replaces entirely if present
+    global_rules: overlay.global_rules ?? base.global_rules,
+    task_rules: overlay.task_rules ?? base.task_rules,
+    stop_conditions: overlay.stop_conditions ?? base.stop_conditions,
+  }
+}
+```
+
+### `scaffoldBatteries()` changes
+
+Stop copying:
+- `batteries/templates/*.md` → `.kata/templates/` (2-tier lookup handles this)
+- `batteries/interviews.yaml` → `.kata/interviews.yaml` (2-tier merge handles this)
+- `batteries/subphase-patterns.yaml` → `.kata/subphase-patterns.yaml` (2-tier merge handles this)
+- `batteries/kata.yaml` → `.kata/kata.yaml` (2-tier merge handles this)
+
+Keep copying (eject-and-own):
+- `batteries/agents/` → `.claude/agents/`
+- `batteries/prompts/` → `.kata/prompts/`
+- `batteries/spec-templates/` → `planning/spec-templates/`
+- `batteries/github/` → `.github/`
+- `batteries/verification-tools.md` → `.kata/verification-tools.md`
+
+### `kata setup --batteries` output
+
+New minimal `kata.yaml`:
+```yaml
+# kata.yaml — project configuration
+# Mode definitions inherited from package. Override specific modes below.
+
+project:
+  name: "my-app"           # auto-detected
+  test_command: "npm test"  # auto-detected
+  build_command: null
+
+spec_path: planning/specs
+research_path: planning/research
+
+# Uncomment to override specific modes:
+# modes:
+#   task:
+#     stop_conditions: [tasks_complete, committed, pushed]
+```
+
+### Migration
+
+For existing projects with full-copy kata.yaml and templates:
+
+```bash
+kata migrate  # future command
+```
+
+1. Diff `.kata/kata.yaml` modes against `batteries/kata.yaml` modes
+2. If identical: remove modes section from project kata.yaml
+3. If different: keep only the differing fields
+4. For each `.kata/templates/*.md`: diff against `batteries/templates/*.md`
+5. If identical: delete project copy (falls through to package)
+6. If different: keep (ejected template), warn user
 
 ## Open Questions
 
-1. **Overlay syntax for template phases** — Should overlays be YAML-only (patching frontmatter) or support markdown body patches too? Recommendation: YAML-only for phases/steps, with an `instruction_file` field that points to a local `.md` file for custom instructions.
-2. **Remove vs. disable** — Should overlays support removing upstream phases, or only disabling them (skip but keep in schema)? Recommendation: support both via `remove_phases: [id]` and `phases.p2.skip: true`.
-3. **Inherently project-specific templates** — `onboard.md` is unique per project. These should be marked as `local_only: true` in the mode definition and always live in `.kata/templates/`, not the overlay system.
-4. **Array merge semantics in kata.yaml** — For fields like `stop_conditions`, `intent_keywords`: should project values replace or append? Recommendation: replace by default, with `+stop_conditions` syntax to append.
-5. **Migration path** — Need a `kata migrate` command. Priority: high, since existing projects have full-copy templates.
+1. **Shallow vs. deep mode merge** — Option A uses shallow (override entire mode definition). Is this sufficient? If a project only wants to add one stop_condition, they'd need to restate the whole mode. Recommendation: start shallow, add deep merge if pain emerges.
+
+2. **Array merge semantics** — For `stop_conditions`, `intent_keywords`: project replaces entirely. An append syntax (`+stop_conditions: [pushed]`) could be useful but adds complexity. Recommendation: defer.
+
+3. **`verification-tools.md`** — This is a fill-in-the-blank file. Should it become a structured YAML with 2-tier merge instead of freeform markdown? Recommendation: yes, in a future iteration.
+
+4. **`kata.yaml` missing = OK?** — Should projects work with zero config (pure package defaults)? Recommendation: yes, `loadKataConfig()` returns package defaults if no project file exists.
+
+5. **Prompts 2-tier lookup** — Currently prompts are copied to project. Could use same 2-tier lookup pattern. Recommendation: defer — prompts are loaded by the review system which may have its own resolution.
 
 ## Next Steps
 
-1. **Write a spec** for the hybrid approach (Option D) — planning mode with issue
-2. **Prototype the config layering** first (Option C part) — lowest risk, highest immediate value
-3. **Design overlay schema** — define YAML structure for template patches
-4. **Build migration tool** — `kata migrate` to convert existing projects
+1. **Phase 1 spec:** Config layering for kata.yaml + narrow batteries scope
+2. **Phase 2 spec:** Eject/uneject/diff commands (if needed after Phase 1)
+3. **Phase 3:** Template overlay system (only if real demand)
