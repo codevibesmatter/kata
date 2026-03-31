@@ -13,9 +13,26 @@ phases:
       labels: [phase, phase-0, reproduce]
     steps:
       - id: reproduce-bug
-        title: "Reproduce the bug with evidence"
+        title: "Reproduce the bug and find related issue"
         instruction: |
-          **BEFORE reading any code, capture evidence:**
+          **First, identify related GitHub issue and recent work:**
+
+          Extract keywords from the bug description, then search:
+          ```bash
+          # Search for related open issues
+          gh issue list --search "{bug keywords}" --state open --limit 5
+
+          # Check recent commits in the affected area
+          git log --oneline --since="2 weeks ago" -- {affected paths if known}
+          ```
+
+          If an issue is found, note the issue number for use throughout this session.
+          If no issue exists and the bug warrants tracking, create one:
+          ```bash
+          gh issue create --title "bug: {short description}" --label "bug"
+          ```
+
+          **Then capture evidence BEFORE reading code:**
 
           1. **Exact reproduction steps** (user, environment, actions)
           2. **Error messages** — copy verbatim
@@ -32,7 +49,7 @@ phases:
           If it can't be reproduced: document the conditions and investigate
           the code path anyway using the reported error as the starting point.
 
-          Document your reproduction and claim the issue:
+          If issue found/created, claim it:
           ```bash
           gh issue edit {N} --remove-label "status:todo" --add-label "status:in-progress"
           gh issue comment {N} --body "Reproduced: {steps}
