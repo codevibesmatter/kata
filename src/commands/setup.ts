@@ -15,7 +15,7 @@ type WmConfig = Record<string, unknown> & {
   reviews?: { spec_review?: boolean; code_review?: boolean; code_reviewer?: string | null }
   wm_version?: string
 }
-import { getPackageRoot, findProjectDir, getKataDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
+import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 /**
@@ -182,7 +182,7 @@ export function buildHookEntries(strict: boolean, wmBin: string): Record<string,
 
 /**
  * Read existing .claude/settings.json or return empty structure
- * Uses cwd-based path since .claude/sessions/ may not exist yet
+ * Uses cwd-based path since .kata/ may not exist yet
  */
 export function readSettings(cwd: string): SettingsJson {
   const settingsPath = join(cwd, '.claude', 'settings.json')
@@ -351,11 +351,8 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   const config = buildKataConfig(projectRoot, profile)
   writeKataYaml(projectRoot, generateKataYaml(config))
 
-  // For fresh projects (no .kata/ or .claude/ yet), create .kata/ (new layout).
-  // For existing projects, getKataDir() detects the active layout.
-  if (!existsSync(join(projectRoot, '.kata')) && !existsSync(join(projectRoot, '.claude', 'workflows'))) {
-    mkdirSync(join(projectRoot, '.kata'), { recursive: true })
-  }
+  // Ensure .kata/ directory exists
+  mkdirSync(join(projectRoot, '.kata'), { recursive: true })
 
   // Ensure sessions directory exists
   mkdirSync(getSessionsDir(projectRoot), { recursive: true })
@@ -407,17 +404,15 @@ export async function setup(args: string[]): Promise<void> {
       const { scaffoldBatteries } = await import('./scaffold-batteries.js')
       const result = scaffoldBatteries(projectRoot)
 
-      const kd = getKataDir(projectRoot)
       process.stdout.write('kata setup --batteries complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
-      process.stdout.write(`  Config: ${kd === '.kata' ? '.kata/kata.yaml' : '.claude/workflows/kata.yaml'}\n`)
+      process.stdout.write(`  Config: .kata/kata.yaml\n`)
       process.stdout.write(`  Hooks: .claude/settings.json\n`)
       process.stdout.write('\nBatteries scaffolded:\n')
       if (result.templates.length > 0) {
-        const tmplRelDir = kd === '.kata' ? '.kata/templates' : '.claude/workflows/templates'
         process.stdout.write(`  Mode templates (${result.templates.length}):\n`)
         for (const t of result.templates) {
-          process.stdout.write(`    ${tmplRelDir}/${t}\n`)
+          process.stdout.write(`    .kata/templates/${t}\n`)
         }
       }
       if (result.agents.length > 0) {
@@ -437,12 +432,11 @@ export async function setup(args: string[]): Promise<void> {
       }
     } else {
       // Plain --yes summary
-      const kd2 = getKataDir(projectRoot)
       process.stdout.write('kata setup complete:\n')
       process.stdout.write(`  Project: ${profile.project_name}\n`)
       process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
       process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
-      process.stdout.write(`  Config: ${kd2 === '.kata' ? '.kata/kata.yaml' : '.claude/workflows/kata.yaml'}\n`)
+      process.stdout.write(`  Config: .kata/kata.yaml\n`)
       process.stdout.write(`  Hooks: .claude/settings.json\n`)
       process.stdout.write(`    - SessionStart\n`)
       process.stdout.write(`    - UserPromptSubmit\n`)

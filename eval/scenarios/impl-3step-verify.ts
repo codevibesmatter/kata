@@ -28,7 +28,7 @@ import {
 export const impl3StepVerifyScenario: EvalScenario = {
   id: 'impl-3step-verify',
   name: 'Implementation impl-test-review: 3-step per phase',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +

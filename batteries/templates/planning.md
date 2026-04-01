@@ -340,7 +340,7 @@ phases:
           Create a new spec file. Copy from the feature spec template:
           ```bash
           # Check if template exists
-          ls planning/specs/_templates/ 2>/dev/null || ls .claude/workflows/spec-templates/ 2>/dev/null
+          ls planning/specs/_templates/ 2>/dev/null || ls planning/spec-templates/ 2>/dev/null
           ```
 
           Create spec at: `planning/specs/{issue-number}-{slug}.md`

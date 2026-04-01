@@ -317,7 +317,7 @@ describe('assertSessionInitialized', () => {
 describe('assertSpecFileCreated (config-driven)', () => {
   it('reads spec_path from wm.yaml', async () => {
     const ctx = mockContext({
-      files: { '.claude/workflows/wm.yaml': 'spec_path: custom/specs' },
+      files: { '.kata/kata.yaml': 'spec_path: custom/specs' },
       dirs: { 'custom/specs': ['feature.md'] },
       // grep returns the full matching line; readWmYamlKey extracts the value via regex
       runResults: { "grep '^spec_path:'": 'spec_path: custom/specs' },

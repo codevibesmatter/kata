@@ -101,7 +101,7 @@ function getLatestCodeCommitTimestamp(nonCodePaths: string[]): Date | null {
 
 /**
  * Check that at least one phase evidence file exists with fresh timestamp and overallPassed.
- * Reads .claude/verification-evidence/phase-*-{issueNumber}.json files.
+ * Reads .kata/verification-evidence/phase-*-{issueNumber}.json files.
  */
 function checkTestsPass(issueNumber: number, nonCodePaths: string[]): { passed: boolean; reason?: string } {
   try {

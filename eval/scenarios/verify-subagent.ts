@@ -102,32 +102,31 @@ function assertEvidenceAllPassed(issueNumber: number): EvalCheckpoint {
   return {
     name: `evidence for issue #${issueNumber} has all steps passed`,
     assert(ctx: EvalContext) {
-      for (const base of ['.kata/verification-evidence', '.claude/verification-evidence']) {
-        let files: string[]
+      const base = '.kata/verification-evidence'
+      let files: string[]
+      try {
+        files = ctx.listDir(base)
+      } catch {
+        return `No evidence file found for issue #${issueNumber}`
+      }
+      // Match vp-p1-100.json, vp-100.json, vp-task-100.json, etc.
+      const matching = files.filter((f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`))
+      for (const file of matching) {
         try {
-          files = ctx.listDir(base)
-        } catch {
-          continue
-        }
-        // Match vp-p1-100.json, vp-100.json, vp-task-100.json, etc.
-        const matching = files.filter((f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`))
-        for (const file of matching) {
-          try {
-            const evidence = JSON.parse(ctx.readFile(`${base}/${file}`)) as {
-              steps: Array<{ id: string; status: string; passed?: boolean }>
-              allStepsPassed?: boolean
-            }
-            const allPassed =
-              evidence.allStepsPassed ??
-              evidence.steps.every((s) => s.status === 'pass' || s.passed === true)
-            if (!allPassed) {
-              const failed = evidence.steps.filter((s) => s.status !== 'pass' && s.passed !== true)
-              return `VP steps failed in ${file}: ${failed.map((s) => s.id).join(', ')}`
-            }
-            return null
-          } catch (err) {
-            return `Failed to parse evidence ${file}: ${err}`
+          const evidence = JSON.parse(ctx.readFile(`${base}/${file}`)) as {
+            steps: Array<{ id: string; status: string; passed?: boolean }>
+            allStepsPassed?: boolean
           }
+          const allPassed =
+            evidence.allStepsPassed ??
+            evidence.steps.every((s) => s.status === 'pass' || s.passed === true)
+          if (!allPassed) {
+            const failed = evidence.steps.filter((s) => s.status !== 'pass' && s.passed !== true)
+            return `VP steps failed in ${file}: ${failed.map((s) => s.id).join(', ')}`
+          }
+          return null
+        } catch (err) {
+          return `Failed to parse evidence ${file}: ${err}`
         }
       }
       return `No evidence file found for issue #${issueNumber}`
@@ -139,15 +138,13 @@ function assertVerifyModeEntered(): EvalCheckpoint {
   return {
     name: 'agent entered verify mode',
     assert(ctx: EvalContext) {
-      for (const base of ['.kata/sessions', '.claude/sessions']) {
-        const sessions = ctx.listDir(base)
-        for (const sid of sessions) {
-          try {
-            const state = JSON.parse(ctx.readFile(`${base}/${sid}/state.json`))
-            if (state.currentMode === 'verify') return null
-          } catch {
-            // skip
-          }
+      const sessions = ctx.listDir('.kata/sessions')
+      for (const sid of sessions) {
+        try {
+          const state = JSON.parse(ctx.readFile(`.kata/sessions/${sid}/state.json`))
+          if (state.currentMode === 'verify') return null
+        } catch {
+          // skip
         }
       }
       return 'No session with currentMode=verify found'
@@ -167,7 +164,7 @@ export const verifySubagentScenario: EvalScenario = {
     `cat > src/api/health.ts << 'HEREDOC'\n${HEALTH_TS}HEREDOC`,
     `cat > src/server.ts << 'HEREDOC'\n${SERVER_TS}HEREDOC`,
     `cat > src/api/health.test.ts << 'HEREDOC'\n${HEALTH_TEST_TS}HEREDOC`,
-    `cat > .claude/workflows/verification-tools.md << 'HEREDOC'\n${VERIFICATION_TOOLS_MD}HEREDOC`,
+    `cat > .kata/verification-tools.md << 'HEREDOC'\n${VERIFICATION_TOOLS_MD}HEREDOC`,
     // Commit the implementation so verify mode has something to check
     'git add -A && git commit -m "feat: add health endpoint"',
     // Verify the build works

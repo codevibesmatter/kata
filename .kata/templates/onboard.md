@@ -122,12 +122,12 @@ Ask the user to restart and re-run `kata enter onboard` before continuing.
 ## What Gets Created
 
 **Always:**
-- `kata.yaml` — Project configuration (at `.kata/kata.yaml` or `.claude/workflows/kata.yaml`)
+- `.kata/kata.yaml` — Project configuration
 - `.claude/settings.json` — Hook registrations (merged with existing)
-- `.claude/sessions/` — Session state directory
+- `.kata/sessions/` — Session state directory
 
 **With batteries:**
-- `.claude/workflows/templates/` — 6 full mode templates with GitHub integration
+- `.kata/templates/` — 6 full mode templates with GitHub integration
 - `.claude/agents/` — 3 Claude Code sub-agent definitions
 - `planning/spec-templates/` — Feature, epic, and bug spec templates
 - `.kata/interviews.yaml` — Planning interview categories (customizable)
@@ -136,7 +136,7 @@ Ask the user to restart and re-run `kata enter onboard` before continuing.
 
 When asked "Install batteries-included starter content?", choosing Yes scaffolds:
 
-**Mode templates** (`.claude/workflows/templates/`):
+**Mode templates** (`.kata/templates/`):
 | Template | Description |
 |----------|-------------|
 | `planning.md` | Research → spec → GitHub issue → review → approve |
@@ -294,7 +294,7 @@ AskUserQuestion(questions=[{
 
 **If all defaults kept:** No action needed — `batteries/interviews.yaml` has all 4 categories.
 
-**If user deselected categories:** Write a custom `.kata/interviews.yaml` (or `.claude/workflows/interviews.yaml` for old layout) containing only the selected categories. Copy the selected category definitions from the batteries file.
+**If user deselected categories:** Write a custom `.kata/interviews.yaml` containing only the selected categories. Copy the selected category definitions from the batteries file.
 
 ## Write Configuration Command
 
@@ -476,7 +476,7 @@ When batteries are installed, `verification-tools.md` is scaffolded with placeho
 
 > **Next step:** Fill in `verification-tools.md` with your project's dev server URL, auth setup, database access, and key endpoints. The verification agent reads this file before executing any Verification Plan.
 
-The file lives at `.kata/verification-tools.md` (new layout) or `.claude/workflows/verification-tools.md` (old layout).
+The file lives at `.kata/verification-tools.md`.
 
 ### 6. Test File Pattern (optional)
 

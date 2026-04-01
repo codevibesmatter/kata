@@ -16,7 +16,7 @@ import { workflowPresets, assertDiffContains } from '../assertions.js'
 export const taskModeScenario: EvalScenario = {
   id: 'task-mode',
   name: 'Task mode: add /about page',
-  templatePath: '.claude/workflows/templates/task.md',
+  templatePath: '.kata/templates/task.md',
   prompt:
     'Add an /about page to this app. It should show the app name and a short description.',
   timeoutMs: 10 * 60 * 1000,

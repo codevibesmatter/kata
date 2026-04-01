@@ -49,7 +49,7 @@ export async function addProject(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error(`Path is not kata-enabled: ${absPath}`)
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Expected .kata/wm.yaml or .claude/workflows/wm.yaml')
+    console.error('Expected .kata/kata.yaml')
     process.exitCode = 1
     return
   }

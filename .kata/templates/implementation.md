@@ -255,7 +255,7 @@ Each REVIEW sub-phase runs reviewers sequentially and prints all results:
 
 **Step 1 — Read kata.yaml to discover external reviewers (do this FIRST):**
 ```bash
-cat .kata/kata.yaml 2>/dev/null || cat .claude/workflows/kata.yaml
+cat .kata/kata.yaml
 ```
 Note: `reviews.code_review` (true/false) and `reviews.code_reviewers` list.
 

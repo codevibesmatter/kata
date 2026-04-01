@@ -116,14 +116,13 @@ describe('resolveSpecTemplatePath', () => {
   })
 })
 
-describe('getCurrentSessionId — layout-shift resilience', () => {
+describe('getCurrentSessionId', () => {
   const origProjectDir = process.env.CLAUDE_PROJECT_DIR
   let tmpDir: string
 
   beforeEach(() => {
     tmpDir = makeTmpDir('session-layout')
-    // Create .claude/sessions/ (old layout) with a valid session
-    mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
@@ -136,17 +135,13 @@ describe('getCurrentSessionId — layout-shift resilience', () => {
     }
   })
 
-  it('finds session in .claude/sessions/ when .kata/ also exists but has no sessions', async () => {
-    // Simulate layout shift: .kata/ created mid-session (e.g. by writing VP evidence)
-    // but state.json remains in .claude/sessions/
+  it('finds session in .kata/sessions/', async () => {
     const sessionId = '12345678-1234-4234-8234-123456789abc'
-    mkdirSync(join(tmpDir, '.claude', 'sessions', sessionId), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions', sessionId), { recursive: true })
     writeFileSync(
-      join(tmpDir, '.claude', 'sessions', sessionId, 'state.json'),
+      join(tmpDir, '.kata', 'sessions', sessionId, 'state.json'),
       JSON.stringify({ updatedAt: new Date().toISOString() }),
     )
-    // Create .kata/ dir (triggers layout detection to prefer .kata/)
-    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
 
     const result = await getCurrentSessionId()
     expect(result).toBe(sessionId)

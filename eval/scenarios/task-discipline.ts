@@ -16,7 +16,7 @@ import { workflowPresets, taskDisciplinePresets } from '../assertions.js'
 export const taskDisciplineScenario: EvalScenario = {
   id: 'task-discipline',
   name: 'Task discipline: date formatter',
-  templatePath: '.claude/workflows/templates/task.md',
+  templatePath: '.kata/templates/task.md',
   prompt:
     'Add a utility function that formats a Date as YYYY-MM-DD. ' +
     'Include a simple test that verifies the format.',

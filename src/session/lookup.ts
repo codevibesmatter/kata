@@ -24,16 +24,15 @@ export function getPackageRoot(): string {
 /**
  * Find kata project directory by walking up from cwd.
  * Priority:
- * 1. CLAUDE_PROJECT_DIR env var (explicit override, checks for .kata/ or .claude/)
- * 2. Walk up looking for .kata/ (new layout)
- * 3. Walk up looking for .claude/sessions/ or .claude/workflows/ (backwards compat)
+ * 1. CLAUDE_PROJECT_DIR env var (explicit override, checks for .kata/)
+ * 2. Walk up looking for .kata/
  * @returns Absolute path to project root
  * @throws Error if not in a kata project
  */
 export function findProjectDir(): string {
   // Honor CLAUDE_PROJECT_DIR env var (set by hooks, npm installs, CI)
   const envDir = process.env.CLAUDE_PROJECT_DIR
-  if (envDir && (existsSync(path.join(envDir, '.kata')) || existsSync(path.join(envDir, '.claude')))) {
+  if (envDir && existsSync(path.join(envDir, '.kata'))) {
     return envDir
   }
 
@@ -41,15 +40,7 @@ export function findProjectDir(): string {
   const root = path.parse(dir).root
 
   while (dir !== root) {
-    // Prefer .kata/ (new layout)
     if (existsSync(path.join(dir, '.kata'))) {
-      return dir
-    }
-    // Backwards compat: accept .claude/sessions/ or .claude/workflows/ (old layout)
-    if (
-      existsSync(path.join(dir, '.claude/sessions')) ||
-      existsSync(path.join(dir, '.claude/workflows'))
-    ) {
       return dir
     }
     const parent = path.dirname(dir)
@@ -61,7 +52,7 @@ export function findProjectDir(): string {
   }
 
   throw new Error(
-    'Not in a kata project directory (no .kata/ or .claude/ found)\n' +
+    'Not in a kata project directory (no .kata/ found)\n' +
       'Run: kata doctor --fix\n' +
       'Or set CLAUDE_PROJECT_DIR environment variable',
   )
@@ -74,49 +65,22 @@ export const findClaudeProjectDir = findProjectDir
 
 /**
  * Get the kata config directory for a project.
- * Returns .kata/ if it exists, otherwise falls back to .claude/ (old layout).
  * @param projectRoot - Absolute path to project root
- * @returns '.kata' or '.claude' relative prefix
+ * @returns '.kata' relative prefix
  */
-export function getKataDir(projectRoot: string): string {
-  if (existsSync(path.join(projectRoot, '.kata'))) {
-    return '.kata'
-  }
-  // Backwards compat: old layout
-  return '.claude'
+export function getKataDir(_projectRoot: string): string {
+  return '.kata'
 }
 
 /**
  * Resolve kata-owned paths within a project.
- * New layout (.kata/):
- *   .kata/sessions/       — session state
- *   .kata/templates/      — mode templates
- *   .kata/modes.yaml      — mode config
- *   .kata/wm.yaml         — project config
+ *   .kata/sessions/              — session state
+ *   .kata/templates/             — mode templates
+ *   .kata/kata.yaml              — project config
  *   .kata/verification-evidence/ — check-phase output
- *
- * Old layout (.claude/):
- *   .claude/sessions/             — session state
- *   .claude/workflows/templates/  — mode templates
- *   .claude/workflows/modes.yaml  — mode config
- *   .claude/workflows/wm.yaml    — project config
- *   .claude/verification-evidence/ — check-phase output
  */
 function resolveKataPath(projectRoot: string, ...segments: string[]): string {
-  const kataDir = getKataDir(projectRoot)
-  if (kataDir === '.kata') {
-    return path.join(projectRoot, '.kata', ...segments)
-  }
-  // Old layout mapping
-  const first = segments[0]
-  if (first === 'sessions') {
-    return path.join(projectRoot, '.claude', ...segments)
-  }
-  if (first === 'verification-evidence') {
-    return path.join(projectRoot, '.claude', ...segments)
-  }
-  // templates, modes.yaml, wm.yaml → .claude/workflows/...
-  return path.join(projectRoot, '.claude', 'workflows', ...segments)
+  return path.join(projectRoot, '.kata', ...segments)
 }
 
 /**
@@ -217,44 +181,25 @@ export async function getCurrentSessionId(): Promise<string> {
   try {
     const projectDir = findProjectDir()
 
-    // Check both layout dirs — layout can shift mid-session if .kata/ is created
-    // after session-start already wrote state.json to .claude/sessions/
-    const sessionsDirs = [
-      getSessionsDir(projectDir),
-      path.join(projectDir, '.claude', 'sessions'),
-      path.join(projectDir, '.kata', 'sessions'),
-    ]
-    // Deduplicate paths
-    const uniqueDirs = [...new Set(sessionsDirs)]
-
-    const allCandidates: Array<{ id: string; mtimeMs: number }> = []
-    for (const sessionsDir of uniqueDirs) {
-      if (!existsSync(sessionsDir)) continue
+    const sessionsDir = getSessionsDir(projectDir)
+    if (existsSync(sessionsDir)) {
       const entries = readdirSync(sessionsDir, { withFileTypes: true })
+      const candidates: Array<{ id: string; mtimeMs: number }> = []
       for (const e of entries) {
         if (!e.isDirectory() || !SESSION_ID_RE.test(e.name)) continue
         const stateFile = path.join(sessionsDir, e.name, 'state.json')
         try {
           const { mtimeMs } = statSync(stateFile)
-          allCandidates.push({ id: e.name, mtimeMs })
+          candidates.push({ id: e.name, mtimeMs })
         } catch {
           // no state.json in this session dir
         }
       }
-    }
 
-    // Deduplicate by ID, keep highest mtime
-    const byId = new Map<string, { id: string; mtimeMs: number }>()
-    for (const c of allCandidates) {
-      const existing = byId.get(c.id)
-      if (!existing || c.mtimeMs > existing.mtimeMs) {
-        byId.set(c.id, c)
+      const sorted = candidates.sort((a, b) => b.mtimeMs - a.mtimeMs)
+      if (sorted[0]) {
+        return sorted[0].id
       }
-    }
-
-    const sorted = [...byId.values()].sort((a, b) => b.mtimeMs - a.mtimeMs)
-    if (sorted[0]) {
-      return sorted[0].id
     }
   } catch {
     // fall through
@@ -273,15 +218,7 @@ export async function getCurrentSessionId(): Promise<string> {
 export async function getStateFilePath(sessionId?: string): Promise<string> {
   const sid = sessionId || (await getCurrentSessionId())
   const projectDir = findProjectDir()
-  // Check primary layout first, then fallback to both layouts
-  const primaryPath = path.join(getSessionsDir(projectDir), sid, 'state.json')
-  if (existsSync(primaryPath)) return primaryPath
-  // Fallback: check both layouts (handles mid-session layout shift)
-  for (const base of ['.kata', '.claude']) {
-    const candidate = path.join(projectDir, base, 'sessions', sid, 'state.json')
-    if (existsSync(candidate)) return candidate
-  }
-  return primaryPath // Return primary path even if missing (caller handles error)
+  return path.join(getSessionsDir(projectDir), sid, 'state.json')
 }
 
 // getUserConfigDir and getModesYamlPath removed — user tier eliminated (see issue #30)
@@ -299,7 +236,7 @@ export function getTemplatesDir(): string {
  * Lookup order (first match wins): project → package batteries.
  *
  * 1. Absolute path — use as-is
- * 2. Project: .kata/templates/{name} (or .claude/workflows/templates/ for old layout)
+ * 2. Project: .kata/templates/{name}
  * 3. Package: batteries/templates/{name}
  *
  * @param templatePath - Template filename or path

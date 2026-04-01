@@ -25,7 +25,7 @@ import { planningPresets } from '../assertions.js'
 export const planningAuthScenario: EvalScenario = {
   id: 'planning-auth',
   name: 'Planning mode: Better Auth feature spec (from research)',
-  templatePath: '.claude/workflows/templates/planning.md',
+  templatePath: '.kata/templates/planning.md',
   fixture: 'tanstack-start',
   prompt:
     'Plan user authentication for this TanStack Start app, ' +

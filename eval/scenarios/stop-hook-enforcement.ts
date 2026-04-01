@@ -27,7 +27,7 @@ import {
 export const stopHookEnforcementScenario: EvalScenario = {
   id: 'stop-hook-enforcement',
   name: 'Stop hook enforcement: blocks until conditions met',
-  templatePath: '.claude/workflows/templates/task.md',
+  templatePath: '.kata/templates/task.md',
   prompt: [
     'Add a utility function that checks if a string is a palindrome.',
     'Follow these steps IN ORDER, completing each before moving to the next:',

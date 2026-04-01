@@ -168,11 +168,11 @@ describe('setup --yes', () => {
     expect(hasWmHook).toBe(true)
   })
 
-  it('works without .claude/sessions/ existing', async () => {
-    // Don't pre-create .claude/sessions/ - setup should create it
+  it('works without .kata/sessions/ existing', async () => {
+    // Don't pre-create .kata/sessions/ - setup should create it
     const output = await captureSetup(['--yes'], tmpDir)
     expect(output).toContain('kata setup complete')
-    expect(existsSync(join(tmpDir, '.claude', 'sessions'))).toBe(true)
+    expect(existsSync(join(tmpDir, '.kata', 'sessions'))).toBe(true)
   })
 
   it('auto-detects package.json name and test command', async () => {

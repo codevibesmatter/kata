@@ -3,7 +3,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectInterviewsPath, getProjectSubphasePatternsPath, getProjectVerificationToolsPath, getKataDir } from '../session/lookup.js'
+import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectInterviewsPath, getProjectSubphasePatternsPath, getProjectVerificationToolsPath } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
@@ -73,7 +73,7 @@ function backupFile(filePath: string, backupDir: string, filename: string): void
  * Scaffold batteries-included content into a project.
  *
  * Copies from the kata package's batteries/ directory:
- *   batteries/templates/              → .claude/workflows/templates/
+ *   batteries/templates/              → .kata/templates/
  *   batteries/agents/                 → .claude/agents/
  *   batteries/spec-templates/         → planning/spec-templates/
  *   batteries/github/ISSUE_TEMPLATE/  → .github/ISSUE_TEMPLATE/
@@ -87,15 +87,11 @@ function backupFile(filePath: string, backupDir: string, filename: string): void
 export function scaffoldBatteries(projectRoot: string, update = false): BatteriesResult {
   const batteryRoot = join(getPackageRoot(), 'batteries')
 
-  // Compute a timestamped backup dir under the kata config dir (only used on --update)
+  // Compute a timestamped backup dir under .kata/ (only used on --update)
   let backupRoot: string | undefined
   if (update) {
     const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19)
-    const kd = getKataDir(projectRoot)
-    const configBase = kd === '.kata'
-      ? join(projectRoot, '.kata')
-      : join(projectRoot, '.claude', 'workflows')
-    backupRoot = join(configBase, 'batteries-backup', timestamp)
+    backupRoot = join(projectRoot, '.kata', 'batteries-backup', timestamp)
   }
 
   const result: BatteriesResult = {
@@ -134,7 +130,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // Mode templates → .kata/templates/ (or .claude/workflows/templates/ for old layout)
+  // Mode templates → .kata/templates/
   copyDirectory(
     join(batteryRoot, 'templates'),
     getProjectTemplatesDir(projectRoot),
@@ -156,7 +152,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     backupRoot ? join(backupRoot, 'agents') : undefined,
   )
 
-  // Review prompts → .kata/prompts/ (or .claude/workflows/prompts/ for old layout)
+  // Review prompts → .kata/prompts/
   copyDirectory(
     join(batteryRoot, 'prompts'),
     getProjectPromptsDir(projectRoot),
@@ -219,7 +215,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // interviews.yaml → .kata/interviews.yaml (or .claude/workflows/interviews.yaml)
+  // interviews.yaml → .kata/interviews.yaml
   const interviewsSrc = join(batteryRoot, 'interviews.yaml')
   const interviewsDest = getProjectInterviewsPath(projectRoot)
   if (existsSync(interviewsSrc)) {
@@ -232,14 +228,14 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
         result.skipped.push('interviews.yaml')
       }
     } else {
-      // Ensure parent directory exists (resolveKataPath may point to .kata/ or .claude/workflows/)
+      // Ensure parent directory exists
       mkdirSync(join(interviewsDest, '..'), { recursive: true })
       copyFileSync(interviewsSrc, interviewsDest)
       result.interviews.push('interviews.yaml')
     }
   }
 
-  // subphase-patterns.yaml → .kata/subphase-patterns.yaml (or .claude/workflows/subphase-patterns.yaml)
+  // subphase-patterns.yaml → .kata/subphase-patterns.yaml
   const subphaseSrc = join(batteryRoot, 'subphase-patterns.yaml')
   const subphaseDest = getProjectSubphasePatternsPath(projectRoot)
   if (existsSync(subphaseSrc)) {
@@ -258,7 +254,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // verification-tools.md → .kata/verification-tools.md (or .claude/workflows/verification-tools.md)
+  // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')
   const vtDest = getProjectVerificationToolsPath(projectRoot)
   if (existsSync(vtSrc)) {

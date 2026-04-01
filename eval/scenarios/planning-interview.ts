@@ -24,7 +24,7 @@ import {
 export const planningInterviewScenario: EvalScenario = {
   id: 'planning-interview',
   name: 'Planning mode: interview phase triggers AskUserQuestion',
-  templatePath: '.claude/workflows/templates/planning.md',
+  templatePath: '.kata/templates/planning.md',
   prompt:
     'Plan a notifications feature for this app. ' +
     'Users should receive in-app and email notifications for key events. ' +

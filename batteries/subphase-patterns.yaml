@@ -57,7 +57,7 @@ subphase_patterns:
           The agent should have NO knowledge of the implementation — only the VP steps.
 
           Before executing, read the project's verification tools config:
-          - `.kata/verification-tools.md` (or `.claude/workflows/verification-tools.md`)
+          - `.kata/verification-tools.md`
           This file has the project's dev server command, API base URL, auth setup,
           database access, and key endpoints. Read it FIRST.
 
@@ -157,7 +157,7 @@ subphase_patterns:
 
           1. Read kata.yaml FIRST to discover external reviewers:
           ```bash
-          cat .kata/kata.yaml 2>/dev/null || cat .claude/workflows/kata.yaml
+          cat .kata/kata.yaml
           ```
           Note the `reviews.code_review` flag and `reviews.code_reviewers` list.
 

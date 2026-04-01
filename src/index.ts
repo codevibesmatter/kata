@@ -319,9 +319,9 @@ Troubleshooting:
   - Task issues? Use TaskList to see native tasks
 
 Notes:
-  - If --session not provided, uses current session from .claude/current-session-id
+  - If --session not provided, uses current session from .kata/sessions/
   - JSON output is for hooks, human-readable output is default
-  - State stored at .claude/sessions/{SESSION_ID}/state.json
+  - State stored at .kata/sessions/{SESSION_ID}/state.json
   - Native tasks stored at ~/.claude/tasks/{SESSION_ID}/
 `)
 }

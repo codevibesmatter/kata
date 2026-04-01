@@ -5,7 +5,5 @@ tsconfig.tsbuildinfo
 .turbo/
 eval-projects/
 .geminiignore
-.claude/sessions/
 .kata/sessions/
 .kata/batteries-backup/
-.claude/workflows/batteries-backup/

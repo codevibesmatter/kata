@@ -824,7 +824,7 @@ This overwrites project files with the latest versions from the updated package.
 
 ### Files are yours to own
 
-Files seeded by `kata batteries` are the project's to own and customize. kata does not reference package templates at runtime — it reads from `.kata/templates/` (or `.claude/workflows/templates/` for old-layout projects). Editing, extending, or replacing the seeded templates is encouraged and expected.
+Files seeded by `kata batteries` are the project's to own and customize. kata does not reference package templates at runtime — it reads from `.kata/templates/`. Editing, extending, or replacing the seeded templates is encouraged and expected.
 
 See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
 
@@ -862,10 +862,6 @@ See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
 ### Hook registration
 
 Hooks are registered in `.claude/settings.json` using the `kata hook <name>` dispatch pattern. Each hook reads Claude Code's stdin JSON, extracts `session_id`, and outputs a JSON decision. The session ID from hook stdin must be forwarded as `--session=ID` to any subcommand — there is no automatic session detection at hook time.
-
-### Backwards compatibility
-
-Projects using `.claude/workflows/` instead of `.kata/` are supported. `getKataDir()` checks for `.kata/` first and falls back to `.claude/workflows/`. All path helpers (`getSessionsDir()`, `getProjectTemplatesDir()`, etc.) handle both layouts transparently, so existing projects do not need to migrate.
 
 ### Eval harness
 

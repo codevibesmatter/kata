@@ -177,8 +177,8 @@ After this gate closes, stop hook activates. Session cannot end until execution 
 
 ```bash
 # Phase-specific commands
-.claude/workflows/scripts/advance-phase.sh {{PHASE_1_ID}}
-.claude/workflows/scripts/advance-phase.sh {{PHASE_2_ID}}
+kata check-phase {{PHASE_1_ID}}
+kata check-phase {{PHASE_2_ID}}
 # etc.
 ```
 
@@ -190,7 +190,7 @@ This session type requires before exit:
 - [ ] Changes pushed
 - [ ] [Type-specific conditions]
 
-Check with: `.claude/workflows/scripts/mode.sh --can-exit`
+Check with: `kata can-exit`
 
 ---
 

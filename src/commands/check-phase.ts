@@ -337,7 +337,7 @@ ${diff}`
 }
 
 /**
- * Write per-phase evidence file to .claude/verification-evidence/phase-<id>-<issue>.json
+ * Write per-phase evidence file to .kata/verification-evidence/phase-<id>-<issue>.json
  * Does NOT touch {issue}.json — that file is owned by the configured code reviewer.
  */
 function writeEvidenceFile(

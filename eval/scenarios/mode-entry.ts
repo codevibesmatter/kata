@@ -19,7 +19,7 @@ const assertStateInProject: EvalCheckpoint = {
   name: 'Session state exists in eval project',
   assert: (ctx) => {
     const stateFiles = ctx.run(
-      'find .claude/sessions -name state.json -type f 2>/dev/null | head -1',
+      'find .kata/sessions -name state.json -type f 2>/dev/null | head -1',
     )
     if (!stateFiles || !stateFiles.trim()) {
       return 'No session state.json found in eval project'
@@ -32,7 +32,7 @@ const assertModeIsResearch: EvalCheckpoint = {
   name: 'Mode is research',
   assert: (ctx) => {
     const stateFiles = ctx.run(
-      'find .claude/sessions -name state.json -type f 2>/dev/null | head -1',
+      'find .kata/sessions -name state.json -type f 2>/dev/null | head -1',
     )
     if (!stateFiles) return 'No state.json'
     const content = ctx.readFile(stateFiles.trim())
@@ -56,7 +56,7 @@ const assertWorkflowDirCorrect: EvalCheckpoint = {
   name: 'workflowDir points to eval project',
   assert: (ctx) => {
     const stateFiles = ctx.run(
-      'find .claude/sessions -name state.json -type f 2>/dev/null | head -1',
+      'find .kata/sessions -name state.json -type f 2>/dev/null | head -1',
     )
     if (!stateFiles) return 'No state.json'
     const content = ctx.readFile(stateFiles.trim())

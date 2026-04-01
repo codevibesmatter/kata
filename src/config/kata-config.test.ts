@@ -153,21 +153,6 @@ describe('loadKataConfig', () => {
     expect(first).toBe(second) // Same object reference
   })
 
-  it('works with old .claude/workflows layout', () => {
-    // Remove .kata, use old layout
-    rmSync(join(tmpDir, '.kata'), { recursive: true })
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
-
-    const config = {
-      project: { name: 'old-layout' },
-      modes: { task: { template: 'task.md' } },
-    }
-    writeFileSync(join(tmpDir, '.claude', 'workflows', 'kata.yaml'), jsYaml.dump(config))
-
-    const result = loadKataConfig()
-    expect(result.project?.name).toBe('old-layout')
-  })
-
   it('provides default task_rules and empty global_rules', () => {
     const config = { modes: {} }
     writeFileSync(join(tmpDir, '.kata', 'kata.yaml'), jsYaml.dump(config))

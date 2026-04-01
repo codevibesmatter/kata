@@ -7,8 +7,8 @@
  *
  * Asserts:
  * 1. .claude/settings.json exists with hooks
- * 2. .claude/workflows/wm.yaml exists
- * 3. .claude/workflows/templates/ has mode templates
+ * 2. .kata/kata.yaml exists
+ * 3. .kata/templates/ has mode templates
  * 4. Git repository is initialized
  */
 

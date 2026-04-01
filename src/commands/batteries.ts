@@ -14,7 +14,7 @@ import {
  * kata batteries [--update] [--cwd=PATH]
  *
  * Scaffolds batteries-included content into a project:
- *   batteries/templates/       → .claude/workflows/templates/
+ *   batteries/templates/       → .kata/templates/
  *   batteries/agents/          → .claude/agents/
  *   batteries/spec-templates/  → planning/spec-templates/
  *   batteries/github/          → .github/
@@ -88,16 +88,10 @@ export async function batteries(args: string[]): Promise<void> {
   }
 
   if (result.kataConfig.length > 0) {
-    const { getKataConfigPath } = await import('../config/kata-config.js')
-    const configPath = getKataConfigPath(projectRoot)
-    const relPath = configPath.replace(projectRoot + '/', '')
-    process.stdout.write(`\nConfig → ${relPath}\n`)
+    process.stdout.write(`\nConfig → .kata/kata.yaml\n`)
   }
   if (result.templates.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const tmplDir = kd === '.kata' ? '.kata/templates' : '.claude/workflows/templates'
-    process.stdout.write(`\nMode templates → ${tmplDir}/\n`)
+    process.stdout.write(`\nMode templates → .kata/templates/\n`)
     for (const f of result.templates) process.stdout.write(`  ${f}\n`)
   }
   if (result.agents.length > 0) {
@@ -105,17 +99,11 @@ export async function batteries(args: string[]): Promise<void> {
     for (const f of result.agents) process.stdout.write(`  ${f}\n`)
   }
   if (result.prompts.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const promptDir = kd === '.kata' ? '.kata/prompts' : '.claude/workflows/prompts'
-    process.stdout.write(`\nReview prompts → ${promptDir}/\n`)
+    process.stdout.write(`\nReview prompts → .kata/prompts/\n`)
     for (const f of result.prompts) process.stdout.write(`  ${f}\n`)
   }
   if (result.providerPlugins.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const provDir = kd === '.kata' ? '.kata/providers' : '.claude/workflows/providers'
-    process.stdout.write(`\nProvider plugins → ${provDir}/\n`)
+    process.stdout.write(`\nProvider plugins → .kata/providers/\n`)
     for (const f of result.providerPlugins) process.stdout.write(`  ${f}\n`)
   }
   if (result.specTemplates.length > 0) {
@@ -128,22 +116,13 @@ export async function batteries(args: string[]): Promise<void> {
     process.stdout.write(`\nNext: run 'kata enter onboard' to create labels on GitHub\n`)
   }
   if (result.interviews.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const intDir = kd === '.kata' ? '.kata' : '.claude/workflows'
-    process.stdout.write(`\nInterview config → ${intDir}/interviews.yaml\n`)
+    process.stdout.write(`\nInterview config → .kata/interviews.yaml\n`)
   }
   if (result.subphasePatterns.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const spDir = kd === '.kata' ? '.kata' : '.claude/workflows'
-    process.stdout.write(`\nSubphase patterns → ${spDir}/subphase-patterns.yaml\n`)
+    process.stdout.write(`\nSubphase patterns → .kata/subphase-patterns.yaml\n`)
   }
   if (result.verificationTools.length > 0) {
-    const { getKataDir } = await import('../session/lookup.js')
-    const kd = getKataDir(projectRoot)
-    const vtDir = kd === '.kata' ? '.kata' : '.claude/workflows'
-    process.stdout.write(`\nVerification tools → ${vtDir}/verification-tools.md\n`)
+    process.stdout.write(`\nVerification tools → .kata/verification-tools.md\n`)
     process.stdout.write(`  ⚠️  Fill in project-specific sections (dev server, API base URL, auth, database)\n`)
   }
   if (result.updated.length > 0) {

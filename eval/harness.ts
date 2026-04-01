@@ -523,44 +523,22 @@ function buildContext(
     sessionId,
     transcriptPath,
     getSessionState(): SessionState | null {
-      // Check BOTH layout dirs — layout can shift mid-session if .kata/ is created
-      // after session-start already wrote state.json to .claude/sessions/
+      const sessionsDir = join(projectDir, '.kata', 'sessions')
+      if (!existsSync(sessionsDir)) return null
       const candidates: Array<{ id: string; path: string }> = []
-      for (const sessionsDir of [
-        join(projectDir, '.kata', 'sessions'),
-        join(projectDir, '.claude', 'sessions'),
-      ]) {
-        if (!existsSync(sessionsDir)) continue
-        try {
-          for (const id of readdirSync(sessionsDir)) {
-            const statePath = join(sessionsDir, id, 'state.json')
-            if (existsSync(statePath)) {
-              candidates.push({ id, path: statePath })
-            }
+      try {
+        for (const id of readdirSync(sessionsDir)) {
+          const statePath = join(sessionsDir, id, 'state.json')
+          if (existsSync(statePath)) {
+            candidates.push({ id, path: statePath })
           }
-        } catch {
-          // skip
         }
+      } catch {
+        // skip
       }
       if (candidates.length === 0) return null
-      // Deduplicate by session ID (prefer the one with the newer updatedAt)
-      const byId = new Map<string, { id: string; path: string }>()
-      for (const c of candidates) {
-        const existing = byId.get(c.id)
-        if (!existing) {
-          byId.set(c.id, c)
-        } else {
-          try {
-            const cTime = new Date(JSON.parse(readFileSync(c.path, 'utf-8')).updatedAt ?? 0).getTime()
-            const eTime = new Date(JSON.parse(readFileSync(existing.path, 'utf-8')).updatedAt ?? 0).getTime()
-            if (cTime > eTime) byId.set(c.id, c)
-          } catch {
-            // keep existing
-          }
-        }
-      }
       try {
-        const latest = [...byId.values()]
+        const latest = candidates
           .sort((a, b) => {
             const aTime = new Date(JSON.parse(readFileSync(a.path, 'utf-8')).updatedAt ?? 0).getTime()
             const bTime = new Date(JSON.parse(readFileSync(b.path, 'utf-8')).updatedAt ?? 0).getTime()

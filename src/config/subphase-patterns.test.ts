@@ -406,22 +406,22 @@ describe('loadSubphasePatterns 2-tier merge', () => {
     )
   })
 
-  it('supports .claude/workflows layout (backwards compat)', async () => {
-    const tmpDir = makeTmpDir('old-layout')
+  it('loads from .kata/ layout', async () => {
+    const tmpDir = makeTmpDir('kata-layout')
     tmpDirs.push(tmpDir)
 
     const projDir = join(tmpDir, 'proj')
-    mkdirSync(join(projDir, '.claude', 'workflows'), { recursive: true })
-    writeSubphasePatternsYaml(join(projDir, '.claude', 'workflows'), {
+    mkdirSync(join(projDir, '.kata'), { recursive: true })
+    writeSubphasePatternsYaml(join(projDir, '.kata'), {
       subphase_patterns: {
         'impl-verify': {
-          description: 'Old layout pattern',
+          description: 'Kata layout pattern',
           steps: [
             {
               id_suffix: 'impl',
-              title_template: 'OLD IMPL',
-              todo_template: 'Old implement',
-              active_form: 'Old implementing',
+              title_template: 'KATA IMPL',
+              todo_template: 'Kata implement',
+              active_form: 'Kata implementing',
             },
           ],
         },
@@ -430,7 +430,7 @@ describe('loadSubphasePatterns 2-tier merge', () => {
     process.env.CLAUDE_PROJECT_DIR = projDir
 
     const config = await loadSubphasePatterns()
-    expect(config.subphase_patterns['impl-verify'].description).toBe('Old layout pattern')
+    expect(config.subphase_patterns['impl-verify'].description).toBe('Kata layout pattern')
   })
 })
 

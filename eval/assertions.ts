@@ -23,14 +23,12 @@ function fail(msg: string): string {
 }
 
 /**
- * Read a top-level key from wm.yaml via grep.
- * Checks .kata/wm.yaml first (new layout), then .claude/workflows/wm.yaml (old layout).
+ * Read a top-level key from .kata/kata.yaml via grep.
  * Returns the value string or the provided default.
  */
 function readWmYamlKey(ctx: EvalContext, key: string, fallback: string): string {
-  // Try new layout first, then old layout
   const raw = ctx.run(
-    `grep '^${key}:' .kata/wm.yaml 2>/dev/null || grep '^${key}:' .claude/workflows/wm.yaml 2>/dev/null`,
+    `grep '^${key}:' .kata/kata.yaml 2>/dev/null`,
   )?.trim()
   if (!raw) return fallback
   // Extract value after "key: "
@@ -247,7 +245,7 @@ export function assertFileContains(relativePath: string, pattern: string | RegEx
 
 /**
  * Assert that at least one spec file (.md) exists in the configured spec_path.
- * Reads spec_path from wm.yaml, falls back to 'planning/specs'.
+ * Reads spec_path from kata.yaml, falls back to 'planning/specs'.
  */
 export function assertSpecFileCreated(): EvalCheckpoint {
   return {
@@ -308,7 +306,7 @@ export function assertSpecHasBehaviors(): EvalCheckpoint {
 
 /**
  * Assert that at least one research doc (.md) exists in the configured research_path.
- * Reads research_path from wm.yaml, falls back to 'planning/research'.
+ * Reads research_path from kata.yaml, falls back to 'planning/research'.
  */
 export function assertResearchDocCreated(): EvalCheckpoint {
   return {
@@ -374,22 +372,18 @@ export function assertSettingsExist(): EvalCheckpoint {
 }
 
 /**
- * Assert that wm.yaml exists with a project: key.
- * Checks .kata/wm.yaml (new layout) then .claude/workflows/wm.yaml (old layout).
+ * Assert that .kata/kata.yaml exists with a project: key.
  */
 export function assertWmYamlExists(): EvalCheckpoint {
   return {
     name: 'wm.yaml exists',
     assert(ctx: EvalContext) {
-      const newPath = '.kata/wm.yaml'
-      const oldPath = '.claude/workflows/wm.yaml'
-      const wmPath = ctx.fileExists(newPath) ? newPath : ctx.fileExists(oldPath) ? oldPath : null
-      if (!wmPath) {
-        return fail('wm.yaml not found (checked .kata/wm.yaml and .claude/workflows/wm.yaml)')
+      if (!ctx.fileExists('.kata/kata.yaml')) {
+        return fail('.kata/kata.yaml not found')
       }
-      const content = ctx.readFile(wmPath)
+      const content = ctx.readFile('.kata/kata.yaml')
       if (!content.includes('project:')) {
-        return fail('wm.yaml missing project: key')
+        return fail('.kata/kata.yaml missing project: key')
       }
       return pass()
     },
@@ -397,28 +391,18 @@ export function assertWmYamlExists(): EvalCheckpoint {
 }
 
 /**
- * Assert that mode templates have been seeded.
- * Checks .kata/templates/ (new layout) then .claude/workflows/templates/ (old layout).
+ * Assert that mode templates have been seeded in .kata/templates/.
  */
 export function assertTemplatesExist(): EvalCheckpoint {
   return {
     name: 'mode templates seeded',
     assert(ctx: EvalContext) {
-      const newDir = '.kata/templates'
-      const oldDir = '.claude/workflows/templates'
-      const templates = ctx.listDir(newDir)
-      if (templates.length > 0) {
-        if (!templates.includes('onboard.md')) {
-          return fail('onboard.md template missing from .kata/templates/')
-        }
-        return pass()
+      const templates = ctx.listDir('.kata/templates')
+      if (templates.length === 0) {
+        return fail('No templates found in .kata/templates/')
       }
-      const oldTemplates = ctx.listDir(oldDir)
-      if (oldTemplates.length === 0) {
-        return fail('No templates found (checked .kata/templates/ and .claude/workflows/templates/)')
-      }
-      if (!oldTemplates.includes('onboard.md')) {
-        return fail('onboard.md template missing from .claude/workflows/templates/')
+      if (!templates.includes('onboard.md')) {
+        return fail('onboard.md template missing from .kata/templates/')
       }
       return pass()
     },
@@ -757,24 +741,21 @@ interface StopHookLogEntry {
  * The stop hook writes to {sessionsDir}/{sessionId}/stop-hook.log.jsonl
  */
 function readStopHookLog(ctx: EvalContext): StopHookLogEntry[] {
-  // Check both session dir layouts
-  for (const base of ['.kata/sessions', '.claude/sessions']) {
-    if (!ctx.sessionId) return []
-    const logPath = `${base}/${ctx.sessionId}/stop-hook.log.jsonl`
-    if (ctx.fileExists(logPath)) {
-      const content = ctx.readFile(logPath)
-      return content
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            return JSON.parse(line) as StopHookLogEntry
-          } catch {
-            return null
-          }
-        })
-        .filter((e): e is StopHookLogEntry => e !== null)
-    }
+  if (!ctx.sessionId) return []
+  const logPath = `.kata/sessions/${ctx.sessionId}/stop-hook.log.jsonl`
+  if (ctx.fileExists(logPath)) {
+    const content = ctx.readFile(logPath)
+    return content
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.parse(line) as StopHookLogEntry
+        } catch {
+          return null
+        }
+      })
+      .filter((e): e is StopHookLogEntry => e !== null)
   }
   return []
 }
@@ -878,23 +859,21 @@ interface HookLogEntry {
  * Hooks write to {sessionsDir}/{sessionId}/hooks.log.jsonl
  */
 function readHookLog(ctx: EvalContext): HookLogEntry[] {
-  for (const base of ['.kata/sessions', '.claude/sessions']) {
-    if (!ctx.sessionId) return []
-    const logPath = `${base}/${ctx.sessionId}/hooks.log.jsonl`
-    if (ctx.fileExists(logPath)) {
-      const content = ctx.readFile(logPath)
-      return content
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => {
-          try {
-            return JSON.parse(line) as HookLogEntry
-          } catch {
-            return null
-          }
-        })
-        .filter((e): e is HookLogEntry => e !== null)
-    }
+  if (!ctx.sessionId) return []
+  const logPath = `.kata/sessions/${ctx.sessionId}/hooks.log.jsonl`
+  if (ctx.fileExists(logPath)) {
+    const content = ctx.readFile(logPath)
+    return content
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        try {
+          return JSON.parse(line) as HookLogEntry
+        } catch {
+          return null
+        }
+      })
+      .filter((e): e is HookLogEntry => e !== null)
   }
   return []
 }
@@ -1133,29 +1112,26 @@ export function assertJudgePasses(options: JudgeAssertionOptions): EvalCheckpoin
 
 /**
  * Assert that verification evidence files exist for a given issue number.
- * Checks .kata/verification-evidence/ and .claude/verification-evidence/ for
- * JSON files matching the issue number pattern.
+ * Checks .kata/verification-evidence/ for JSON files matching the issue number pattern.
  */
 export function assertVerifyEvidenceExists(issueNumber: number): EvalCheckpoint {
   return {
     name: `verify evidence exists for issue #${issueNumber}`,
     assert(ctx: EvalContext) {
-      for (const base of ['.kata/verification-evidence', '.claude/verification-evidence']) {
-        try {
-          const files = ctx.listDir(base)
-          const matching = files.filter(
-            (f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`),
-          )
-          if (matching.length > 0) {
-            return pass()
-          }
-        } catch {
-          // dir doesn't exist, try next
+      try {
+        const files = ctx.listDir('.kata/verification-evidence')
+        const matching = files.filter(
+          (f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`),
+        )
+        if (matching.length > 0) {
+          return pass()
         }
+      } catch {
+        // dir doesn't exist
       }
       return fail(
         `No verification evidence JSON found for issue #${issueNumber} ` +
-        `in .kata/verification-evidence/ or .claude/verification-evidence/`,
+        `in .kata/verification-evidence/`,
       )
     },
   }

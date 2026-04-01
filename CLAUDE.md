@@ -30,7 +30,7 @@ The `kata` shell script at the repo root is the CLI entry point. It runs `dist/i
 | `commands/enter/` | Sub-modules for the `enter` command: `task-factory.ts` (native task creation), `guidance.ts`, `template.ts`, `spec.ts` |
 | `session/lookup.ts` | Project root discovery, session ID resolution, template path resolution |
 | `state/` | Zod schema (`schema.ts`), reader/writer for `SessionState` JSON |
-| `config/` | `wm-config.ts` loads `.claude/workflows/wm.yaml`; `cache.ts` loads and merges `modes.yaml` |
+| `config/` | `kata-config.ts` loads `.kata/kata.yaml` |
 | `validation/` | Phase/template validation |
 | `yaml/` | YAML frontmatter parser for template files |
 | `utils/` | Workflow ID generation, session cleanup, timestamps |
@@ -44,22 +44,19 @@ tsup produces ESM-only output with two entry points:
 
 ### Runtime data layout
 
-**New projects** use `.kata/` for kata-owned config. **Existing projects** with `.claude/workflows/` are supported via backwards compatibility.
+All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/settings.json`, `.claude/agents/`) remain in `.claude/`.
 
-| Path (new `.kata/` layout) | Old `.claude/` layout | Contents |
-|---|---|---|
-| `.kata/sessions/{sessionId}/state.json` | `.claude/sessions/{sessionId}/state.json` | Per-session `SessionState` |
-| `.kata/wm.yaml` | `.claude/workflows/wm.yaml` | Project config (`WmConfig`) |
-| `.kata/modes.yaml` | `.claude/workflows/modes.yaml` | Project-level mode overrides |
-| `.kata/templates/` | `.claude/workflows/templates/` | Mode templates |
-| `.kata/prompts/` | `.claude/workflows/prompts/` | Review prompt templates (customizable) |
-| `.kata/verification-evidence/` | `.claude/verification-evidence/` | Verify-phase output |
-| `~/.claude/tasks/{sessionId}/` | (same) | Native task files (Claude-owned) |
-| `.claude/settings.json` | (same) | Hook registration (Claude-owned) |
-| `.claude/agents/` | (same) | Agent definitions (Claude-owned) |
-| `planning/spec-templates/` | (same) | Spec document stubs |
-
-Layout detection: `getKataDir()` checks for `.kata/` first, falls back to `.claude/`. Path helpers (`getSessionsDir()`, `getProjectTemplatesDir()`, etc.) handle both layouts transparently.
+| Path | Contents |
+|---|---|
+| `.kata/kata.yaml` | Project config (modes, settings) |
+| `.kata/sessions/{sessionId}/state.json` | Per-session `SessionState` |
+| `.kata/templates/` | Mode templates |
+| `.kata/prompts/` | Review prompt templates (customizable) |
+| `.kata/verification-evidence/` | Verify-phase output |
+| `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned) |
+| `.claude/settings.json` | Hook registration (Claude-owned) |
+| `.claude/agents/` | Agent definitions (Claude-owned) |
+| `planning/spec-templates/` | Spec document stubs |
 
 ### Hook architecture
 
@@ -80,9 +77,7 @@ Built-in modes are defined in `modes.yaml` (package root). Each mode references 
 - `templates/` — system templates only: `onboard.md` and `SESSION-TEMPLATE.template.md`
 - `batteries/templates/` — canonical mode templates (implementation, planning, task, bugfix, etc.)
 
-After setup, the project owns copies under `.kata/templates/` (or `.claude/workflows/templates/` for old-layout projects). The package files are seeds only, not used at runtime. To update project templates with newer versions, run `kata batteries --update`.
-
-Project modes in `.kata/modes.yaml` (or `.claude/workflows/modes.yaml`) are merged over the built-in set with project definitions taking precedence.
+After setup, the project owns copies under `.kata/templates/`. The package files are seeds only, not used at runtime. To update project templates with newer versions, run `kata batteries --update`.
 
 ### Key dependencies
 
@@ -146,7 +141,7 @@ bun test eval/assertions.test.ts                        # Run assertion unit tes
 
 ### Eval mode
 
-`eval` is a project-level mode override (`.claude/workflows/modes.yaml`), not in the batteries templates. Enter with `kata enter eval` — creates per-scenario tasks with dependency chains.
+`eval` is a project-level mode override (`.kata/kata.yaml`), not in the batteries templates. Enter with `kata enter eval` — creates per-scenario tasks with dependency chains.
 
 ### Fixtures
 
@@ -157,4 +152,4 @@ bun test eval/assertions.test.ts                        # Run assertion unit tes
 
 ## Project root resolution
 
-`findProjectDir()` (formerly `findClaudeProjectDir()`) walks up from cwd looking for `.kata/` first, then `.claude/sessions/` or `.claude/workflows/` (backwards compat). It **stops at `.git` boundaries** to prevent escaping into a parent project (e.g., eval projects nested under this repo). If cwd has `.git` but no `.kata/` or `.claude/`, it's a fresh project — the walk stops there.
+`findProjectDir()` walks up from cwd looking for `.kata/`. It **stops at `.git` boundaries** to prevent escaping into a parent project (e.g., eval projects nested under this repo). If cwd has `.git` but no `.kata/`, it's a fresh project — the walk stops there.

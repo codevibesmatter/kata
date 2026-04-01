@@ -1,10 +1,10 @@
 // kata teardown - Remove kata from a project
 // Removes kata hook entries from .claude/settings.json
-// Deletes .claude/workflows/wm.yaml
-// Preserves .claude/sessions/ and all non-kata hooks
+// Deletes .kata/kata.yaml
+// Preserves .kata/sessions/ and all non-kata hooks
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { findProjectDir, getSessionsDir, getKataDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 /**
@@ -101,10 +101,9 @@ function removeWmHooks(settings: SettingsJson): { cleaned: SettingsJson; removed
  *
  * Remove kata from a project:
  * - Removes kata hook entries from .claude/settings.json (identified by 'kata hook' command substring)
- * - Deletes .claude/workflows/wm.yaml
- * - Preserves .claude/sessions/ and all non-kata hooks
+ * - Deletes .kata/kata.yaml
+ * - Preserves .kata/sessions/ and all non-kata hooks
  * - --yes: Skip confirmation
- * - --all: Also remove .claude/workflows/modes.yaml
  * - --dry-run: Show what would be removed without making changes
  *
  * Idempotent: safe to run multiple times.
@@ -151,8 +150,7 @@ export async function teardown(args: string[]): Promise<void> {
   // 2. Check for kata.yaml
   const kataYamlPath = getKataConfigPath(projectRoot)
   if (existsSync(kataYamlPath)) {
-    const kd = getKataDir(projectRoot)
-    actions.push(`Delete: ${kd === '.kata' ? '.kata/kata.yaml' : '.claude/workflows/kata.yaml'}`)
+    actions.push(`Delete: .kata/kata.yaml`)
   }
 
   // No actions needed
@@ -191,7 +189,5 @@ export async function teardown(args: string[]): Promise<void> {
     unlinkSync(kataYamlPath)
   }
 
-  const kd = getKataDir(projectRoot)
-  const sessDir = kd === '.kata' ? '.kata/sessions' : '.claude/sessions'
-  process.stdout.write(`\nTeardown complete. Sessions preserved at ${sessDir}/\n`)
+  process.stdout.write(`\nTeardown complete. Sessions preserved at .kata/sessions/\n`)
 }

@@ -27,7 +27,7 @@ import {
 export const implE2eVerifyScenario: EvalScenario = {
   id: 'impl-e2e-verify',
   name: 'E2E implementation with LLM judge',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +
@@ -42,7 +42,7 @@ export const implE2eVerifyScenario: EvalScenario = {
     ...implTaskGenPresets(),
     // LLM judge: evaluate complete transcript
     assertJudgePasses({
-      templatePath: '.claude/workflows/templates/implementation.md',
+      templatePath: '.kata/templates/implementation.md',
       minAgentScore: 70,
       minSystemScore: 50,
     }),

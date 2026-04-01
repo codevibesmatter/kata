@@ -24,7 +24,7 @@ import {
 export const implTaskGenDefaultScenario: EvalScenario = {
   id: 'impl-task-gen-default',
   name: 'Implementation task gen: default impl-test-review pattern',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +

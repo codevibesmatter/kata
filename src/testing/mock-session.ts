@@ -70,9 +70,9 @@ export async function createMockSession(options: MockSessionOptions = {}): Promi
 
   await writeFile(statePath, JSON.stringify(initialState, null, 2))
 
-  // Create mock .claude directories if needed
-  const claudeDir = join(baseDir, '.claude')
-  const sessionsDir = join(claudeDir, 'sessions', sessionId)
+  // Create mock .kata directories if needed
+  const kataDir = join(baseDir, '.kata')
+  const sessionsDir = join(kataDir, 'sessions', sessionId)
   await mkdir(sessionsDir, { recursive: true })
   await writeFile(join(sessionsDir, 'state.json'), JSON.stringify(initialState, null, 2))
 
@@ -93,7 +93,7 @@ export async function createMockSession(options: MockSessionOptions = {}): Promi
       const current = await getState()
       const updated = { ...current, ...partial, updatedAt: new Date().toISOString() }
       await writeFile(statePath, JSON.stringify(updated, null, 2))
-      // Also update in .claude/sessions
+      // Also update in .kata/sessions
       await writeFile(join(sessionsDir, 'state.json'), JSON.stringify(updated, null, 2))
     },
 

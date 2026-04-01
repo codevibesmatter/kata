@@ -31,11 +31,11 @@ export const planningReviewAgentsScenario: EvalScenario = {
   fixture: 'tanstack-start',
   fixtureSetup: [
     // batteries --update comments out the reviews block; uncomment it and add spec reviewers
-    "sed -i 's/^# reviews:/reviews:/' .claude/workflows/kata.yaml",
-    "sed -i '/^reviews:/a\\  spec_review: true' .claude/workflows/kata.yaml",
-    "sed -i '/^  spec_review: true/a\\  spec_reviewers:' .claude/workflows/kata.yaml",
-    "sed -i '/^  spec_reviewers:/a\\    - codex' .claude/workflows/kata.yaml",
-    "sed -i '/^  spec_reviewers:/a\\    - gemini' .claude/workflows/kata.yaml",
+    "sed -i 's/^# reviews:/reviews:/' .kata/kata.yaml",
+    "sed -i '/^reviews:/a\\  spec_review: true' .kata/kata.yaml",
+    "sed -i '/^  spec_review: true/a\\  spec_reviewers:' .kata/kata.yaml",
+    "sed -i '/^  spec_reviewers:/a\\    - codex' .kata/kata.yaml",
+    "sed -i '/^  spec_reviewers:/a\\    - gemini' .kata/kata.yaml",
   ],
   prompt:
     'The dark mode spec at planning/specs/200-dark-mode.md has status: needs-review. ' +

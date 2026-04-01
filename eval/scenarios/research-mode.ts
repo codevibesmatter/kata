@@ -24,7 +24,7 @@ import {
 export const researchModeScenario: EvalScenario = {
   id: 'research-mode',
   name: 'Research mode — explore and document findings',
-  templatePath: '.claude/workflows/templates/research.md',
+  templatePath: '.kata/templates/research.md',
   prompt:
     'Research how this app could add database persistence — ' +
     'explore what ORM/driver options work with TanStack Start, ' +

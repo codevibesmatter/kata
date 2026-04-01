@@ -31,17 +31,17 @@ import {
 export const implReviewAgentsScenario: EvalScenario = {
   id: 'impl-review-agents',
   name: 'Implementation: review-agent + gemini + codex run during REVIEW steps',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   fixtureSetup: [
     // kata batteries --update writes a fresh kata.yaml with reviews commented out.
     // Uncomment the reviews block and set code_review: true + code_reviewers list.
-    "sed -i 's/^# reviews:/reviews:/' .claude/workflows/kata.yaml",
-    "sed -i 's/^#   code_review:.*$/  code_review: true/' .claude/workflows/kata.yaml",
-    "sed -i '/code_reviewer:/d' .claude/workflows/kata.yaml",
-    "sed -i '/^  code_review: true/a\\  code_reviewers:' .claude/workflows/kata.yaml",
-    "sed -i '/^  code_reviewers:/a\\    - codex' .claude/workflows/kata.yaml",
-    "sed -i '/^  code_reviewers:/a\\    - gemini' .claude/workflows/kata.yaml",
+    "sed -i 's/^# reviews:/reviews:/' .kata/kata.yaml",
+    "sed -i 's/^#   code_review:.*$/  code_review: true/' .kata/kata.yaml",
+    "sed -i '/code_reviewer:/d' .kata/kata.yaml",
+    "sed -i '/^  code_review: true/a\\  code_reviewers:' .kata/kata.yaml",
+    "sed -i '/^  code_reviewers:/a\\    - codex' .kata/kata.yaml",
+    "sed -i '/^  code_reviewers:/a\\    - gemini' .kata/kata.yaml",
   ],
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +

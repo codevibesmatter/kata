@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { z } from 'zod'
 import { STOP_CONDITION_TYPES } from '../state/schema.js'
-import { findProjectDir, getKataDir } from '../session/lookup.js'
+import { findProjectDir } from '../session/lookup.js'
 
 /**
  * Per-mode config schema for kata.yaml `modes:` section.
@@ -113,15 +113,9 @@ let cachedPath: string | null = null
 
 /**
  * Get the path to kata.yaml for a project.
- * Returns .kata/kata.yaml for new layout, .claude/workflows/kata.yaml for old layout.
  */
 export function getKataConfigPath(projectRoot: string): string {
-  const kataDir = getKataDir(projectRoot)
-  if (kataDir === '.kata') {
-    return join(projectRoot, '.kata', 'kata.yaml')
-  }
-  // Old layout: .claude/workflows/kata.yaml
-  return join(projectRoot, '.claude', 'workflows', 'kata.yaml')
+  return join(projectRoot, '.kata', 'kata.yaml')
 }
 
 /**
@@ -143,10 +137,8 @@ export function loadKataConfig(projectRoot?: string): KataConfig {
 
   if (!existsSync(configPath)) {
     // Check for legacy config files to give a helpful migration hint
-    const hasLegacyWm = existsSync(join(root, '.kata', 'wm.yaml')) ||
-      existsSync(join(root, '.claude', 'workflows', 'wm.yaml'))
-    const hasLegacyModes = existsSync(join(root, '.kata', 'modes.yaml')) ||
-      existsSync(join(root, '.claude', 'workflows', 'modes.yaml'))
+    const hasLegacyWm = existsSync(join(root, '.kata', 'wm.yaml'))
+    const hasLegacyModes = existsSync(join(root, '.kata', 'modes.yaml'))
 
     if (hasLegacyWm || hasLegacyModes) {
       throw new Error(

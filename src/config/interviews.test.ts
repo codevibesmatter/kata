@@ -311,17 +311,17 @@ describe('loadInterviewConfig 2-tier merge', () => {
     )
   })
 
-  it('supports .claude/workflows layout (backwards compat)', async () => {
-    const tmpDir = makeTmpDir('old-layout')
+  it('loads from .kata/ layout', async () => {
+    const tmpDir = makeTmpDir('kata-layout')
     tmpDirs.push(tmpDir)
 
     const projDir = join(tmpDir, 'proj')
-    mkdirSync(join(projDir, '.claude', 'workflows'), { recursive: true })
-    writeInterviewsYaml(join(projDir, '.claude', 'workflows'), {
+    mkdirSync(join(projDir, '.kata'), { recursive: true })
+    writeInterviewsYaml(join(projDir, '.kata'), {
       interview_categories: {
         requirements: {
-          name: 'Old Layout Requirements',
-          description: 'Using .claude/workflows/ path',
+          name: 'Kata Layout Requirements',
+          description: 'Using .kata/ path',
           rounds: [
             {
               header: 'Q',
@@ -335,6 +335,6 @@ describe('loadInterviewConfig 2-tier merge', () => {
     process.env.CLAUDE_PROJECT_DIR = projDir
 
     const config = await loadInterviewConfig()
-    expect(config.interview_categories.requirements.name).toBe('Old Layout Requirements')
+    expect(config.interview_categories.requirements.name).toBe('Kata Layout Requirements')
   })
 })

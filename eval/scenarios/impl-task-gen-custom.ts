@@ -5,7 +5,7 @@
  * an agent review step between impl and verify.
  *
  * Uses tanstack-start fixture with fixtureSetup to:
- * 1. Create .claude/workflows/subphase-patterns.yaml with impl-review-verify pattern
+ * 1. Create .kata/subphase-patterns.yaml with impl-review-verify pattern
  * 2. Override implementation.md to reference the custom pattern
  *
  * The impl-review-verify pattern has:
@@ -60,16 +60,14 @@ subphase_patterns:
 export const implTaskGenCustomScenario: EvalScenario = {
   id: 'impl-task-gen-custom',
   name: 'Implementation task gen: custom impl-review-verify pattern',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   fixtureSetup: [
-    // Write custom subphase pattern into old layout (.claude/workflows/)
-    // IMPORTANT: do NOT create .kata/ — that would switch getKataDir() to new layout
-    // while batteries already wrote templates to .claude/workflows/templates/
-    `cat > .claude/workflows/subphase-patterns.yaml << 'YAML'\n${CUSTOM_SUBPHASE_PATTERNS}\nYAML`,
+    // Write custom subphase pattern into .kata/
+    `cat > .kata/subphase-patterns.yaml << 'YAML'\n${CUSTOM_SUBPHASE_PATTERNS}\nYAML`,
     // Override implementation template to reference custom pattern
     // sed replaces the subphase_pattern value in the YAML frontmatter
-    "sed -i 's/subphase_pattern: impl-test-verify/subphase_pattern: impl-review-verify/' .claude/workflows/templates/implementation.md",
+    "sed -i 's/subphase_pattern: impl-test-verify/subphase_pattern: impl-review-verify/' .kata/templates/implementation.md",
   ],
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +

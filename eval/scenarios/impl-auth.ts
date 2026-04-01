@@ -22,7 +22,7 @@ import { workflowPresetsWithPush, assertDiffNonTrivial } from '../assertions.js'
 export const implAuthScenario: EvalScenario = {
   id: 'impl-auth',
   name: 'Implementation mode: Better Auth from approved spec',
-  templatePath: '.claude/workflows/templates/implementation.md',
+  templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   prompt:
     'Implement the authentication feature described in the approved spec at planning/specs/.',

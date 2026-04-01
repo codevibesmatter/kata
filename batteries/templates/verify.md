@@ -51,7 +51,7 @@ phases:
         title: "Read verification tools config"
         instruction: |
           Read the project's verification tools config:
-          - `.kata/verification-tools.md` (or `.claude/workflows/verification-tools.md`)
+          - `.kata/verification-tools.md`
 
           This file has the project's dev server command, API base URL, auth setup,
           database access, and key endpoints. Read it FIRST before executing any VP steps.
@@ -252,7 +252,7 @@ phases:
       - id: write-evidence
         title: "Write VP evidence file"
         instruction: |
-          Write VP evidence to `.kata/verification-evidence/` (or `.claude/verification-evidence/` for old layout).
+          Write VP evidence to `.kata/verification-evidence/`.
 
           Filename convention (the `can-exit` check requires `vp-*-{issueNumber}.json`):
           - Issue-based: `vp-p{N}-{issueNumber}.json` (e.g. `vp-p1-42.json`)
@@ -280,7 +280,7 @@ phases:
         instruction: |
           Commit the VP evidence file:
           ```bash
-          git add .kata/verification-evidence/ .claude/verification-evidence/
+          git add .kata/verification-evidence/
           git commit -m "chore(verify): VP evidence for issue #N — {PASSED|FAILED}"
           git push
           ```

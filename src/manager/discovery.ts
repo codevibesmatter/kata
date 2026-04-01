@@ -35,15 +35,9 @@ export function decanonPath(dirName: string): string {
  * Check if a directory is a kata-enabled project.
  * Returns the layout type if enabled, or null if not.
  */
-export function isKataEnabled(projectPath: string): { enabled: boolean; layout: '.kata' | '.claude' } {
-  // Check for new .kata/ layout first
-  if (existsSync(join(projectPath, '.kata', 'wm.yaml'))) {
+export function isKataEnabled(projectPath: string): { enabled: boolean; layout: '.kata' } {
+  if (existsSync(join(projectPath, '.kata', 'kata.yaml'))) {
     return { enabled: true, layout: '.kata' }
-  }
-
-  // Check for old .claude/workflows/wm.yaml layout
-  if (existsSync(join(projectPath, '.claude', 'workflows', 'wm.yaml'))) {
-    return { enabled: true, layout: '.claude' }
   }
 
   return { enabled: false, layout: '.kata' }
@@ -56,7 +50,7 @@ export function isKataEnabled(projectPath: string): { enabled: boolean; layout: 
 export function scanClaudeProjects(): Array<{
   path: string
   name: string
-  kata_layout: '.kata' | '.claude'
+  kata_layout: '.kata'
   discovered_from: 'auto'
 }> {
   const claudeProjectsDir = join(homedir(), '.claude', 'projects')
@@ -65,7 +59,7 @@ export function scanClaudeProjects(): Array<{
   const entries: Array<{
     path: string
     name: string
-    kata_layout: '.kata' | '.claude'
+    kata_layout: '.kata'
     discovered_from: 'auto'
   }> = []
 

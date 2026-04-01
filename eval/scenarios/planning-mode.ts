@@ -18,7 +18,7 @@ import { planningPresets } from '../assertions.js'
 export const planningModeScenario: EvalScenario = {
   id: 'planning-mode',
   name: 'Planning mode: user authentication feature spec',
-  templatePath: '.claude/workflows/templates/planning.md',
+  templatePath: '.kata/templates/planning.md',
   prompt:
     'Plan a user authentication feature for this app. ' +
     'The feature should cover session-based auth with login and protected routes. ' +

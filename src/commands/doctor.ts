@@ -38,7 +38,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 /**
  * Get Claude project dir, falling back to cwd for bootstrap scenarios
- * (when .claude/sessions/ or .claude/workflows/ may not exist yet)
+ * (when .kata/ may not exist yet)
  */
 function getProjectDir(useFallback: boolean): string {
   if (useFallback) {

@@ -37,25 +37,22 @@ describe('isKataEnabled', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('detects .kata layout', () => {
+  it('detects .kata layout with kata.yaml', () => {
     mkdirSync(join(tmpDir, '.kata'), { recursive: true })
-    writeFileSync(join(tmpDir, '.kata', 'wm.yaml'), 'project:\n  name: test\n')
+    writeFileSync(join(tmpDir, '.kata', 'kata.yaml'), 'project:\n  name: test\n')
 
     const result = isKataEnabled(tmpDir)
     expect(result.enabled).toBe(true)
     expect(result.layout).toBe('.kata')
   })
 
-  it('detects .claude/workflows layout', () => {
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
-    writeFileSync(join(tmpDir, '.claude', 'workflows', 'wm.yaml'), 'project:\n  name: test\n')
-
+  it('returns not enabled for empty directory', () => {
     const result = isKataEnabled(tmpDir)
-    expect(result.enabled).toBe(true)
-    expect(result.layout).toBe('.claude')
+    expect(result.enabled).toBe(false)
   })
 
-  it('returns not enabled for empty directory', () => {
+  it('returns not enabled when .kata/ exists but no kata.yaml', () => {
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     const result = isKataEnabled(tmpDir)
     expect(result.enabled).toBe(false)
   })

@@ -59,7 +59,7 @@ function getBatteriesPromptsDir(): string {
 
 /**
  * Load a saved prompt template by name.
- * Checks project-level prompts first (.kata/prompts/ or .claude/workflows/prompts/),
+ * Checks project-level prompts first (.kata/prompts/),
  * then falls back to package batteries/prompts/.
  */
 export function loadPrompt(name: string): string {
