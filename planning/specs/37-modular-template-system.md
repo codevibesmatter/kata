@@ -12,23 +12,19 @@ phases:
   - id: p1
     name: "Schema + placeholder system"
     tasks:
-      - "Extend phaseStepSchema with gate field (bash, agent, skill variants)"
+      - "Extend phaseStepSchema with gate field (bash variant only)"
       - "Extend phaseStepSchema with hints array (read, bash, search, agent, skill, ask types)"
-      - "Create placeholder resolution engine with three-source chain"
-      - "Add step output capture to session state for cross-step placeholders"
+      - "Create placeholder resolution engine with two-source chain (session state + kata.yaml config)"
       - "Update templateYamlSchema to accept new gate/hint fields"
-      - "Write unit tests for gate schema validation (all three gate types)"
+      - "Write unit tests for gate schema validation (bash gate type)"
       - "Write unit tests for hint schema validation (all six hint types)"
-      - "Write unit tests for placeholder resolution chain (step > session > config)"
+      - "Write unit tests for placeholder resolution chain (session > config)"
     test_cases:
       - id: gate-schema-valid
         description: "Gate with bash/expect parses without error"
         type: unit
-      - id: gate-schema-agent
-        description: "Gate with agent/prompt/threshold parses without error"
-        type: unit
-      - id: gate-schema-skill
-        description: "Gate with skill/name/args/expect parses without error"
+      - id: gate-schema-exit
+        description: "Gate with bash/expect_exit parses without error"
         type: unit
       - id: hint-schema-all-types
         description: "Hints array with all six types parses without error"
@@ -39,24 +35,20 @@ phases:
       - id: placeholder-kata-config
         description: "{test_command} resolves from kata.yaml project config"
         type: unit
-      - id: placeholder-step-output
-        description: "{steps.read_spec.output} resolves from captured step output"
-        type: unit
       - id: placeholder-chain-priority
-        description: "Step output wins over session state wins over kata.yaml config"
+        description: "Session state wins over kata.yaml config"
         type: unit
   - id: p2
-    name: "Gate-check PreToolUse hook"
+    name: "Consolidated PreToolUse hook + gate evaluation"
     tasks:
-      - "Create src/commands/hook-gate-check.ts with gate evaluation engine"
+      - "Consolidate mode-gate, task-deps, task-evidence, and gate-check into single handlePreToolUse handler"
       - "Implement bash gate evaluator (run command, check expect/expect_exit)"
-      - "Implement agent gate evaluator (invoke provider, check threshold)"
-      - "Implement skill gate evaluator (run skill, check expect)"
-      - "Wire gate-check into hook dispatcher (src/commands/hook.ts)"
-      - "Register gate-check hook in buildHookEntries() in setup.ts"
-      - "Add gate failure response format (continue: false + retry hint)"
-      - "Write unit tests for each gate evaluator type"
-      - "Write integration test: gate blocks tool use when failing"
+      - "Add gate evaluation to TaskUpdate completion path (after dep check, before evidence check)"
+      - "Update buildHookEntries() to register single PreToolUse hook instead of multiple"
+      - "Add gate failure response format (permissionDecision: deny + retry hint)"
+      - "Write unit tests for bash gate evaluator"
+      - "Write integration test: gate blocks task completion when failing"
+      - "Write unit tests for consolidated handler dispatch (mode-gate, deps, gates, evidence)"
     test_cases:
       - id: gate-bash-pass
         description: "Bash gate with matching expect returns allow"
@@ -67,14 +59,11 @@ phases:
       - id: gate-bash-exit
         description: "Bash gate with expect_exit checks exit code"
         type: unit
-      - id: gate-agent-pass
-        description: "Agent gate with score >= threshold returns allow"
+      - id: consolidated-mode-gate
+        description: "Single PreToolUse handler blocks writes when no mode active"
         type: unit
-      - id: gate-agent-fail
-        description: "Agent gate with score < threshold returns deny"
-        type: unit
-      - id: gate-hook-blocks
-        description: "PreToolUse hook returns continue: false when gate fails"
+      - id: consolidated-dispatch
+        description: "Single handler runs deps → gates → evidence in order for TaskUpdate"
         type: integration
   - id: p3
     name: "Inline subphases"
@@ -144,17 +133,23 @@ phases:
   - id: p6
     name: "Setup/update/migrate + batteries removal"
     tasks:
-      - "Update kata setup to register gate-check hook in settings.json"
+      - "Update kata setup to register consolidated PreToolUse hook in settings.json"
       - "Add kata_version field to KataConfigSchema (read from package.json)"
       - "Create src/commands/update.ts for upstream template merge"
       - "Remove batteries 2-tier lookup from resolveTemplatePath()"
       - "Remove batteries-backup logic"
+      - "Create src/commands/migrate.ts with old-format detection and conversion"
+      - "Detect old-format templates (no gate/hints fields in frontmatter)"
+      - "Convert old phaseStepSchema instructions to hints + gates where possible"
+      - "Convert string subphase_pattern references to inline arrays"
+      - "Preserve custom instructions as-is (no lossy conversion)"
+      - "Add --dry-run flag to preview migration"
       - "Update CLI dispatcher to add update/migrate commands"
       - "Update eval fixtures to new layout"
-      - "Write unit tests for update and migrate commands"
+      - "Write unit tests for update, migrate, and setup commands"
     test_cases:
-      - id: setup-registers-gate-check
-        description: "kata setup --yes produces settings.json with gate-check hook"
+      - id: setup-registers-pretooluse
+        description: "kata setup --yes produces settings.json with single consolidated PreToolUse hook"
         type: unit
       - id: update-preserves-custom
         description: "kata update keeps user-modified instructions, updates structure"
@@ -162,16 +157,6 @@ phases:
       - id: migrate-old-format
         description: "kata migrate converts old template format to new format"
         type: unit
-  - id: p7
-    name: "Migration command"
-    tasks:
-      - "Detect old-format templates (no gate/hints fields in frontmatter)"
-      - "Convert old phaseStepSchema instructions to hints + gates where possible"
-      - "Convert string subphase_pattern references to inline arrays"
-      - "Preserve custom instructions as-is (no lossy conversion)"
-      - "Add --dry-run flag to preview migration"
-      - "Write unit tests for format detection and conversion"
-    test_cases:
       - id: detect-old-format
         description: "Old template without gates/hints detected as needing migration"
         type: unit
@@ -191,7 +176,7 @@ phases:
 
 ## Overview
 
-The template system encodes 125+ actions as unstructured prose in markdown instructions. Bash commands, tool calls, agent spawns, conditionals, and gates are all embedded in freeform text that agents must parse and interpret. Subphase patterns live in a separate YAML file with exactly one consumer. Interviews live in another separate file with zero programmatic callers. This spec replaces the template action model with a formal schema: **gates** (enforced by a PreToolUse hook), **hints** (typed agent guidance), and **instructions** (prose for judgment calls). Subphase patterns move inline into template frontmatter. Interviews become a callable `/interview` skill. A new placeholder system resolves variables from session state, project config, and step output capture.
+The template system encodes 125+ actions as unstructured prose in markdown instructions. Bash commands, tool calls, agent spawns, conditionals, and gates are all embedded in freeform text that agents must parse and interpret. Subphase patterns live in a separate YAML file with exactly one consumer. Interviews live in another separate file with zero programmatic callers. This spec replaces the template action model with a formal schema: **gates** (bash-only, enforced by a consolidated PreToolUse hook), **hints** (typed agent guidance), and **instructions** (prose for judgment calls). Subphase patterns move inline into template frontmatter. Interviews become a callable `/interview` skill. A new placeholder system resolves variables from session state and project config. All existing PreToolUse hooks (mode-gate, task-deps, task-evidence) are consolidated into a single handler alongside the new gate evaluation.
 
 **Audience:** All kata users and template authors.
 
@@ -204,6 +189,8 @@ The template system encodes 125+ actions as unstructured prose in markdown instr
 - **Multi-project manager** -- Out of scope. Single-project workflows only.
 - **Three-way merge for templates** -- `kata update` uses file-level comparison (current matches old base = replace; current differs = skip with diff shown). No three-way merge.
 - **Full execution engine** -- Gates are *checks* (pass/fail), not an orchestrator. The agent still drives all creative work. Gates block forward progress when preconditions fail; they do not sequence actions.
+- **Agent or skill gate types** -- Only bash gates are implemented. Bash can shell out to any command (including `kata <skill>` or custom review scripts), so agent/skill gate types are deferred. LLM-as-judge quality gates can be added in a follow-up.
+- **Step output capture** -- Cross-step placeholders (`{steps.<id>.output}`) are deferred. Placeholders resolve from session state and kata.yaml config only.
 - **Changing stop hook mechanism** -- `stop_conditions` in `modes.yaml` stays as-is. Gates are per-step preconditions, not exit conditions.
 - **Real-time gate evaluation during agent work** -- Gates fire at step boundaries (when the agent attempts to complete a task via TaskUpdate), not continuously during work.
 
@@ -216,13 +203,12 @@ The template system encodes 125+ actions as unstructured prose in markdown instr
 - **Trigger:** Template step has a `gate` field; agent attempts to complete the step's native task via `TaskUpdate(status: "completed")`
 - **Expected:** The `gate-check` PreToolUse hook evaluates the gate condition. If the gate passes, the TaskUpdate proceeds. If the gate fails, the hook returns `{ permissionDecision: "deny", permissionDecisionReason: "<retry hint>" }` and the agent receives the retry hint to fix the issue.
 - **Verify:** Create a template with `gate: { bash: "echo FAIL", expect: "PASS" }`. Enter the mode. Attempt to complete the step. Confirm the hook blocks with a retry hint containing "PASS".
-- **Source:** `src/validation/schemas.ts`, `src/commands/hook-gate-check.ts`, `src/commands/setup.ts`
+- **Source:** `src/validation/schemas.ts`, `src/commands/hook.ts`, `src/commands/setup.ts`
 
-#### Gate Types
+#### Gate Type
 
-Three gate types, each with its own sub-schema:
+One gate type: **bash** -- runs a shell command, checks output or exit code:
 
-**Bash gate** -- runs a shell command, checks output or exit code:
 ```yaml
 gate:
   bash: "grep 'status:' {spec_path}"
@@ -237,103 +223,81 @@ gate:
   on_fail: "Tests failing on clean tree. Fix before proceeding."
 ```
 
-**Agent gate** -- invokes a provider, checks score against threshold:
-```yaml
-gate:
-  agent: "review-agent"
-  prompt: "code-review"
-  threshold: 75               # score must be >= this (0-100)
-  on_fail: "Code review score {score} < 75. Address review feedback."
-```
-
-**Skill gate** -- runs a kata skill, checks output:
-```yaml
-gate:
-  skill: "check-phase"
-  args: "{phase_label} --issue={issue}"
-  expect: "PASS"
-  on_fail: "Phase check failed. Review output and fix issues."
-```
+Bash gates are sufficient for all use cases -- template authors can shell out to any command, including `kata <skill>` or custom scripts. Agent-driven quality gates (e.g., LLM review with a score threshold) are deferred to a follow-up if needed.
 
 #### Zod Schema
 
 Extend `src/validation/schemas.ts`:
 
 ```typescript
-export const bashGateSchema = z.object({
+export const gateSchema = z.object({
   bash: z.string().min(1),
   expect: z.string().optional(),
   expect_exit: z.number().optional(),
   on_fail: z.string().optional(),
 }).strict()
-
-export const agentGateSchema = z.object({
-  agent: z.string().min(1),
-  prompt: z.string().min(1),
-  model: z.string().optional(),
-  threshold: z.number().min(0).max(100).default(75),
-  on_fail: z.string().optional(),
-}).strict()
-
-export const skillGateSchema = z.object({
-  skill: z.string().min(1),
-  args: z.string().optional(),
-  expect: z.string().optional(),
-  on_fail: z.string().optional(),
-}).strict()
-
-export const gateSchema = z.union([bashGateSchema, agentGateSchema, skillGateSchema])
 ```
 
-Each sub-schema uses `.strict()` to reject unknown keys, enforcing mutual exclusivity. An object with both `bash` and `agent` keys will fail validation because `agent` is not in `bashGateSchema`'s allowed keys.
+Single object schema with `.strict()` to reject unknown keys.
 
 #### Gate Evaluation Engine
 
-New file `src/commands/hook-gate-check.ts`:
+Gate evaluation is integrated into the consolidated `handlePreToolUse` handler (see B1 Hook Consolidation below). When a `TaskUpdate(status: "completed")` is intercepted:
 
-1. Hook fires on `PreToolUse` with matcher `TaskUpdate`.
-2. Read the TaskUpdate input to extract the task ID being completed.
-3. Map native task ID back to workflow task ID via `metadata.originalId`.
-4. Look up the step definition in the template (by matching `phase.id:step.id` to `originalId`).
-5. If the step has no `gate` field, return `{ permissionDecision: "allow" }`.
-6. Resolve placeholders in the gate definition (see B3).
-7. Evaluate the gate:
-   - **bash**: `execSync(command)`, compare stdout to `expect` or exit code to `expect_exit`.
-   - **agent**: invoke provider via `claudeProvider.run()` or equivalent, parse score from output.
-   - **skill**: run `kata <skill> <args>`, check output against `expect`.
-8. If gate passes: return `{ permissionDecision: "allow" }`.
-9. If gate fails: resolve gate-local placeholders in `on_fail` (e.g., `{score}` for agent gates is the actual score returned by the provider), then return `{ permissionDecision: "deny", permissionDecisionReason: resolvedOnFail }`.
+1. Map native task ID back to workflow task ID via `metadata.originalId`.
+2. Look up the step definition in the template (by matching `phase.id:step.id` to `originalId`).
+3. If the step has no `gate` field, skip gate evaluation.
+4. Resolve placeholders in the gate definition (see B3).
+5. Evaluate the gate: `execSync(command)`, compare stdout to `expect` or exit code to `expect_exit`.
+6. If gate passes: proceed to next check (evidence).
+7. If gate fails: resolve gate-local placeholders in `on_fail`, then return `{ permissionDecision: "deny", permissionDecisionReason: resolvedOnFail }`.
 
 **Gate-local placeholders** are injected by the gate evaluator after evaluation, in addition to the standard placeholder sources from B3:
-- `{score}` -- agent gate: the score returned by the review agent
-- `{exit_code}` -- bash gate: the actual exit code of the command
-- `{output}` -- bash/skill gate: the stdout of the command
+- `{exit_code}` -- the actual exit code of the command
+- `{output}` -- the stdout of the command
 
-#### Hook Registration
+#### Hook Consolidation (PreToolUse)
 
-`buildHookEntries()` in `src/commands/setup.ts` adds a new PreToolUse entry:
+Currently, `mode-gate`, `task-deps`, and `task-evidence` are registered as separate PreToolUse hooks, each spawning a separate process, parsing stdin, and loading session state independently. This spec consolidates all PreToolUse logic — including gate evaluation — into a **single `handlePreToolUse` handler**.
+
+`buildHookEntries()` in `src/commands/setup.ts` registers **one** PreToolUse entry:
 
 ```typescript
-{
-  matcher: 'TaskUpdate',
-  hooks: [{
-    type: 'command',
-    command: `${bin} hook gate-check`,
-    timeout: 30,
-  }],
+PreToolUse: [
+  {
+    hooks: [{
+      type: 'command',
+      command: `${bin} hook pre-tool-use`,
+      timeout: 30,
+    }],
+  },
+],
+```
+
+The consolidated handler dispatches internally:
+
+```typescript
+async function handlePreToolUse(input) {
+  // 1. Always: inject --session=ID into kata bash commands
+  // 2. Always: block writes when no mode active (mode-gate)
+  // 3. If TaskUpdate(status: "completed"):
+  //    a. Check task dependencies (hard block)
+  //    b. Evaluate gate if step has one (hard block)
+  //    c. Check git evidence (advisory warning)
 }
 ```
 
-This hook is **always registered** (not strict-only). Gates are opt-in per step -- the hook is a no-op when the step has no gate.
+This replaces the separate `mode-gate`, `task-deps`, `task-evidence` handlers and the proposed `gate-check` handler. One process spawn, one stdin parse, one state load per tool use.
+
+The old handler functions (`handleModeGate`, `handleTaskDeps`, `handleTaskEvidence`) are refactored into internal helper functions called by `handlePreToolUse`. The `--strict` flag no longer controls whether task-deps/task-evidence hooks are registered (they're always part of the consolidated handler); instead, strict mode can be checked internally to decide whether to run the dep/evidence checks.
 
 #### Files Modified
 
 | File | Change |
 |------|--------|
-| `src/validation/schemas.ts` | Add `bashGateSchema`, `agentGateSchema`, `skillGateSchema`, `gateSchema`. Add `gate` field to `phaseStepSchema`. Add `gate` field to `subphasePatternSchema`. |
-| `src/commands/hook-gate-check.ts` | **New file.** Gate evaluation engine. |
-| `src/commands/hook.ts` | Add `gate-check` case to hook dispatcher. |
-| `src/commands/setup.ts` | Add gate-check entry to `buildHookEntries()`. |
+| `src/validation/schemas.ts` | Add `gateSchema`. Add `gate` field to `phaseStepSchema`. Add `gate` field to `subphasePatternSchema`. |
+| `src/commands/hook.ts` | Replace `mode-gate`, `task-deps`, `task-evidence` handlers with consolidated `handlePreToolUse`. Add gate evaluation logic. |
+| `src/commands/setup.ts` | Replace multiple PreToolUse entries with single `pre-tool-use` hook. |
 
 #### Backward Compatibility
 
@@ -464,39 +428,13 @@ This keeps hints human-readable in TaskList output while preserving type informa
 **Core:**
 - **ID:** placeholder-resolution
 - **Trigger:** Any gate, hint, or instruction field contains a `{variable}` placeholder during task creation or gate evaluation.
-- **Expected:** Placeholders resolve to concrete values from a three-source chain: (1) step output capture, (2) session state, (3) kata.yaml project config. Unresolved placeholders remain as literal `{variable}` text with a warning logged to stderr.
+- **Expected:** Placeholders resolve to concrete values from a two-source chain: (1) session state, (2) kata.yaml project config. Unresolved placeholders remain as literal `{variable}` text with a warning logged to stderr.
 - **Verify:** Create a template with `gate: { bash: "{test_command}" }`. Set `project.test_command: "npm test"` in kata.yaml. Enter the mode. Confirm the gate runs `npm test`.
-- **Source:** `src/commands/enter/guidance.ts` (existing `applyPlaceholders`), `src/commands/hook-gate-check.ts`
+- **Source:** `src/commands/enter/guidance.ts` (existing `applyPlaceholders`), `src/commands/hook.ts`
 
 #### Variable Sources
 
-**Source 1: Step output capture** (highest priority)
-
-Steps can capture their output for use by later steps. The capture mechanism (how output gets stored) is an implementation detail deferred to Open Question #3. The schema and resolution engine are defined here:
-
-```yaml
-steps:
-  - id: read-spec
-    title: "Read the spec"
-    # Output capture mechanism TBD (see Open Question #3)
-  - id: implement
-    title: "Implement changes"
-    instruction: "Based on spec output: {steps.read_spec.output}"
-```
-
-Step outputs are stored in session state under `stepOutputs`:
-
-```json
-{
-  "stepOutputs": {
-    "read-spec": { "output": "...", "capturedAt": "..." }
-  }
-}
-```
-
-Pattern: `{steps.<step_id>.output}`
-
-**Source 2: Session state** (medium priority)
+**Source 1: Session state** (higher priority)
 
 | Placeholder | Resolves from |
 |-------------|---------------|
@@ -506,7 +444,7 @@ Pattern: `{steps.<step_id>.output}`
 | `{spec_path}` | `sessionState.specPath` |
 | `{phase}` | `sessionState.currentPhase` |
 
-**Source 3: kata.yaml project config** (lowest priority)
+**Source 2: kata.yaml project config** (lower priority)
 
 | Placeholder | Resolves from |
 |-------------|---------------|
@@ -531,29 +469,15 @@ export function resolvePlaceholders(
 ```
 
 Where `PlaceholderContext` contains:
-- `stepOutputs: Record<string, { output: string }>` -- from session state
 - `session: SessionState` -- current session
 - `config: KataConfig` -- loaded kata.yaml
 - `extra: Record<string, string>` -- ad-hoc variables (e.g., `taskSummary`, `phaseName`, `phaseLabel`, `reviewers`)
 
-Resolution order: for each `{key}` placeholder, check step outputs first (`steps.<id>.output` pattern), then session state fields, then kata.yaml config fields, then extra vars. First match wins. Unresolved placeholders stay as-is; a warning is logged to stderr.
+Resolution order: for each `{key}` placeholder, check session state fields, then kata.yaml config fields, then extra vars. First match wins. Unresolved placeholders stay as-is; a warning is logged to stderr.
 
 #### Migration from `applyPlaceholders()`
 
 The existing `applyPlaceholders()` in `src/commands/enter/guidance.ts` handles only `{task_summary}`, `{phase_name}`, `{phase_label}`, `{reviewers}`. The new `resolvePlaceholders()` subsumes it. All callers of `applyPlaceholders()` migrate to the new function. The old function is deleted.
-
-#### Session State Extension
-
-Add one field to `SessionStateSchema` in `src/state/schema.ts`:
-
-```typescript
-stepOutputs: z.record(z.object({
-  output: z.string(),
-  capturedAt: z.string(),
-})).optional().default({}),
-```
-
-This is the only session state schema change in this spec.
 
 #### Files Modified
 
@@ -563,8 +487,7 @@ This is the only session state schema change in this spec.
 | `src/commands/enter/guidance.ts` | Delete `applyPlaceholders()` function. Migrate 4 internal call sites (lines ~102, 107, 153, 158) to use `resolvePlaceholders()` from `placeholder.ts`. |
 | `src/commands/enter/task-factory.ts` | Replace `applyPlaceholders()` calls with `resolvePlaceholders()`. Resolve placeholders in gate and hint fields during task creation. |
 | `src/commands/enter/index.ts` | Update re-exports: remove `applyPlaceholders`, add `resolvePlaceholders` and `PlaceholderContext`. |
-| `src/commands/hook-gate-check.ts` | Use `resolvePlaceholders()` before evaluating gates at hook time. |
-| `src/state/schema.ts` | Add `stepOutputs` field. |
+| `src/commands/hook.ts` | Use `resolvePlaceholders()` before evaluating gates in consolidated PreToolUse handler. |
 
 ---
 
@@ -649,11 +572,6 @@ The `impl-test-review` pattern from `batteries/subphase-patterns.yaml` moves inl
         active_form: "Reviewing {phase_name}"
         labels: [review]
         depends_on_previous: true
-        gate:
-          agent: "review-agent"
-          prompt: "code-review"
-          threshold: 75
-          on_fail: "Review score {score} < 75. Address feedback."
 ```
 
 Other patterns (`impl-test`, `impl-test-verify`, `impl-verify`) are no longer shipped as named patterns. Projects that use them embed the equivalent inline in their own templates. `kata migrate` handles this conversion (see B6).
@@ -817,7 +735,7 @@ function isOldFormat(template: TemplateYaml): boolean
 
 | Old pattern | New pattern |
 |-------------|-------------|
-| `agent: { gate: true, threshold: 75, prompt: "X" }` | `gate: { agent: "review-agent", prompt: "X", threshold: 75 }` |
+| `agent: { gate: true, threshold: 75, prompt: "X" }` | Gate removed (no bash equivalent). Agent review steps become ungated or use a bash script wrapper. |
 | `subphase_pattern: "impl-test-review"` | `subphase_pattern: [{ id_suffix: "impl", ... }, ...]` (inline array from known patterns) |
 | Step with only `instruction` (no hints) | Keep `instruction` as-is, no auto-generated hints |
 | `agent: { provider: "P", prompt: "X" }` (no gate) | Move to `hints: [{ agent: { subagent_type: "P", prompt: "X" } }]` |
@@ -861,6 +779,8 @@ When migrating a template with `subphase_pattern: "impl-test-review"`, the comma
 | `src/commands/enter.ts` | Add old-format detection check before proceeding. |
 | `src/commands/enter/template.ts` | Add `isOldFormatTemplate()` export. |
 
+Note: B6 and B7 are implemented together in Phase 6.
+
 ---
 
 ### B7: Keep from #35 -- setup/update/migrate/batteries-removal
@@ -875,7 +795,7 @@ When migrating a template with `subphase_pattern: "impl-test-review"`, the comma
 #### `kata setup` changes (extends #35 B2)
 
 In addition to #35's setup behavior:
-- Register `gate-check` PreToolUse hook in `.claude/settings.json` (always, not strict-only)
+- Register consolidated `pre-tool-use` PreToolUse hook in `.claude/settings.json` (replaces separate mode-gate, task-deps, task-evidence hooks)
 - Copy `batteries/interviews/*.yaml` to `.kata/interviews/`
 - Seed new-format templates to `.kata/templates/`
 - Stamp `kata_version` in kata.yaml (read from package.json)
@@ -924,7 +844,7 @@ Note: The `batteries/` directory in the package is retained as a seed source for
 
 | File | Change |
 |------|--------|
-| `src/commands/setup.ts` | Add gate-check hook, copy interviews, stamp kata_version. |
+| `src/commands/setup.ts` | Consolidate PreToolUse hooks into single entry, copy interviews, stamp kata_version. |
 | `src/commands/update.ts` | **New file.** Upstream merge with file-level comparison. |
 | `src/commands/migrate.ts` | Extended with old-format template conversion. |
 | `src/config/kata-config.ts` | Add `kata_version` to schema. |
@@ -946,12 +866,12 @@ Note: The `batteries/` directory in the package is retained as a seed source for
 
 | Template | Key Changes |
 |----------|-------------|
-| `implementation.md` | Inline `impl-test-review` subphase pattern with gates on test and review steps. Baseline gate on spec status check. Claim step unchanged (prose). |
+| `implementation.md` | Inline `impl-test-review` subphase pattern with bash gate on test step (exit code check). Baseline gate on spec status check. Review step ungated (prose-driven). Claim step unchanged (prose). |
 | `planning.md` | Replace 200+ lines of AskUserQuestion prose with `{ skill: "interview", args: "<category>" }` hints. Add gate on spec validation step. Research step gets search hints. |
 | `task.md` | Add bash gate on test step (`{test_command}` with `expect_exit: 0`). Add read hint on spec/issue step. |
 | `research.md` | Add search hints on codebase exploration steps. Add read hints on documentation review. No gates (research is exploratory). |
 | `freeform.md` | Minimal changes. No gates (freeform has no preconditions). Add bash hints for common operations. |
-| `verify.md` | Add formal gates for VP step execution. Bash gate on test command. Agent gate on verification scoring. |
+| `verify.md` | Add formal gates for VP step execution. Bash gate on test command. |
 | `debug.md` | Add search/read hints for investigation steps. Bash gate on reproduction step. |
 | `stop-hook-test.md` | Test fixture. Minimal changes to maintain test compatibility. |
 
@@ -1033,35 +953,32 @@ Note: The `batteries/` directory in the package is retained as a seed source for
 **Goal:** Extend the Zod schemas with gate and hint types. Build the placeholder resolution engine. All later phases depend on this foundation.
 
 **Tasks:**
-1. Add `bashGateSchema`, `agentGateSchema`, `skillGateSchema`, `gateSchema` to `src/validation/schemas.ts`
+1. Add `gateSchema` (bash-only) to `src/validation/schemas.ts`
 2. Add `readHintSchema`, `bashHintSchema`, `searchHintSchema`, `agentHintSchema`, `skillHintSchema`, `askHintSchema`, `hintSchema` to `src/validation/schemas.ts`
 3. Add `gate: gateSchema.optional()` and `hints: z.array(hintSchema).optional()` to `phaseStepSchema`
 4. Add `gate` and `hints` fields to `subphasePatternSchema`
 5. Remove `gate: z.boolean().optional()` from `agentStepConfigSchema`
 6. Create `src/commands/enter/placeholder.ts` with `resolvePlaceholders()` and `PlaceholderContext`
-7. Add `stepOutputs` field to `SessionStateSchema`
-8. Replace all `applyPlaceholders()` calls in `task-factory.ts` with `resolvePlaceholders()`
-9. Delete `applyPlaceholders()` from `guidance.ts`
-10. Write unit tests for all schema types and placeholder resolution
+7. Replace all `applyPlaceholders()` calls in `task-factory.ts` with `resolvePlaceholders()`
+8. Delete `applyPlaceholders()` from `guidance.ts`
+9. Write unit tests for all schema types and placeholder resolution
 
 **Test cases:** See p1 in frontmatter.
 
-### Phase 2: Gate-check PreToolUse hook (p2)
+### Phase 2: Consolidated PreToolUse hook + gate evaluation (p2)
 
-**Goal:** Runtime gate enforcement via a new PreToolUse hook that evaluates gates when agents try to complete tasks.
+**Goal:** Consolidate all PreToolUse logic into a single handler. Add bash gate evaluation to the TaskUpdate completion path.
 
 **Depends on:** p1 (gate schema must exist)
 
 **Tasks:**
-1. Create `src/commands/hook-gate-check.ts` with gate evaluation engine
-2. Implement `evaluateBashGate(gate, context)`: runs command, checks expect/expect_exit
-3. Implement `evaluateAgentGate(gate, context)`: invokes provider, checks threshold
-4. Implement `evaluateSkillGate(gate, context)`: runs kata skill, checks expect
-5. Add `gate-check` case to hook dispatcher in `src/commands/hook.ts`
-6. Add gate-check PreToolUse entry to `buildHookEntries()` in `src/commands/setup.ts`
-7. Resolve placeholders in gate fields before evaluation using `resolvePlaceholders()`
-8. Return `{ permissionDecision: "deny", permissionDecisionReason: onFail }` on gate failure
-9. Write unit tests for each evaluator and the hook integration
+1. Refactor `handleModeGate`, `handleTaskDeps`, `handleTaskEvidence` into internal helpers
+2. Create `handlePreToolUse` that dispatches: session injection -> mode-gate -> (if TaskUpdate: deps -> gates -> evidence)
+3. Implement `evaluateBashGate(gate, context)`: runs command, checks expect/expect_exit
+4. Update `buildHookEntries()` to register single `pre-tool-use` hook (replacing separate mode-gate, task-deps, task-evidence entries)
+5. Resolve placeholders in gate fields before evaluation using `resolvePlaceholders()`
+6. Return `{ permissionDecision: "deny", permissionDecisionReason: onFail }` on gate failure
+7. Write unit tests for bash gate evaluator and consolidated handler dispatch
 
 **Test cases:** See p2 in frontmatter.
 
@@ -1124,42 +1041,30 @@ Note: The `batteries/` directory in the package is retained as a seed source for
 
 ### Phase 6: Setup/update/migrate + batteries removal (p6)
 
-**Goal:** Integrate new template format into project lifecycle commands. Remove the batteries system.
+**Goal:** Integrate new template format into project lifecycle commands. Remove the batteries system. Provide migration for old-format projects.
 
-**Depends on:** p2 (gate-check hook for setup), p5 (new-format templates for seeding)
+**Depends on:** p2 (consolidated PreToolUse hook for setup), p3 (inline subphases -- migration must know target format), p5 (new-format templates for seeding)
 
 **Tasks:**
-1. Update `buildHookEntries()` to include gate-check PreToolUse hook
+1. Update `buildHookEntries()` to register single consolidated PreToolUse hook
 2. Add `kata_version` to `KataConfigSchema`
 3. Update `kata setup` to copy `batteries/interviews/` to `.kata/interviews/`
 4. Update `kata setup` to stamp `kata_version` in kata.yaml
 5. Create `src/commands/update.ts` with file-level comparison merge
-6. Delete `src/commands/batteries.ts` and `src/commands/scaffold-batteries.ts`
-7. Remove `batteries` command from CLI dispatcher in `src/index.ts`
-8. Remove 2-tier template lookup from `resolveTemplatePath()` and `resolveSpecTemplatePath()`
-9. Update eval fixtures to use new template format
-10. Wire `update` and `migrate` commands in CLI dispatcher (migrate implementation in P7)
-11. Write unit tests for update command and setup changes
+6. Create `src/commands/migrate.ts` with old-format detection and conversion
+7. Implement `isOldFormat(template)` detection function
+8. Implement `convertOldGate()`: `agent.gate: true` -> `gate: { bash: ... }` (or remove if no bash equivalent)
+9. Implement `convertSubphaseRef()`: string pattern name -> inline array (for known patterns)
+10. Implement `convertAgentHint()`: `agent: { provider, prompt }` (no gate) -> hint
+11. Add `--dry-run` flag to `kata migrate` to preview migration without writing
+12. Delete `src/commands/batteries.ts` and `src/commands/scaffold-batteries.ts`
+13. Remove `batteries` command from CLI dispatcher in `src/index.ts`
+14. Remove 2-tier template lookup from `resolveTemplatePath()` and `resolveSpecTemplatePath()`
+15. Update eval fixtures to use new template format
+16. Wire `update` and `migrate` commands in CLI dispatcher
+17. Write unit tests for update, migrate, and setup changes
 
 **Test cases:** See p6 in frontmatter.
-
-### Phase 7: Migration command (p7)
-
-**Goal:** Convert old-format templates and old layout projects to the new system.
-
-**Depends on:** p3 (inline subphases -- migration must know the target format), p6 (batteries removal -- migration must work with new layout)
-
-**Tasks:**
-1. Create `src/commands/migrate.ts`
-2. Implement `isOldFormat(template)` detection function
-3. Implement `convertOldGate()`: `agent.gate: true` -> `gate: { agent: ... }`
-4. Implement `convertSubphaseRef()`: string pattern name -> inline array (for known patterns)
-5. Implement `convertAgentHint()`: `agent: { provider, prompt }` (no gate) -> hint
-6. Add `--dry-run` flag to preview migration without writing
-7. Register `migrate` command in CLI dispatcher
-8. Write unit tests for detection, conversion, and dry-run
-
-**Test cases:** See p7 in frontmatter.
 
 ## Verification Plan
 
@@ -1231,10 +1136,8 @@ Note: The `batteries/` directory in the package is retained as a seed source for
 2. Confirm result is `"npm test"` (from kata.yaml)
 3. Call `resolvePlaceholders()` with the instruction
 4. Confirm result contains `"issue 42"` (from session state) and `"planning/specs/42-feature.md"` (from session state)
-5. Set `stepOutputs: { "read-spec": { output: "approved" } }` in session state
-6. Resolve `"{steps.read_spec.output}"` -- confirm result is `"approved"`
 
-**Expected:** Placeholders resolve from the correct source in priority order.
+**Expected:** Placeholders resolve from the correct source in priority order (session state > kata.yaml config).
 
 ### VP4: Inline subphases
 
@@ -1301,14 +1204,13 @@ No new external dependencies required.
 
 ## Rollout Plan
 
-1. **p1 schema first, then p2 + p3 in parallel with rest of p1** -- p1's schema types (gate, hint Zod definitions) must land first. Then p2 (gate-check hook) and p3 (inline subphases) can proceed in parallel alongside p1's remaining work (placeholder engine, tests).
+1. **p1 schema first, then p2 + p3 in parallel** -- p1's schema types (gate, hint Zod definitions) and placeholder engine must land first. Then p2 (consolidated PreToolUse hook + gate evaluation) and p3 (inline subphases) can proceed in parallel.
 2. **p4 after p1** -- Interview skill needs hint schema from p1 but nothing else.
 3. **p5 after p1 + p3 + p4** -- Templates need all three: schema types, inline subphases, interview skill.
-4. **p6 after p2 + p5** -- Setup needs the gate-check hook (p2) and new-format templates (p5).
-5. **p7 after p3 + p6** -- Migration needs to know both the target format (p3) and the new layout (p6).
+4. **p6 after p2 + p3 + p5** -- Setup needs the consolidated hook (p2), inline subphases (p3 for migration), and new-format templates (p5). Migration is included in this phase.
 
 ## Open Questions
 
-1. **Gate timeout** -- The gate-check hook timeout in settings.json should be set to 120s (not the default 30s) to accommodate test suites and agent reviews. Individual gates can add an optional `timeout` field to override per-gate. Implementation detail for P2.
+1. **Gate timeout** -- The consolidated PreToolUse hook timeout in settings.json is set to 30s. Bash gates that run test suites may need longer. Individual gates can add an optional `timeout` field to override per-gate, or the consolidated hook timeout can be increased. Implementation detail for P2.
 2. **Hint validation in stop hook** -- Should the stop hook warn if "required" hints weren't attempted? Deferred to a follow-up. This spec treats all hints as advisory.
-3. **Step output capture mechanism** -- How does a step's output get captured into `stepOutputs`? The agent must explicitly call a capture command, or the TaskUpdate hook captures the task's completion reason. Deferred to implementation -- the schema and placeholder resolution are defined here; the capture trigger is implementation detail.
+3. ~~**Step output capture mechanism**~~ -- Deferred entirely. Step output capture (`stepOutputs`, `{steps.*}` placeholders) removed from this spec to reduce complexity. The two-source placeholder chain (session state + kata.yaml config) covers all current use cases. Step output capture can be added in a follow-up if needed.
