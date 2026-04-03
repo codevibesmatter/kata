@@ -88,7 +88,7 @@ describe('setup --yes', () => {
     expect(settings.hooks.Stop).toBeDefined()
   })
 
-  it('--strict adds 3 PreToolUse hooks', async () => {
+  it('--strict registers consolidated PreToolUse hook', async () => {
     await captureSetup(['--yes', '--strict'], tmpDir)
 
     const settingsPath = join(tmpDir, '.claude', 'settings.json')
@@ -96,11 +96,10 @@ describe('setup --yes', () => {
       hooks: Record<string, unknown[]>
     }
 
-    // Should have PreToolUse hooks
+    // Should have PreToolUse hooks — now consolidated into a single entry
     expect(settings.hooks.PreToolUse).toBeDefined()
     expect(Array.isArray(settings.hooks.PreToolUse)).toBe(true)
-    // mode-gate + task-deps + task-evidence = 3 entries
-    expect(settings.hooks.PreToolUse.length).toBe(3)
+    expect(settings.hooks.PreToolUse.length).toBe(1)
   })
 
   it('is idempotent (re-run preserves existing)', async () => {

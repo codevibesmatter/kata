@@ -102,7 +102,7 @@ export interface SettingsJson {
  * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
  * With --strict: also PreToolUse task-deps + task-evidence hooks
  */
-export function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEntry[]> {
+export function buildHookEntries(_strict: boolean, wmBin: string): Record<string, HookEntry[]> {
   // Quote the binary path so spaces in the path are handled correctly
   const bin = `"${wmBin}"`
   const hooks: Record<string, HookEntry[]> = {
@@ -137,44 +137,18 @@ export function buildHookEntries(strict: boolean, wmBin: string): Record<string,
         ],
       },
     ],
-    // mode-gate is always registered: it injects --session=ID into kata bash
-    // commands so session resolution works correctly (not just a strict feature)
+    // Consolidated PreToolUse handler: mode-gate + task-deps + gate evaluation + task-evidence
     PreToolUse: [
       {
         hooks: [
           {
             type: 'command',
-            command: `${bin} hook mode-gate`,
-            timeout: 10,
+            command: `${bin} hook pre-tool-use`,
+            timeout: 30,
           },
         ],
       },
     ],
-  }
-
-  if (strict) {
-    hooks.PreToolUse.push(
-      {
-        matcher: 'TaskUpdate',
-        hooks: [
-          {
-            type: 'command',
-            command: `${bin} hook task-deps`,
-            timeout: 10,
-          },
-        ],
-      },
-      {
-        matcher: 'TaskUpdate',
-        hooks: [
-          {
-            type: 'command',
-            command: `${bin} hook task-evidence`,
-            timeout: 10,
-          },
-        ],
-      },
-    )
   }
 
   return hooks
@@ -229,7 +203,7 @@ export function mergeHooksIntoSettings(
     // Tolerates both bare `kata hook …` and quoted `"/path/kata" hook …` forms while
     // avoiding false positives from unrelated tools like lefthook or husky.
     const wmHookPattern =
-      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence)\b/
+      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence|pre-tool-use)\b/
     const nonWmEntries = existing.filter((entry) => {
       return !entry.hooks?.some(
         (h) => typeof h.command === 'string' && wmHookPattern.test(h.command),
