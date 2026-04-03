@@ -33,6 +33,7 @@ import { providers as providersCommand } from './commands/providers.js'
 import { review as reviewCommand } from './commands/review.js'
 import { agentRun as agentRunCommand } from './commands/agent-run.js'
 import { postmortem } from './commands/postmortem.js'
+import { interview } from './commands/interview.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPackageRoot } from './session/lookup.js'
@@ -189,6 +190,10 @@ async function main() {
         await projects(commandArgs)
         break
 
+      case 'interview':
+        await interview(commandArgs)
+        break
+
       case 'hook':
         await hook(commandArgs)
         break
@@ -254,6 +259,8 @@ Usage:
   kata review --prompt=<name> [--provider=P]       Review shortcut (auto-context)
   kata projects <subcommand> [options]             Multi-project management
   kata teardown [--yes] [--all] [--dry-run]      Remove kata from a project
+  kata interview <category>                       Run structured interview (outputs JSON)
+  kata interview --list                          List available interview categories
   kata hook <name>                               Dispatch hook event (for settings.json)
   kata --version                                 Show version
   kata help                                      Show this help
@@ -336,7 +343,7 @@ export * from './state/validator.js'
 export * from './utils/workflow-id.js'
 export * from './utils/timestamp.js'
 export * from './config/kata-config.js'
-export * from './config/interviews.js'
+export * from './commands/interview.js'
 export * from './session/lookup.js'
 export * from './validation/index.js'
 

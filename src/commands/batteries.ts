@@ -115,7 +115,8 @@ export async function batteries(args: string[]): Promise<void> {
     process.stdout.write(`\nNext: run 'kata enter onboard' to create labels on GitHub\n`)
   }
   if (result.interviews.length > 0) {
-    process.stdout.write(`\nInterview config → .kata/interviews.yaml\n`)
+    process.stdout.write(`\nInterview configs → .kata/interviews/\n`)
+    for (const f of result.interviews) process.stdout.write(`  ${f}\n`)
   }
   if (result.verificationTools.length > 0) {
     process.stdout.write(`\nVerification tools → .kata/verification-tools.md\n`)
