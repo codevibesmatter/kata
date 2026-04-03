@@ -15,7 +15,6 @@ import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import type { SessionState } from '../state/schema.js'
 import { validatePhases, formatValidationErrors } from '../validation/index.js'
 import { readFullTemplateContent, parseYamlFrontmatterWithError, type SpecPhase, type SpecYaml } from '../yaml/index.js'
-import { loadSubphasePatterns } from '../config/subphase-patterns.js'
 import type { SubphasePattern } from '../validation/schemas.js'
 
 // Import from modular enter command
@@ -402,23 +401,10 @@ export async function enter(args: string[]): Promise<void> {
   const containerPhase = templatePhases?.find((p) => p.container === true)
   const hasContainerPhase = containerPhase !== undefined
 
-  // Resolve subphase pattern: string name → SubphasePattern[], inline array → as-is
+  // Resolve subphase pattern: always an inline array now (string references removed)
   let resolvedSubphasePattern: SubphasePattern[] = []
-  if (hasContainerPhase && containerPhase?.subphase_pattern != null) {
-    if (typeof containerPhase.subphase_pattern === 'string') {
-      const patternConfig = await loadSubphasePatterns()
-      const patternName = containerPhase.subphase_pattern
-      const patternDef = patternConfig.subphase_patterns[patternName]
-      if (!patternDef) {
-        const available = Object.keys(patternConfig.subphase_patterns).join(', ')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`Unknown subphase pattern "${patternName}". Available: ${available}`)
-        process.exit(1)
-      }
-      resolvedSubphasePattern = patternDef.steps
-    } else {
-      resolvedSubphasePattern = containerPhase.subphase_pattern
-    }
+  if (hasContainerPhase && containerPhase?.subphase_pattern) {
+    resolvedSubphasePattern = containerPhase.subphase_pattern  // always array now
   }
 
   const sessionId = parsed.session || (await getCurrentSessionId())

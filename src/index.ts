@@ -337,7 +337,6 @@ export * from './utils/workflow-id.js'
 export * from './utils/timestamp.js'
 export * from './config/kata-config.js'
 export * from './config/interviews.js'
-export * from './config/subphase-patterns.js'
 export * from './session/lookup.js'
 export * from './validation/index.js'
 

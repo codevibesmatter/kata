@@ -87,7 +87,32 @@ phases:
   - id: p2
     name: Implement
     container: true
-    subphase_pattern: impl-test-review
+    subphase_pattern:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        todo_template: "Implement {task_summary}"
+        active_form: "Implementing {phase_name}"
+        labels: [impl]
+        instruction: |
+          Implement the behavior described in the spec phase.
+          Reference the spec for detailed requirements.
+      - id_suffix: test
+        title_template: "TEST - {phase_name}"
+        todo_template: "Test {phase_name} implementation"
+        active_form: "Testing {phase_name}"
+        labels: [test]
+        depends_on_previous: true
+        instruction: |
+          Run the project's test and typecheck commands.
+          If the spec phase has test_cases, verify each one.
+      - id_suffix: review
+        title_template: "REVIEW - {reviewers}"
+        todo_template: "Review {phase_name} changes"
+        active_form: "Reviewing {phase_name}"
+        labels: [review]
+        depends_on_previous: true
+        instruction: |
+          Run review-agent and any configured external reviewers.
 
   - id: p3
     name: Close

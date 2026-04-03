@@ -60,7 +60,6 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
     steps: p.steps,
     container: (p as Record<string, unknown>).container as boolean | undefined,
     subphase_pattern: (p as Record<string, unknown>).subphase_pattern as
-      | string
       | SubphasePattern[]
       | undefined,
   }))

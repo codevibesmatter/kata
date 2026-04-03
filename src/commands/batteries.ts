@@ -53,7 +53,6 @@ export async function batteries(args: string[]): Promise<void> {
     result.specTemplates.length +
     result.githubTemplates.length +
     result.interviews.length +
-    result.subphasePatterns.length +
     result.verificationTools.length +
     result.kataConfig.length
   const updatedCount = result.updated.length
@@ -117,9 +116,6 @@ export async function batteries(args: string[]): Promise<void> {
   }
   if (result.interviews.length > 0) {
     process.stdout.write(`\nInterview config → .kata/interviews.yaml\n`)
-  }
-  if (result.subphasePatterns.length > 0) {
-    process.stdout.write(`\nSubphase patterns → .kata/subphase-patterns.yaml\n`)
   }
   if (result.verificationTools.length > 0) {
     process.stdout.write(`\nVerification tools → .kata/verification-tools.md\n`)

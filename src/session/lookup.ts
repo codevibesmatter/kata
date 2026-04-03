@@ -124,14 +124,6 @@ export function getProjectInterviewsPath(projectRoot?: string): string {
 }
 
 /**
- * Get path to project subphase-patterns.yaml
- */
-export function getProjectSubphasePatternsPath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectDir()
-  return resolveKataPath(root, 'subphase-patterns.yaml')
-}
-
-/**
  * Get path to project verification-tools.md
  */
 export function getProjectVerificationToolsPath(projectRoot?: string): string {

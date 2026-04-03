@@ -137,7 +137,7 @@ export const phaseSchema = z.object({
   task_config: phaseTaskConfigSchema.optional(),
   steps: z.array(phaseStepSchema).optional(), // Individual trackable units within phase (e.g., interview rounds)
   container: z.boolean().optional(), // Marks phase that accepts spec content phases
-  subphase_pattern: z.union([z.string(), z.array(subphasePatternSchema)]).optional(), // Name reference or inline array
+  subphase_pattern: z.array(subphasePatternSchema).optional(), // Inline array only (string references removed)
 })
 
 /**

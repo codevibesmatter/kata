@@ -5,8 +5,7 @@
  * an agent review step between impl and verify.
  *
  * Uses tanstack-start fixture with fixtureSetup to:
- * 1. Create .kata/subphase-patterns.yaml with impl-review-verify pattern
- * 2. Override implementation.md to reference the custom pattern
+ * 1. Override implementation.md template with custom inline subphase_pattern
  *
  * The impl-review-verify pattern has:
  * - impl step (no instruction)
@@ -29,33 +28,41 @@ import {
   assertNativeTaskHasInstruction,
 } from '../assertions.js'
 
-const CUSTOM_SUBPHASE_PATTERNS = `
-subphase_patterns:
-  impl-review-verify:
-    description: "Implement, review with agent, then verify"
-    steps:
+// Node script that replaces the subphase_pattern in the template YAML frontmatter
+// Reads the file, replaces the p2 phase's subphase_pattern with a custom inline array
+const REWRITE_TEMPLATE_SCRIPT = `node -e "
+const fs = require('fs');
+const content = fs.readFileSync('.kata/templates/implementation.md', 'utf8');
+// Replace everything between 'subphase_pattern:' and the next top-level phase '  - id: p3'
+const replaced = content.replace(
+  /subphase_pattern:[\\\\s\\\\S]*?(  - id: p3)/,
+  \\\`subphase_pattern:
       - id_suffix: impl
-        title_template: "IMPL - {task_summary}"
-        todo_template: "Implement {task_summary}"
-        active_form: "Implementing {phase_name}"
+        title_template: 'IMPL - {task_summary}'
+        todo_template: 'Implement {task_summary}'
+        active_form: 'Implementing {phase_name}'
         labels: [impl]
       - id_suffix: review
-        title_template: "REVIEW - {phase_name}"
-        todo_template: "Review {phase_name} code"
-        active_form: "Reviewing {phase_name}"
+        title_template: 'REVIEW - {phase_name}'
+        todo_template: 'Review {phase_name} code'
+        active_form: 'Reviewing {phase_name}'
         labels: [review]
         depends_on_previous: true
         agent:
           provider: claude
           prompt: code-review
       - id_suffix: verify
-        title_template: "VERIFY - {phase_name}"
-        todo_template: "Verify {phase_name} implementation"
-        active_form: "Verifying {phase_name}"
+        title_template: 'VERIFY - {phase_name}'
+        todo_template: 'Verify {phase_name} implementation'
+        active_form: 'Verifying {phase_name}'
         labels: [verify]
         depends_on_previous: true
-        instruction: "Run: kata check-phase {phase_label} --issue={issue}"
-`.trim()
+        instruction: 'Run: kata check-phase {phase_label} --issue={issue}'
+
+  - id: p3\\\`
+);
+fs.writeFileSync('.kata/templates/implementation.md', replaced);
+"`
 
 export const implTaskGenCustomScenario: EvalScenario = {
   id: 'impl-task-gen-custom',
@@ -63,11 +70,8 @@ export const implTaskGenCustomScenario: EvalScenario = {
   templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   fixtureSetup: [
-    // Write custom subphase pattern into .kata/
-    `cat > .kata/subphase-patterns.yaml << 'YAML'\n${CUSTOM_SUBPHASE_PATTERNS}\nYAML`,
-    // Override implementation template to reference custom pattern
-    // sed replaces the subphase_pattern value in the YAML frontmatter
-    "sed -i 's/subphase_pattern: impl-test-verify/subphase_pattern: impl-review-verify/' .kata/templates/implementation.md",
+    // Override implementation template to use inline custom pattern (impl-review-verify)
+    REWRITE_TEMPLATE_SCRIPT,
   ],
   prompt:
     'Implement the health endpoint feature from the approved spec at planning/specs/100-health-endpoint.md. ' +
