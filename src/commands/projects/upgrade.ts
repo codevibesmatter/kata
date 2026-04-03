@@ -57,7 +57,7 @@ export async function upgradeProjects(args: string[]): Promise<void> {
 
     if (dryRun) {
       // biome-ignore lint/suspicious/noConsole: CLI output
-      console.error('  [dry-run] Would run: kata batteries --update --cwd=' + project.path)
+      console.error('  [dry-run] Would run: kata update --cwd=' + project.path)
       results.push({
         name: project.alias || project.name,
         path: project.path,
@@ -68,13 +68,13 @@ export async function upgradeProjects(args: string[]): Promise<void> {
     }
 
     try {
-      const { batteries } = await import('../batteries.js')
-      await batteries(['--update', `--cwd=${project.path}`])
+      const { update } = await import('../update.js')
+      await update([`--cwd=${project.path}`])
       results.push({
         name: project.alias || project.name,
         path: project.path,
         status: 'upgraded',
-        details: 'batteries updated',
+        details: 'templates updated',
       })
       // biome-ignore lint/suspicious/noConsole: CLI output
       console.error(`  [ok] upgraded`)

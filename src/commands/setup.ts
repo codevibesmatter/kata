@@ -2,7 +2,7 @@
 // For the guided setup interview, use: kata enter onboard
 // Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getDefaultProfile, type SetupProfile } from '../config/setup-profile.js'
@@ -270,6 +270,19 @@ function buildKataConfig(projectRoot: string, profile: SetupProfile): Record<str
     }
   }
 
+  // Stamp kata_version from package.json
+  try {
+    const pkgPath = join(getPackageRoot(), 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string }
+      if (pkgJson.version) {
+        fromProfile.kata_version = pkgJson.version
+      }
+    }
+  } catch {
+    // Version stamp is best-effort
+  }
+
   // Seed modes from batteries/kata.yaml
   try {
     const seedPath = join(getPackageRoot(), 'batteries', 'kata.yaml')
@@ -339,6 +352,21 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     if (existsSync(onboardSrc)) {
       mkdirSync(templatesDir, { recursive: true })
       copyFileSync(onboardSrc, onboardDest)
+    }
+  }
+
+  // Copy interview configs from batteries
+  const batteriesInterviewsDir = join(getPackageRoot(), 'batteries', 'interviews')
+  const projectInterviewsDir = join(projectRoot, '.kata', 'interviews')
+  if (existsSync(batteriesInterviewsDir)) {
+    mkdirSync(projectInterviewsDir, { recursive: true })
+    for (const f of readdirSync(batteriesInterviewsDir)) {
+      if (f.endsWith('.yaml')) {
+        const dest = join(projectInterviewsDir, f)
+        if (!existsSync(dest)) {
+          copyFileSync(join(batteriesInterviewsDir, f), dest)
+        }
+      }
     }
   }
 

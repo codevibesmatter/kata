@@ -71,6 +71,9 @@ export const KataProvidersSchema = z.object({
 export const KataConfigSchema = z.object({
   project: KataProjectSchema.optional(),
 
+  // Version stamp — set by kata setup / kata update
+  kata_version: z.string().optional(),
+
   // Paths
   spec_path: z.string().default('planning/specs'),
   research_path: z.string().default('planning/research'),

@@ -24,7 +24,8 @@ import { suggest } from './commands/suggest.js'
 import { setup } from './commands/setup.js'
 import { teardown } from './commands/teardown.js'
 import { hook } from './commands/hook.js'
-import { batteries } from './commands/batteries.js'
+import { update } from './commands/update.js'
+import { migrate } from './commands/migrate.js'
 import { projects } from './commands/projects.js'
 import { config as configCommand } from './commands/config.js'
 import { modes } from './commands/modes.js'
@@ -140,8 +141,12 @@ async function main() {
         await teardown(commandArgs)
         break
 
-      case 'batteries':
-        await batteries(commandArgs)
+      case 'update':
+        await update(commandArgs)
+        break
+
+      case 'migrate':
+        await migrate(commandArgs)
         break
 
       case 'config':
@@ -251,7 +256,8 @@ Usage:
   kata suggest <message>                         Detect mode from message, output guidance
   kata doctor [--fix] [--json]                   Diagnose and fix session state
   kata setup [--yes] [--strict] [--batteries]    Setup kata in a project
-  kata batteries [--update] [--cwd=PATH]           Scaffold batteries-included starter content
+  kata update                                      Update templates to latest package version
+  kata migrate [--dry-run]                         Convert old-format templates to gate/hint format
   kata config [--show]                            Show resolved config with provenance
   kata providers [list|setup] [--json]             Check/configure agent providers
   kata agent-run --prompt=<name> [options]           Run agent with named prompt
@@ -279,8 +285,9 @@ Setup:
   kata setup --batteries          Setup + scaffold batteries-included starter content (implies --yes)
   kata setup --batteries --strict Setup + batteries + strict PreToolUse hooks
   kata enter onboard                Guided setup interview (interactive, agent-driven)
-  kata batteries                  Scaffold batteries content only (idempotent, skips existing)
-  kata batteries --update         Re-scaffold batteries, overwriting with latest versions
+  kata update                     Update templates + stamp kata_version
+  kata migrate                    Convert old-format templates to new gate/hint format
+  kata migrate --dry-run          Preview migration without writing files
   kata teardown --yes             Remove kata hooks and config
   kata teardown --dry-run         Preview what would be removed
 
