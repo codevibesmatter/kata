@@ -8,7 +8,7 @@ export interface PlaceholderContext {
 }
 
 /**
- * Resolve {variable} placeholders from a two-source chain:
+ * Resolve {variable} placeholders from a three-source priority chain:
  * 1. Session state (higher priority)
  * 2. kata.yaml project config (lower priority)
  * 3. Extra vars (lowest priority)
@@ -37,7 +37,9 @@ export function resolvePlaceholders(
       return context.extra[key]
     }
 
-    // Unresolved — leave as-is
+    // Unresolved — leave as-is, warn on stderr
+    // biome-ignore lint/suspicious/noConsole: intentional CLI warning
+    console.error(`Warning: unresolved placeholder {${key}}`)
     return `{${key}}`
   })
 }
