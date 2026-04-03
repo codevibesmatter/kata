@@ -15,6 +15,10 @@ phases:
     steps:
       - id: determine-input
         title: "Determine VP input source"
+        hints:
+          - read: "{spec_path}"
+          - bash: "git log --oneline -10"
+          - bash: "git diff HEAD~1 --stat"
         instruction: |
           Determine where the Verification Plan comes from. Check in order:
 
@@ -49,6 +53,8 @@ phases:
 
       - id: read-verification-tools
         title: "Read verification tools config"
+        hints:
+          - read: ".kata/verification-tools.md"
         instruction: |
           Read the project's verification tools config:
           - `.kata/verification-tools.md`
@@ -115,6 +121,10 @@ phases:
     steps:
       - id: check-failures
         title: "Check for VP failures"
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+          on_fail: "Tests failing before fix loop. Address test failures first."
         instruction: |
           Review results from P1. List all VP steps with their pass/fail status.
 
@@ -251,6 +261,9 @@ phases:
     steps:
       - id: write-evidence
         title: "Write VP evidence file"
+        hints:
+          - read: "{spec_path}"
+            section: "## Verification Plan"
         instruction: |
           Write VP evidence to `.kata/verification-evidence/`.
 

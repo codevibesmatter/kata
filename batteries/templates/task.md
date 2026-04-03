@@ -14,6 +14,8 @@ phases:
     steps:
       - id: understand-task
         title: "Understand and classify the task"
+        hints:
+          - bash: "gh issue list --search \"{task_description}\" --limit 3"
         instruction: |
           Read the user's request carefully.
 
@@ -35,6 +37,9 @@ phases:
 
       - id: context-search
         title: "Quick context search (3-5 min max)"
+        hints:
+          - search: "relevant patterns"
+            glob: "src/**/*.ts"
         instruction: |
           SPAWN a fast Explore agent for context gathering:
 
@@ -122,6 +127,13 @@ phases:
     steps:
       - id: final-verification
         title: "Final verification"
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+          on_fail: "Tests failing. Fix before proceeding."
+        hints:
+          - bash: "git status"
+          - bash: "git diff --staged"
         instruction: |
           ```bash
           # Run typecheck

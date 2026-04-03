@@ -14,6 +14,9 @@ phases:
     steps:
       - id: reproduce-bug
         title: "Reproduce the bug and find related issue"
+        hints:
+          - bash: "gh issue list --search \"{bug_keywords}\" --state open --limit 5"
+          - bash: "git log --oneline --since=\"2 weeks ago\""
         instruction: |
           **First, identify related GitHub issue and recent work:**
 
@@ -128,6 +131,10 @@ phases:
 
       - id: trace-code-path
         title: "Trace the code path"
+        hints:
+          - search: "error handling"
+            glob: "src/**/*.ts"
+          - read: "{entry_point}"
         instruction: |
           Spawn a debug-focused agent to trace the execution:
 
@@ -215,6 +222,10 @@ phases:
     steps:
       - id: verify-fix
         title: "Verify fix resolves the original bug"
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+          on_fail: "Tests failing after fix. Address before proceeding."
         instruction: |
           Reproduce the original issue using your P0 steps.
           Confirm it no longer occurs.

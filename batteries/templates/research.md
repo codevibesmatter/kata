@@ -14,6 +14,8 @@ phases:
     steps:
       - id: clarify-intent
         title: "Clarify research intent"
+        hints:
+          - read: "README.md"
         instruction: |
           Use AskUserQuestion IMMEDIATELY after mode activation to understand:
           - What topic/area they want to explore
@@ -58,6 +60,8 @@ phases:
     steps:
       - id: define-questions
         title: "Define specific research questions"
+        hints:
+          - bash: "gh issue list --search \"{topic}\" --limit 5"
         instruction: |
           Write down the specific questions this research needs to answer:
 
@@ -99,6 +103,11 @@ phases:
     steps:
       - id: spawn-explore-parallel
         title: "Spawn parallel Explore agents"
+        hints:
+          - search: "relevant patterns"
+            glob: "src/**/*.ts"
+          - search: "related implementations"
+            glob: "**/*.ts"
         instruction: |
           SPAWN 3 parallel Explore agents for fast codebase coverage:
 
@@ -156,6 +165,10 @@ phases:
     steps:
       - id: web-research
         title: "Web research and documentation review"
+        hints:
+          - read: "README.md"
+          - search: "documentation"
+            glob: "docs/**/*.md"
         instruction: |
           Search for external context:
           WebSearch(query="{topic} best practices {year}")
@@ -203,6 +216,8 @@ phases:
 
       - id: create-research-doc
         title: "Write research findings document"
+        hints:
+          - read: "{research_path}"
         instruction: |
           Read `research_path` from kata.yaml (default: `planning/research`).
           Create persistent findings doc at:

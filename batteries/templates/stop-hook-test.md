@@ -14,6 +14,8 @@ phases:
     steps:
       - id: write-file
         title: "Create a single-file utility"
+        hints:
+          - bash: "echo 'creating probe file'"
         instruction: |
           Create ONE small file: `src/utils/stop-hook-probe.ts`
 
