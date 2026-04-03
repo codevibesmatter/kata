@@ -5,10 +5,12 @@ import jsYaml from 'js-yaml'
 import { getPackageRoot, findProjectDir, getProjectTemplatesDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
 
-export async function update(_args: string[]): Promise<void> {
+export async function update(args: string[]): Promise<void> {
   let projectRoot: string
   try {
-    projectRoot = findProjectDir()
+    // Support --cwd=PATH for kata projects upgrade
+    const cwdArg = args.find(a => a.startsWith('--cwd='))
+    projectRoot = cwdArg ? cwdArg.slice('--cwd='.length) : findProjectDir()
   } catch {
     process.stderr.write('Error: Not in a kata project. Run kata setup first.\n')
     process.exitCode = 1
