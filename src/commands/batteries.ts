@@ -2,6 +2,7 @@
 // Default: skips existing files. Use --update to overwrite with latest versions.
 import { scaffoldBatteries } from './scaffold-batteries.js'
 import { findProjectDir } from '../session/lookup.js'
+import { loadKataConfig } from '../config/kata-config.js'
 import {
   resolveWmBin,
   buildHookEntries,
@@ -68,7 +69,9 @@ export async function batteries(args: string[]): Promise<void> {
       const strict = Object.values(settings.hooks)
         .flat()
         .some((entry) => entry.hooks?.some((h) => /\bhook task-deps\b/.test(h.command ?? '')))
-      const wmBin = resolveWmBin()
+      let binaryOverride: string | undefined
+      try { binaryOverride = loadKataConfig(projectRoot).kata_binary } catch { /* not yet configured */ }
+      const wmBin = resolveWmBin(binaryOverride)
       const wmHooks = buildHookEntries(strict, wmBin)
       writeSettings(projectRoot, mergeHooksIntoSettings(settings, wmHooks))
       hooksRefreshed = true

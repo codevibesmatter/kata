@@ -16,16 +16,19 @@ type WmConfig = Record<string, unknown> & {
   wm_version?: string
 }
 import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
-import { getKataConfigPath } from '../config/kata-config.js'
+import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
 
 /**
  * Resolve the absolute path to the kata binary.
  *
- * Prefers `which kata` so hooks point to the bin symlink that npm/pnpm update on
- * upgrade (e.g. /usr/local/bin/kata). Falls back to the package-relative path for
- * workspace / pnpm-link scenarios where `kata` is not yet in PATH.
+ * Resolution order:
+ * 1. Explicit override (kata_binary from kata.yaml) — for A/B testing branches
+ * 2. `which kata` — bin symlink that npm/pnpm update on upgrade
+ * 3. Package-relative path — workspace / pnpm-link fallback
  */
-export function resolveWmBin(): string {
+export function resolveWmBin(override?: string): string {
+  if (override) return override
+
   try {
     const which = execSync('which kata 2>/dev/null || command -v kata 2>/dev/null', {
       encoding: 'utf-8',
@@ -369,7 +372,15 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   }
 
   // Register hooks in settings.json using absolute kata binary path
-  const wmBin = resolveWmBin()
+  // If kata_binary is set in kata.yaml, use it (for A/B testing branches)
+  let binaryOverride: string | undefined
+  try {
+    const kataConfig = loadKataConfig(projectRoot)
+    binaryOverride = kataConfig.kata_binary
+  } catch {
+    // Config may not exist yet during first setup
+  }
+  const wmBin = resolveWmBin(binaryOverride)
   const settings = readSettings(projectRoot)
   const wmHooks = buildHookEntries(profile.strict, wmBin)
   writeSettings(projectRoot, mergeHooksIntoSettings(settings, wmHooks))

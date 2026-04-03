@@ -71,6 +71,9 @@ export const KataProvidersSchema = z.object({
 export const KataConfigSchema = z.object({
   project: KataProjectSchema.optional(),
 
+  // Binary override — point hooks at a different kata build for A/B testing
+  kata_binary: z.string().optional(),
+
   // Paths
   spec_path: z.string().default('planning/specs'),
   research_path: z.string().default('planning/research'),

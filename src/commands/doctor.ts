@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { findProjectDir, getPackageRoot, getSessionsDir } from '../session/lookup.js'
 import { resolveWmBin } from './setup.js'
+import { loadKataConfig } from '../config/kata-config.js'
 import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 
 interface DiagnosticResult {
@@ -119,7 +120,9 @@ function fixMissingHooks(claudeDir: string, missingHooks: string[]): void {
   const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>
 
   // Use absolute path to kata binary (same as setup.ts) so hooks work regardless of PATH
-  const wmBin = `"${resolveWmBin()}"`
+  let binaryOverride: string | undefined
+  try { binaryOverride = loadKataConfig().kata_binary } catch { /* config may not exist */ }
+  const wmBin = `"${resolveWmBin(binaryOverride)}"`
   const hookCommands: Record<string, { command: string; timeout?: number }> = {
     SessionStart: { command: `${wmBin} hook session-start` },
     UserPromptSubmit: { command: `${wmBin} hook user-prompt` },
