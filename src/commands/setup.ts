@@ -99,8 +99,8 @@ export interface SettingsJson {
  * Build kata hook entries for .claude/settings.json.
  * Uses an absolute path to the kata binary so hooks work regardless of PATH
  * (both for globally-installed and locally-installed packages).
- * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
- * With --strict: also PreToolUse task-deps + task-evidence hooks
+ * Registers a single consolidated PreToolUse hook (pre-tool-use) that handles
+ * mode-gate, task-deps, gate evaluation, and task-evidence internally.
  */
 export function buildHookEntries(_strict: boolean, wmBin: string): Record<string, HookEntry[]> {
   // Quote the binary path so spaces in the path are handled correctly
@@ -415,11 +415,7 @@ export async function setup(args: string[]): Promise<void> {
       process.stdout.write(`    - SessionStart\n`)
       process.stdout.write(`    - UserPromptSubmit\n`)
       process.stdout.write(`    - Stop\n`)
-      process.stdout.write(`    - PreToolUse (mode-gate)\n`)
-      if (parsed.strict) {
-        process.stdout.write(`    - PreToolUse (task-deps)\n`)
-        process.stdout.write(`    - PreToolUse (task-evidence)\n`)
-      }
+      process.stdout.write(`    - PreToolUse (consolidated: mode-gate + task-deps + gates + evidence)\n`)
     }
 
     process.stdout.write('\nOptional: add shorthand to package.json scripts:\n')

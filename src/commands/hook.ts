@@ -560,13 +560,13 @@ function evaluateBashGate(
     output = (execErr.stdout ?? '').toString().trim()
   }
 
-  // 3. Check pass/fail
+  // 3. Check pass/fail (AND semantics: both must pass if both specified)
   let passed = true
   if (gate.expect !== undefined) {
-    passed = output.includes(gate.expect)
+    passed = passed && output.includes(gate.expect)
   }
   if (gate.expect_exit !== undefined) {
-    passed = exitCode === gate.expect_exit
+    passed = passed && exitCode === gate.expect_exit
   }
 
   // 4. Resolve on_fail with gate-local placeholders
@@ -721,8 +721,7 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
           }
 
           // 3b. Evaluate gate if step has one (hard block)
-          const task2 = tasks.find((t) => t.id === taskId)
-          const originalId = (task2?.metadata?.originalId as string) ?? ''
+          const originalId = (task?.metadata?.originalId as string) ?? ''
           const templatePath = session.state.template
 
           if (originalId && templatePath) {
