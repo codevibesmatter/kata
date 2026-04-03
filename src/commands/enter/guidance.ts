@@ -2,6 +2,7 @@
 import { loadKataConfig } from '../../config/kata-config.js'
 import type { PhaseDefinition, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
+import { resolvePlaceholders } from './placeholder.js'
 
 export interface PhaseTitle {
   id: string
@@ -23,21 +24,6 @@ export interface WorkflowGuidance {
     pendingTasks: string
     completeWithEvidence: string
   }
-}
-
-/**
- * Apply template placeholders to a string
- * Supports: {task_summary}, {phase_name}, {phase_label}
- */
-export function applyPlaceholders(
-  template: string,
-  vars: { taskSummary: string; phaseName: string; phaseLabel: string; reviewers?: string },
-): string {
-  return template
-    .replace(/{task_summary}/g, vars.taskSummary)
-    .replace(/{phase_name}/g, vars.phaseName)
-    .replace(/{phase_label}/g, vars.phaseLabel)
-    .replace(/{reviewers}/g, vars.reviewers ?? 'review-agent')
 }
 
 /**
@@ -99,15 +85,11 @@ export function buildWorkflowGuidance(
 
       // Generate todos from subphase pattern
       for (const patternItem of subphasePattern) {
-        const todoContent = applyPlaceholders(patternItem.todo_template, {
-          taskSummary,
-          phaseName,
-          phaseLabel,
+        const todoContent = resolvePlaceholders(patternItem.todo_template, {
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel },
         })
-        const activeForm = applyPlaceholders(patternItem.active_form, {
-          taskSummary,
-          phaseName,
-          phaseLabel,
+        const activeForm = resolvePlaceholders(patternItem.active_form, {
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel },
         })
 
         requiredTodos.push({
@@ -150,15 +132,11 @@ export function buildWorkflowGuidance(
 
       // Generate todos from subphase pattern
       for (const patternItem of subphasePattern) {
-        const todoContent = applyPlaceholders(patternItem.todo_template, {
-          taskSummary,
-          phaseName,
-          phaseLabel,
+        const todoContent = resolvePlaceholders(patternItem.todo_template, {
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel },
         })
-        const activeForm = applyPlaceholders(patternItem.active_form, {
-          taskSummary,
-          phaseName,
-          phaseLabel,
+        const activeForm = resolvePlaceholders(patternItem.active_form, {
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel },
         })
 
         requiredTodos.push({

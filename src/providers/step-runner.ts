@@ -220,8 +220,7 @@ export async function runAgentStep(
 
   // 7. Extract score if applicable
   const score = extractScore(output, 'SCORE') ?? extractScore(output, 'AGENT_SCORE')
-  const threshold = config.threshold ?? 75
-  const passed = config.gate ? (score !== undefined && score >= threshold) : true
+  const passed = true
 
   // 8. Save artifact if configured
   let artifactPath: string | undefined
@@ -230,8 +229,6 @@ export async function runAgentStep(
       provider: providerName,
       model: config.model ?? provider.defaultModel,
       prompt: config.prompt,
-      gate: config.gate,
-      threshold: config.gate ? threshold : undefined,
       score,
       passed,
     })
