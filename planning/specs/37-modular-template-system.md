@@ -166,6 +166,42 @@ phases:
       - id: dry-run-no-write
         description: "kata migrate --dry-run shows changes without writing files"
         type: unit
+  - id: p7
+    name: "Batteries template redesign — gates over fanout"
+    tasks:
+      - "Add kata_binary field to KataConfigSchema for A/B testing branches"
+      - "Update resolveWmBin() to accept config override (setup, batteries, doctor)"
+      - "Implement gate placeholder validation in kata enter (fail on missing config)"
+      - "Add extractGatePlaceholders() and validateGatePlaceholders() to placeholder.ts"
+      - "Simplify implementation.md: single impl subphase + test_command gate (remove test/review subphases)"
+      - "Add typecheck_command to KataProjectSchema"
+      - "Add gates to debug.md: verify-fix step gets test_command gate"
+      - "Add gates to task.md: final-verification step gets test_command gate"
+      - "Add gates to verify.md: check-failures step gets test_command gate"
+      - "Add hints to all batteries templates (read, bash, search, skill types)"
+      - "Ensure freeform.md and stop-hook-test.md have no gates (no config requirements)"
+      - "Document frame pattern: phases are invariant, gates+hints are the customization surface"
+      - "Write tests for placeholder validation (missing config → clear error)"
+      - "Write tests for kata_binary config override in setup/batteries/doctor"
+    test_cases:
+      - id: enter-fails-missing-config
+        description: "kata enter implementation fails with clear error when typecheck_command missing"
+        type: integration
+      - id: enter-passes-complete-config
+        description: "kata enter implementation succeeds when all gate placeholders resolvable"
+        type: integration
+      - id: single-subphase-expansion
+        description: "Container phase with 1 subphase creates N tasks (one per spec phase)"
+        type: unit
+      - id: kata-binary-override
+        description: "kata setup --yes uses kata_binary from kata.yaml for hook registration"
+        type: unit
+      - id: gate-on-impl-blocks
+        description: "Gate on impl subphase blocks task completion when test_command fails"
+        type: integration
+      - id: no-gates-freeform
+        description: "Freeform template has zero gates, no config requirements"
+        type: unit
 ---
 
 # Modular Template System: Gates, Hints, and Formal Action Schema
@@ -1208,9 +1244,56 @@ No new external dependencies required.
 2. **p4 after p1** -- Interview skill needs hint schema from p1 but nothing else.
 3. **p5 after p1 + p3 + p4** -- Templates need all three: schema types, inline subphases, interview skill.
 4. **p6 after p2 + p3 + p5** -- Setup needs the consolidated hook (p2), inline subphases (p3 for migration), and new-format templates (p5). Migration is included in this phase.
+5. **p7 after p5 + p6** -- Batteries redesign depends on the schema (p1), gate evaluation (p2), and templates (p5) being stable. Placeholder validation at entry time depends on the placeholder engine (p1) and gate schema (p1).
+
+## P7 Design: Gates Over Fanout
+
+### Core principle
+
+Quality enforcement moves from **task topology** (separate test/review subphases with dependency chains) to **gates on task completion** (the impl task can't complete until tests pass). This eliminates multi-subphase fan-out within container phases.
+
+### Frame pattern
+
+Templates define invariant phase sequences. Projects customize via `kata.yaml` config fields that gates reference:
+
+```
+implementation: baseline → claim → impl(×N, gated) → close
+planning:       research → interview → write-spec → review → approve
+task:           plan → implement(gated) → close
+debug:          reproduce → investigate → fix(gated) → verify(gated)
+verify:         setup → execute → fix-loop(gated) → evidence
+research:       clarify → scope → explore → synthesize → present
+freeform:       (no phases, no gates)
+```
+
+**Phases are the frame** — rarely changed by projects.
+**Gates are the customization surface** — projects set their commands in kata.yaml, templates reference them.
+**Instructions are the fill** — projects override specific step instructions for their workflow (e.g. "spawn impl-agent" vs "code it yourself").
+
+### Gate placement by mode
+
+| Mode | Gate step | Gate command | Required config |
+|------|-----------|-------------|-----------------|
+| implementation | impl subphase | `{test_command}` | `test_command` |
+| implementation | read-spec | `test -f {spec_path}` | (session, runtime) |
+| task | final-verification | `{test_command}` | `test_command` |
+| debug | verify-fix | `{test_command}` | `test_command` |
+| verify | check-failures | `{test_command}` | `test_command` |
+| planning | (none) | — | — |
+| research | (none) | — | — |
+| freeform | (none) | — | — |
+
+### Entry-time validation
+
+`kata enter` scans all gate `bash` commands for `{placeholder}` references, resolves them against kata.yaml, and fails with actionable errors listing which config fields are missing. This ensures gates will actually work at runtime.
+
+### kata_binary override
+
+Projects can set `kata_binary: /path/to/other/kata` in kata.yaml to point hooks at a different kata build. Used for A/B testing branches in-place without copying projects. `kata setup --yes` reads this field and writes hooks pointing to the override binary.
 
 ## Open Questions
 
 1. **Gate timeout** -- The consolidated PreToolUse hook timeout in settings.json is set to 30s. Bash gates that run test suites may need longer. Individual gates can add an optional `timeout` field to override per-gate, or the consolidated hook timeout can be increased. Implementation detail for P2.
 2. **Hint validation in stop hook** -- Should the stop hook warn if "required" hints weren't attempted? Deferred to a follow-up. This spec treats all hints as advisory.
 3. ~~**Step output capture mechanism**~~ -- Deferred entirely. Step output capture (`stepOutputs`, `{steps.*}` placeholders) removed from this spec to reduce complexity. The two-source placeholder chain (session state + kata.yaml config) covers all current use cases. Step output capture can be added in a follow-up if needed.
+4. **Per-mode required config** -- Should modes declare which config fields they require (e.g. implementation requires `test_command`), or should this be purely derived from gate placeholder scanning? Currently derived — simpler, but less discoverable. Could add a `required_config` field to mode definitions in kata.yaml as a future enhancement.
