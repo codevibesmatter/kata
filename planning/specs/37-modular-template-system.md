@@ -183,6 +183,9 @@ phases:
       - "Document frame pattern: phases are invariant, gates+hints are the customization surface"
       - "Write tests for placeholder validation (missing config → clear error)"
       - "Write tests for kata_binary config override in setup/batteries/doctor"
+      - "Add test_output field to KataProjectSchema (path to test artifact for freshness checking)"
+      - "Create gate helper: test-evidence check (artifact exists + newer than HEAD)"
+      - "Update all test_command gates to use artifact freshness check instead of running full suite"
       - "Add scanAllGatePlaceholders() that scans all project templates and returns union of required config"
       - "Wire scan into onboard template: step that discovers missing config and prompts user via AskUserQuestion"
     test_cases:
@@ -203,6 +206,12 @@ phases:
         type: integration
       - id: no-gates-freeform
         description: "Freeform template has zero gates, no config requirements"
+        type: unit
+      - id: gate-artifact-fresh
+        description: "Gate passes when test_output artifact is newer than latest code change"
+        type: unit
+      - id: gate-artifact-stale
+        description: "Gate fails when test_output artifact is older than latest code change"
         type: unit
 ---
 
@@ -1289,13 +1298,39 @@ freeform:       (no phases, no gates)
 
 `kata enter` scans all gate `bash` commands for `{placeholder}` references, resolves them against kata.yaml, and fails with actionable errors listing which config fields are missing. This ensures gates will actually work at runtime.
 
+### Gate artifact freshness (not full suite runs)
+
+Gates must be fast — milliseconds, not minutes. Instead of re-running `{test_command}`, gates check whether tests were run after the latest code change.
+
+**Config:**
+```yaml
+project:
+  test_command: "turbo test ..."
+  test_output: ".turbo/cache"     # artifact path (file or dir)
+```
+
+**Gate logic (bash one-liner):**
+```bash
+# Check artifact is newer than latest code change
+test -e {test_output} && test {test_output} -nt $(git diff --name-only HEAD | head -1 || echo .kata)
+```
+
+**Flow:**
+1. Agent implements code
+2. Agent runs `{test_command}` → updates artifact at `{test_output}`
+3. Agent tries to complete task → gate checks artifact freshness
+4. If stale: gate fails with `on_fail: "Tests not run since last change. Run: {test_command}"`
+5. Agent runs tests, retries completion → gate passes
+
+This eliminates OQ#1 (gate timeout) — freshness checks take milliseconds.
+
 ### kata_binary override
 
 Projects can set `kata_binary: /path/to/other/kata` in kata.yaml to point hooks at a different kata build. Used for A/B testing branches in-place without copying projects. `kata setup --yes` reads this field and writes hooks pointing to the override binary.
 
 ## Open Questions
 
-1. **Gate timeout** -- The consolidated PreToolUse hook timeout in settings.json is set to 30s. Bash gates that run test suites may need longer. Individual gates can add an optional `timeout` field to override per-gate, or the consolidated hook timeout can be increased. Implementation detail for P2.
+1. ~~**Gate timeout**~~ -- Resolved: gates check artifact freshness (milliseconds) instead of running full test suites. Hook timeout of 30s is more than sufficient. See "Gate artifact freshness" design section.
 2. **Hint validation in stop hook** -- Should the stop hook warn if "required" hints weren't attempted? Deferred to a follow-up. This spec treats all hints as advisory.
 3. ~~**Step output capture mechanism**~~ -- Deferred entirely. Step output capture (`stepOutputs`, `{steps.*}` placeholders) removed from this spec to reduce complexity. The two-source placeholder chain (session state + kata.yaml config) covers all current use cases. Step output capture can be added in a follow-up if needed.
 4. ~~**Per-mode required config**~~ -- Resolved: derive from gate placeholder scanning, no explicit `required_config` field. Templates are the declaration — gates declare what they need, `kata enter` validates at entry time, and onboard scans all templates to prompt for missing config during setup. More discoverable than a redundant config field because the agent actively asks.
