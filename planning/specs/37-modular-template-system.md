@@ -183,6 +183,8 @@ phases:
       - "Document frame pattern: phases are invariant, gates+hints are the customization surface"
       - "Write tests for placeholder validation (missing config → clear error)"
       - "Write tests for kata_binary config override in setup/batteries/doctor"
+      - "Add scanAllGatePlaceholders() that scans all project templates and returns union of required config"
+      - "Wire scan into onboard template: step that discovers missing config and prompts user via AskUserQuestion"
     test_cases:
       - id: enter-fails-missing-config
         description: "kata enter implementation fails with clear error when typecheck_command missing"
@@ -1296,4 +1298,4 @@ Projects can set `kata_binary: /path/to/other/kata` in kata.yaml to point hooks 
 1. **Gate timeout** -- The consolidated PreToolUse hook timeout in settings.json is set to 30s. Bash gates that run test suites may need longer. Individual gates can add an optional `timeout` field to override per-gate, or the consolidated hook timeout can be increased. Implementation detail for P2.
 2. **Hint validation in stop hook** -- Should the stop hook warn if "required" hints weren't attempted? Deferred to a follow-up. This spec treats all hints as advisory.
 3. ~~**Step output capture mechanism**~~ -- Deferred entirely. Step output capture (`stepOutputs`, `{steps.*}` placeholders) removed from this spec to reduce complexity. The two-source placeholder chain (session state + kata.yaml config) covers all current use cases. Step output capture can be added in a follow-up if needed.
-4. **Per-mode required config** -- Should modes declare which config fields they require (e.g. implementation requires `test_command`), or should this be purely derived from gate placeholder scanning? Currently derived — simpler, but less discoverable. Could add a `required_config` field to mode definitions in kata.yaml as a future enhancement.
+4. ~~**Per-mode required config**~~ -- Resolved: derive from gate placeholder scanning, no explicit `required_config` field. Templates are the declaration — gates declare what they need, `kata enter` validates at entry time, and onboard scans all templates to prompt for missing config during setup. More discoverable than a redundant config field because the agent actively asks.
