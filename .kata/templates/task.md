@@ -3,17 +3,19 @@ id: task
 name: Task Mode
 description: Combined planning + implementation for small tasks, chores, and quick fixes
 mode: task
-workflow_prefix: "TK"
-
+workflow_prefix: TK
 phases:
   - id: p0
     name: Quick Planning
     task_config:
-      title: "P0: Plan - scope, approach, verify strategy (5-10 min)"
-      labels: [phase, phase-0, planning]
+      title: 'P0: Plan - scope, approach, verify strategy (5-10 min)'
+      labels:
+        - phase
+        - phase-0
+        - planning
     steps:
       - id: understand-task
-        title: "Understand and classify the task"
+        title: Understand and classify the task
         instruction: |
           Read the user's request carefully.
 
@@ -32,9 +34,8 @@ phases:
           gh issue list --search "{task description}" --limit 3
           ```
           Note issue # if found.
-
       - id: context-search
-        title: "Quick context search (3-5 min max)"
+        title: Quick context search (3-5 min max)
         instruction: |
           SPAWN a fast Explore agent for context gathering:
 
@@ -51,9 +52,8 @@ phases:
           Record key findings — just enough context to plan the change.
 
           Then: Mark this task completed via TaskUpdate
-
       - id: scope-and-approach
-        title: "Define scope and approach"
+        title: Define scope and approach
         instruction: |
           Write a brief plan (3-5 lines):
 
@@ -75,16 +75,19 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
   - id: p1
     name: Implement
     task_config:
-      title: "P1: Implement - make changes, verify as you go"
-      labels: [phase, phase-1, implementation]
-      depends_on: [p0]
+      title: 'P1: Implement - make changes, verify as you go'
+      labels:
+        - phase
+        - phase-1
+        - implementation
+      depends_on:
+        - p0
     steps:
       - id: make-changes
-        title: "Make the changes"
+        title: Make the changes
         instruction: |
           Follow your plan from P0. For each file:
           1. Read the file first
@@ -95,9 +98,8 @@ phases:
           - No over-engineering
           - No features beyond scope
           - No unrelated refactoring
-
       - id: verify-as-you-go
-        title: "Verify after each logical change"
+        title: Verify after each logical change
         instruction: |
           After each change:
           ```bash
@@ -112,16 +114,19 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
   - id: p2
     name: Complete
     task_config:
-      title: "P2: Complete - final checks, commit, push, close issue"
-      labels: [phase, phase-2, complete]
-      depends_on: [p1]
+      title: 'P2: Complete - final checks, commit, push, close issue'
+      labels:
+        - phase
+        - phase-2
+        - complete
+      depends_on:
+        - p1
     steps:
       - id: final-verification
-        title: "Final verification"
+        title: Final verification
         instruction: |
           ```bash
           # Run typecheck
@@ -129,9 +134,8 @@ phases:
           git status          # Review all changes
           git diff --staged   # Confirm staged changes look right
           ```
-
       - id: commit-and-push
-        title: "Commit, push, close issue"
+        title: Commit, push, close issue
         instruction: |
           Commit:
           ```bash
@@ -153,11 +157,9 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
 global_conditions:
   - changes_committed
-
-workflow_id_format: "TK-{session_last_4}-{MMDD}"
+workflow_id_format: TK-{session_last_4}-{MMDD}
 ---
 
 # Task Mode
