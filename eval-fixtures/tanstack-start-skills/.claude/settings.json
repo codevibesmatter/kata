@@ -1,0 +1,66 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook session-start"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook user-prompt"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook stop-conditions",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook mode-gate",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook task-deps",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "TaskUpdate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook task-evidence",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
