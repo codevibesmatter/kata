@@ -116,22 +116,6 @@ export function getProjectWmConfigPath(projectRoot?: string): string {
 }
 
 /**
- * Get path to project interviews.yaml
- */
-export function getProjectInterviewsPath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectDir()
-  return resolveKataPath(root, 'interviews.yaml')
-}
-
-/**
- * Get path to project subphase-patterns.yaml
- */
-export function getProjectSubphasePatternsPath(projectRoot?: string): string {
-  const root = projectRoot ?? findProjectDir()
-  return resolveKataPath(root, 'subphase-patterns.yaml')
-}
-
-/**
  * Get path to project verification-tools.md
  */
 export function getProjectVerificationToolsPath(projectRoot?: string): string {
@@ -232,16 +216,15 @@ export function getTemplatesDir(): string {
 }
 
 /**
- * Resolve a template path across two tiers.
- * Lookup order (first match wins): project → package batteries.
+ * Resolve a template path.
+ * Lookup order:
  *
  * 1. Absolute path — use as-is
  * 2. Project: .kata/templates/{name}
- * 3. Package: batteries/templates/{name}
  *
  * @param templatePath - Template filename or path
  * @returns Absolute path to template
- * @throws Error if template not found at any tier
+ * @throws Error if template not found
  */
 export function resolveTemplatePath(templatePath: string): string {
   // Absolute path - use as-is
@@ -254,7 +237,7 @@ export function resolveTemplatePath(templatePath: string): string {
 
   const checked: string[] = []
 
-  // 1. Project-level template (highest priority)
+  // Project-level template
   try {
     const projectRoot = findProjectDir()
     const projectTemplate = path.join(getProjectTemplatesDir(projectRoot), templatePath)
@@ -266,35 +249,25 @@ export function resolveTemplatePath(templatePath: string): string {
     // No project dir found — skip project tier
   }
 
-  // 2. Package batteries template (fallback)
-  const packageTemplate = path.join(getPackageRoot(), 'batteries', 'templates', templatePath)
-  checked.push(packageTemplate)
-  if (existsSync(packageTemplate)) {
-    return packageTemplate
-  }
-
   throw new Error(
     `Template not found: ${templatePath}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata batteries' to seed project templates.`,
+      `Run 'kata setup --batteries' to seed project templates.`,
   )
 }
 
 /**
- * Resolve a spec template path across two tiers.
- * Lookup order (first match wins): project → package batteries.
- *
- * 1. Project: planning/spec-templates/{name}
- * 2. Package: batteries/spec-templates/{name}
+ * Resolve a spec template path.
+ * Lookup: project planning/spec-templates/ only.
  *
  * @param name - Spec template filename (e.g. "feature.md")
  * @returns Absolute path to spec template
- * @throws Error if spec template not found at any tier
+ * @throws Error if spec template not found
  */
 export function resolveSpecTemplatePath(name: string): string {
   const checked: string[] = []
 
-  // 1. Project-level spec template
+  // Project-level spec template
   try {
     const projectRoot = findProjectDir()
     const projectTemplate = path.join(projectRoot, 'planning', 'spec-templates', name)
@@ -303,19 +276,12 @@ export function resolveSpecTemplatePath(name: string): string {
       return projectTemplate
     }
   } catch {
-    // No project dir found — skip project tier
-  }
-
-  // 2. Package batteries spec template
-  const packageTemplate = path.join(getPackageRoot(), 'batteries', 'spec-templates', name)
-  checked.push(packageTemplate)
-  if (existsSync(packageTemplate)) {
-    return packageTemplate
+    // No project dir found
   }
 
   throw new Error(
     `Spec template not found: ${name}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata batteries' to seed spec templates.`,
+      `Run 'kata setup --batteries' to seed spec templates.`,
   )
 }

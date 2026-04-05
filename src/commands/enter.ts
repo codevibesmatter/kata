@@ -15,7 +15,6 @@ import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import type { SessionState } from '../state/schema.js'
 import { validatePhases, formatValidationErrors } from '../validation/index.js'
 import { readFullTemplateContent, parseYamlFrontmatterWithError, type SpecPhase, type SpecYaml } from '../yaml/index.js'
-import { loadSubphasePatterns } from '../config/subphase-patterns.js'
 import type { SubphasePattern } from '../validation/schemas.js'
 
 // Import from modular enter command
@@ -26,6 +25,7 @@ import {
   parseAndValidateTemplatePhases,
   getTemplateReviewerPrompt,
 } from './enter/template.js'
+import { validateGatePlaceholders, type PlaceholderContext } from './enter/placeholder.js'
 
 /**
  * Output full template content to stderr for context injection
@@ -402,22 +402,29 @@ export async function enter(args: string[]): Promise<void> {
   const containerPhase = templatePhases?.find((p) => p.container === true)
   const hasContainerPhase = containerPhase !== undefined
 
-  // Resolve subphase pattern: string name → SubphasePattern[], inline array → as-is
+  // Resolve subphase pattern: always an inline array now (string references removed)
   let resolvedSubphasePattern: SubphasePattern[] = []
-  if (hasContainerPhase && containerPhase?.subphase_pattern != null) {
-    if (typeof containerPhase.subphase_pattern === 'string') {
-      const patternConfig = await loadSubphasePatterns()
-      const patternName = containerPhase.subphase_pattern
-      const patternDef = patternConfig.subphase_patterns[patternName]
-      if (!patternDef) {
-        const available = Object.keys(patternConfig.subphase_patterns).join(', ')
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`Unknown subphase pattern "${patternName}". Available: ${available}`)
-        process.exit(1)
+  if (hasContainerPhase && containerPhase?.subphase_pattern) {
+    resolvedSubphasePattern = containerPhase.subphase_pattern  // always array now
+  }
+
+  // Validate gate placeholders — fail early if config is missing required fields
+  if (templatePhases) {
+    const placeholderCtx: PlaceholderContext = { config }
+    const missing = validateGatePlaceholders(templatePhases, placeholderCtx)
+    if (missing.length > 0) {
+      process.stderr.write(`\nkata enter ${canonical}: missing config for gate placeholders:\n\n`)
+      for (const key of missing) {
+        process.stderr.write(`  - {${key}} → set \`${key}\` in kata.yaml project section\n`)
       }
-      resolvedSubphasePattern = patternDef.steps
-    } else {
-      resolvedSubphasePattern = containerPhase.subphase_pattern
+      process.stderr.write(`\nGates cannot run without these values. Add them to .kata/kata.yaml:\n\n`)
+      process.stderr.write(`  project:\n`)
+      for (const key of missing) {
+        process.stderr.write(`    ${key}: "your-command-here"\n`)
+      }
+      process.stderr.write(`\n`)
+      process.exitCode = 1
+      return
     }
   }
 

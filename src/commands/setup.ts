@@ -2,7 +2,7 @@
 // For the guided setup interview, use: kata enter onboard
 // Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getDefaultProfile, type SetupProfile } from '../config/setup-profile.js'
@@ -102,10 +102,10 @@ export interface SettingsJson {
  * Build kata hook entries for .claude/settings.json.
  * Uses an absolute path to the kata binary so hooks work regardless of PATH
  * (both for globally-installed and locally-installed packages).
- * Default: SessionStart, UserPromptSubmit, Stop, PreToolUse (mode-gate)
- * With --strict: also PreToolUse task-deps + task-evidence hooks
+ * Registers a single consolidated PreToolUse hook (pre-tool-use) that handles
+ * mode-gate, task-deps, gate evaluation, and task-evidence internally.
  */
-export function buildHookEntries(strict: boolean, wmBin: string): Record<string, HookEntry[]> {
+export function buildHookEntries(_strict: boolean, wmBin: string): Record<string, HookEntry[]> {
   // Quote the binary path so spaces in the path are handled correctly
   const bin = `"${wmBin}"`
   const hooks: Record<string, HookEntry[]> = {
@@ -140,44 +140,18 @@ export function buildHookEntries(strict: boolean, wmBin: string): Record<string,
         ],
       },
     ],
-    // mode-gate is always registered: it injects --session=ID into kata bash
-    // commands so session resolution works correctly (not just a strict feature)
+    // Consolidated PreToolUse handler: mode-gate + task-deps + gate evaluation + task-evidence
     PreToolUse: [
       {
         hooks: [
           {
             type: 'command',
-            command: `${bin} hook mode-gate`,
-            timeout: 10,
+            command: `${bin} hook pre-tool-use`,
+            timeout: 30,
           },
         ],
       },
     ],
-  }
-
-  if (strict) {
-    hooks.PreToolUse.push(
-      {
-        matcher: 'TaskUpdate',
-        hooks: [
-          {
-            type: 'command',
-            command: `${bin} hook task-deps`,
-            timeout: 10,
-          },
-        ],
-      },
-      {
-        matcher: 'TaskUpdate',
-        hooks: [
-          {
-            type: 'command',
-            command: `${bin} hook task-evidence`,
-            timeout: 10,
-          },
-        ],
-      },
-    )
   }
 
   return hooks
@@ -232,7 +206,7 @@ export function mergeHooksIntoSettings(
     // Tolerates both bare `kata hook …` and quoted `"/path/kata" hook …` forms while
     // avoiding false positives from unrelated tools like lefthook or husky.
     const wmHookPattern =
-      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence)\b/
+      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence|pre-tool-use)\b/
     const nonWmEntries = existing.filter((entry) => {
       return !entry.hooks?.some(
         (h) => typeof h.command === 'string' && wmHookPattern.test(h.command),
@@ -297,6 +271,19 @@ function buildKataConfig(projectRoot: string, profile: SetupProfile): Record<str
     } catch {
       process.stderr.write(`kata setup: warning: could not parse existing kata.yaml; using defaults\n`)
     }
+  }
+
+  // Stamp kata_version from package.json
+  try {
+    const pkgPath = join(getPackageRoot(), 'package.json')
+    if (existsSync(pkgPath)) {
+      const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string }
+      if (pkgJson.version) {
+        fromProfile.kata_version = pkgJson.version
+      }
+    }
+  } catch {
+    // Version stamp is best-effort
   }
 
   // Seed modes from batteries/kata.yaml
@@ -368,6 +355,21 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     if (existsSync(onboardSrc)) {
       mkdirSync(templatesDir, { recursive: true })
       copyFileSync(onboardSrc, onboardDest)
+    }
+  }
+
+  // Copy interview configs from batteries
+  const batteriesInterviewsDir = join(getPackageRoot(), 'batteries', 'interviews')
+  const projectInterviewsDir = join(projectRoot, '.kata', 'interviews')
+  if (existsSync(batteriesInterviewsDir)) {
+    mkdirSync(projectInterviewsDir, { recursive: true })
+    for (const f of readdirSync(batteriesInterviewsDir)) {
+      if (f.endsWith('.yaml')) {
+        const dest = join(projectInterviewsDir, f)
+        if (!existsSync(dest)) {
+          copyFileSync(join(batteriesInterviewsDir, f), dest)
+        }
+      }
     }
   }
 
@@ -452,11 +454,7 @@ export async function setup(args: string[]): Promise<void> {
       process.stdout.write(`    - SessionStart\n`)
       process.stdout.write(`    - UserPromptSubmit\n`)
       process.stdout.write(`    - Stop\n`)
-      process.stdout.write(`    - PreToolUse (mode-gate)\n`)
-      if (parsed.strict) {
-        process.stdout.write(`    - PreToolUse (task-deps)\n`)
-        process.stdout.write(`    - PreToolUse (task-evidence)\n`)
-      }
+      process.stdout.write(`    - PreToolUse (consolidated: mode-gate + task-deps + gates + evidence)\n`)
     }
 
     process.stdout.write('\nOptional: add shorthand to package.json scripts:\n')

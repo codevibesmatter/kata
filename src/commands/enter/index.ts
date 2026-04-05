@@ -3,9 +3,10 @@ export {
   type PhaseTitle,
   type RequiredTodo,
   type WorkflowGuidance,
-  applyPlaceholders,
   buildWorkflowGuidance,
 } from './guidance.js'
+
+export { resolvePlaceholders, type PlaceholderContext } from './placeholder.js'
 
 export {
   parseTemplateYaml,

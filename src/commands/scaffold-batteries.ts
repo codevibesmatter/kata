@@ -3,7 +3,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectInterviewsPath, getProjectSubphasePatternsPath, getProjectVerificationToolsPath } from '../session/lookup.js'
+import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectVerificationToolsPath } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
@@ -14,7 +14,6 @@ export interface BatteriesResult {
   specTemplates: string[]
   githubTemplates: string[]
   interviews: string[]
-  subphasePatterns: string[]
   verificationTools: string[]
   kataConfig: string[]
   skipped: string[]
@@ -102,7 +101,6 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     specTemplates: [],
     githubTemplates: [],
     interviews: [],
-    subphasePatterns: [],
     verificationTools: [],
     kataConfig: [],
     skipped: [],
@@ -215,44 +213,16 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // interviews.yaml → .kata/interviews.yaml
-  const interviewsSrc = join(batteryRoot, 'interviews.yaml')
-  const interviewsDest = getProjectInterviewsPath(projectRoot)
-  if (existsSync(interviewsSrc)) {
-    if (existsSync(interviewsDest)) {
-      if (update) {
-        if (backupRoot) backupFile(interviewsDest, backupRoot, 'interviews.yaml')
-        copyFileSync(interviewsSrc, interviewsDest)
-        result.updated.push('interviews.yaml')
-      } else {
-        result.skipped.push('interviews.yaml')
-      }
-    } else {
-      // Ensure parent directory exists
-      mkdirSync(join(interviewsDest, '..'), { recursive: true })
-      copyFileSync(interviewsSrc, interviewsDest)
-      result.interviews.push('interviews.yaml')
-    }
-  }
-
-  // subphase-patterns.yaml → .kata/subphase-patterns.yaml
-  const subphaseSrc = join(batteryRoot, 'subphase-patterns.yaml')
-  const subphaseDest = getProjectSubphasePatternsPath(projectRoot)
-  if (existsSync(subphaseSrc)) {
-    if (existsSync(subphaseDest)) {
-      if (update) {
-        if (backupRoot) backupFile(subphaseDest, backupRoot, 'subphase-patterns.yaml')
-        copyFileSync(subphaseSrc, subphaseDest)
-        result.updated.push('subphase-patterns.yaml')
-      } else {
-        result.skipped.push('subphase-patterns.yaml')
-      }
-    } else {
-      mkdirSync(join(subphaseDest, '..'), { recursive: true })
-      copyFileSync(subphaseSrc, subphaseDest)
-      result.subphasePatterns.push('subphase-patterns.yaml')
-    }
-  }
+  // Interview configs → .kata/interviews/
+  copyDirectory(
+    join(batteryRoot, 'interviews'),
+    join(projectRoot, '.kata', 'interviews'),
+    result.interviews,
+    result.skipped,
+    result.updated,
+    update,
+    backupRoot ? join(backupRoot, 'interviews') : undefined,
+  )
 
   // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')

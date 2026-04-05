@@ -29,11 +29,6 @@ export const agentStepConfigSchema = z.object({
   context: z.array(z.string()).optional(),
   /** Output artifact path (relative to project root). Supports {date} placeholder. */
   output: z.string().optional(),
-  /** If true, blocks next step until score meets threshold */
-  gate: z.boolean().optional(),
-  /** Minimum score (0-100) to pass the gate. Default: 75. */
-  threshold: z.number().min(0).max(100).optional(),
-
   // ── Agent capability options (forwarded to provider.run) ──
 
   /** Tools the agent can use. Default: [] (text-only, no tools). */
@@ -44,6 +39,64 @@ export const agentStepConfigSchema = z.object({
   timeout: z.number().min(1).optional(),
 })
 
+// ── Gate schema (bash-only) ──
+
+export const gateSchema = z.object({
+  bash: z.string().min(1),
+  expect: z.string().optional(),
+  expect_exit: z.number().optional(),
+  on_fail: z.string().optional(),
+}).strict()
+
+// ── Hint schemas (6 types) ──
+
+export const readHintSchema = z.object({
+  read: z.string().min(1),
+  section: z.string().optional(),
+})
+
+export const bashHintSchema = z.object({
+  bash: z.string().min(1),
+})
+
+export const searchHintSchema = z.object({
+  search: z.string().min(1),
+  glob: z.string().optional(),
+})
+
+export const agentHintSchema = z.object({
+  agent: z.object({
+    subagent_type: z.string().min(1),
+    prompt: z.string().min(1),
+  }),
+})
+
+export const skillHintSchema = z.object({
+  skill: z.string().min(1),
+  args: z.string().optional(),
+})
+
+export const askHintSchema = z.object({
+  ask: z.object({
+    question: z.string().min(1),
+    header: z.string().optional(),
+    options: z.array(z.object({
+      label: z.string().min(1),
+      description: z.string().optional(),
+    })).optional(),
+    multiSelect: z.boolean().optional(),
+  }),
+})
+
+export const hintSchema = z.union([
+  readHintSchema,
+  bashHintSchema,
+  searchHintSchema,
+  agentHintSchema,
+  skillHintSchema,
+  askHintSchema,
+])
+
 /**
  * Schema for a step within a phase
  * Steps are individual trackable units within a phase (e.g., interview rounds)
@@ -53,6 +106,8 @@ export const phaseStepSchema = z.object({
   title: z.string().min(1, 'Step title cannot be empty'),
   instruction: z.string().optional(),
   agent: agentStepConfigSchema.optional(),
+  gate: gateSchema.optional(),
+  hints: z.array(hintSchema).optional(),
 })
 
 /**
@@ -68,6 +123,8 @@ export const subphasePatternSchema = z.object({
   depends_on_previous: z.boolean().optional(),
   instruction: z.string().optional(),
   agent: agentStepConfigSchema.optional(),
+  gate: gateSchema.optional(),
+  hints: z.array(hintSchema).optional(),
 })
 
 /**
@@ -80,7 +137,7 @@ export const phaseSchema = z.object({
   task_config: phaseTaskConfigSchema.optional(),
   steps: z.array(phaseStepSchema).optional(), // Individual trackable units within phase (e.g., interview rounds)
   container: z.boolean().optional(), // Marks phase that accepts spec content phases
-  subphase_pattern: z.union([z.string(), z.array(subphasePatternSchema)]).optional(), // Name reference or inline array
+  subphase_pattern: z.array(subphasePatternSchema).optional(), // Inline array only (string references removed)
 })
 
 /**
@@ -127,3 +184,5 @@ export type PhaseDefinition = z.infer<typeof phaseSchema>
 export type TemplateYaml = z.infer<typeof templateYamlSchema>
 export type EvidenceType = z.infer<typeof evidenceTypeSchema>
 export type EvidenceTypes = z.infer<typeof evidenceTypesSchema>
+export type Gate = z.infer<typeof gateSchema>
+export type Hint = z.infer<typeof hintSchema>

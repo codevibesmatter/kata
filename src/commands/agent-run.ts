@@ -223,8 +223,6 @@ Options:
       raw_prompt: parsed.custom,
       context: parsed.context.length > 0 ? parsed.context : undefined,
       output: parsed.output,
-      gate: parsed.gate || undefined,
-      threshold: parsed.threshold,
       allowed_tools: parsed.allowedTools,
       max_turns: parsed.maxTurns,
       timeout: parsed.timeout,

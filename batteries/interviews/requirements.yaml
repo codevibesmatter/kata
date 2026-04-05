@@ -1,0 +1,35 @@
+name: "Requirements"
+description: "User journey, happy path, scope boundaries, edge cases"
+rounds:
+  - header: "Problem"
+    question: "What user problem does this solve?"
+    options:
+      - {label: "User workflow gap", description: "Missing capability in existing flow"}
+      - {label: "Performance issue", description: "Current approach too slow/unreliable"}
+      - {label: "New capability", description: "Something users can't do at all today"}
+  - header: "Happy Path"
+    question: "What does the ideal success flow look like?"
+    options:
+      - {label: "I'll describe it", description: "Free-form description"}
+  - header: "Scope OUT"
+    question: "What are you explicitly NOT building?"
+    options:
+      - {label: "I'll list exclusions", description: "Free-form list"}
+  - header: "Empty State"
+    question: "What happens with zero results or first-time use?"
+    options:
+      - {label: "Show placeholder", description: "Empty state with guidance"}
+      - {label: "Hide section", description: "Don't show until data exists"}
+      - {label: "N/A", description: "Not applicable to this feature"}
+  - header: "Scale"
+    question: "Expected data volume? (affects pagination, caching, indexing)"
+    options:
+      - {label: "Small (<100)", description: "No pagination needed"}
+      - {label: "Medium (100-10K)", description: "Basic pagination"}
+      - {label: "Large (10K+)", description: "Virtual scroll, server-side pagination, indexing"}
+  - header: "Concurrency"
+    question: "What if multiple users edit simultaneously?"
+    options:
+      - {label: "Last write wins", description: "Simple, no conflict detection"}
+      - {label: "Optimistic locking", description: "Detect conflicts, prompt user"}
+      - {label: "N/A", description: "Single-user or read-only feature"}

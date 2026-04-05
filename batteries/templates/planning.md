@@ -37,6 +37,11 @@ phases:
 
       - id: codebase-research
         title: "Research existing patterns"
+        hints:
+          - search: "relevant patterns"
+            glob: "src/**/*.ts"
+          - search: "related implementations"
+            glob: "**/*.ts"
         instruction: |
           SPAWN 2 parallel Explore agents for fast codebase research.
 
@@ -74,227 +79,44 @@ phases:
     steps:
       - id: requirements
         title: "Interview: Requirements"
+        hints:
+          - skill: "interview"
+            args: "requirements"
         instruction: |
-          Gather requirements from the user. Run two AskUserQuestion rounds:
-
-          **Round 1: Problem, happy path, scope**
-
-          AskUserQuestion(questions=[
-            {
-              question: "What user problem does this solve?",
-              header: "Problem",
-              options: [
-                {label: "User workflow gap", description: "Missing capability in existing flow"},
-                {label: "Performance issue", description: "Current approach too slow/unreliable"},
-                {label: "New capability", description: "Something users can't do at all today"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What does the ideal success flow look like?",
-              header: "Happy Path",
-              options: [
-                {label: "I'll describe it", description: "Free-form description"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What are you explicitly NOT building?",
-              header: "Scope OUT",
-              options: [
-                {label: "I'll list exclusions", description: "Free-form list"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          **Round 2: Edge cases — empty state, scale, concurrency**
-
-          AskUserQuestion(questions=[
-            {
-              question: "What happens with zero results or first-time use?",
-              header: "Empty State",
-              options: [
-                {label: "Show placeholder", description: "Empty state with guidance"},
-                {label: "Hide section", description: "Don't show until data exists"},
-                {label: "N/A", description: "Not applicable to this feature"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "Expected data volume? (affects pagination, caching, indexing)",
-              header: "Scale",
-              options: [
-                {label: "Small (<100)", description: "No pagination needed"},
-                {label: "Medium (100-10K)", description: "Basic pagination"},
-                {label: "Large (10K+)", description: "Virtual scroll, server-side pagination, indexing"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What if multiple users edit simultaneously?",
-              header: "Concurrency",
-              options: [
-                {label: "Last write wins", description: "Simple, no conflict detection"},
-                {label: "Optimistic locking", description: "Detect conflicts, prompt user"},
-                {label: "N/A", description: "Single-user or read-only feature"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          Document all answers with rationale.
+          Run the requirements interview. Document answers in planning notes.
+          Focus on: problem statement, happy path, scope boundaries, edge cases.
           Then: Mark this task completed via TaskUpdate
 
       - id: architecture
         title: "Interview: Architecture"
+        hints:
+          - skill: "interview"
+            args: "architecture"
         instruction: |
-          Gather architecture decisions from the user:
-
-          AskUserQuestion(questions=[
-            {
-              question: "What existing systems or APIs does this touch?",
-              header: "Integration",
-              options: [
-                {label: "I'll list them", description: "Free-form list of integration points"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "How should errors surface to users?",
-              header: "Errors",
-              options: [
-                {label: "Inline messages", description: "Error text near the action that failed"},
-                {label: "Toast/notification", description: "Temporary popup notification"},
-                {label: "Error page", description: "Full error state with recovery action"},
-                {label: "Silent retry", description: "Auto-retry with fallback"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "Any latency or throughput requirements?",
-              header: "Performance",
-              options: [
-                {label: "Standard", description: "No special requirements (<2s page loads)"},
-                {label: "Fast", description: "Sub-second response required (autocomplete, search)"},
-                {label: "Background OK", description: "Can process async (jobs, queues)"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          Document all answers with rationale.
+          Run the architecture interview. Document answers in planning notes.
+          Focus on: integration points, error handling strategy, performance requirements.
           Then: Mark this task completed via TaskUpdate
 
       - id: testing
         title: "Interview: Testing Strategy"
+        hints:
+          - skill: "interview"
+            args: "testing"
         instruction: |
-          Gather testing strategy from the user:
-
-          AskUserQuestion(questions=[
-            {
-              question: "What scenarios verify the feature works correctly?",
-              header: "Happy Path",
-              options: [
-                {label: "CRUD operations", description: "Create, read, update, delete flows"},
-                {label: "User journey", description: "End-to-end workflow completion"},
-                {label: "API responses", description: "Correct data returned for valid inputs"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What should fail gracefully?",
-              header: "Error Paths",
-              options: [
-                {label: "Validation errors", description: "Invalid input handling"},
-                {label: "Permission denied", description: "Unauthorized access attempts"},
-                {label: "Network failures", description: "Timeout and retry behavior"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What kinds of tests should we write?",
-              header: "Test Types",
-              options: [
-                {label: "Unit tests", description: "Isolated function/component tests"},
-                {label: "Integration tests", description: "Cross-module or API tests"},
-                {label: "E2E tests", description: "Full user flow tests"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          **Round 2: Verification Plan — how to verify against the real running system**
-
-          AskUserQuestion(questions=[
-            {
-              question: "How should this feature be verified against a real running system?",
-              header: "Verification",
-              options: [
-                {label: "API calls", description: "curl/httpie commands against real endpoints — check status codes, response bodies"},
-                {label: "Browser navigation", description: "Visit URLs, click elements, observe rendered output"},
-                {label: "CLI commands", description: "Run tool commands, verify stdout/stderr output"},
-                {label: "Not applicable", description: "No runtime verification possible (config-only, template-only changes)"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "How is the dev server started for this project?",
-              header: "Dev Server",
-              options: [
-                {label: "npm run dev", description: "Standard Node.js dev server"},
-                {label: "Custom command", description: "I'll specify the command"},
-                {label: "No dev server", description: "CLI tool, library, or build-only project"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          Document all answers — testing strategy feeds the Test Plan section, verification
-          strategy feeds the Verification Plan section in the spec.
+          Run the testing strategy interview. Document answers in planning notes.
+          Focus on: happy path scenarios, error paths, test types, verification approach.
+          Answers feed the Test Plan and Verification Plan sections in the spec.
           Then: Mark this task completed via TaskUpdate
 
       - id: design
         title: "Interview: UI Design (skip if backend-only)"
+        hints:
+          - skill: "interview"
+            args: "design"
         instruction: |
-          **Skip this step entirely if the feature is backend-only (no UI changes).**
-          Mark completed and move on.
-
-          For features with UI, gather design decisions:
-
-          AskUserQuestion(questions=[
-            {
-              question: "Which existing page or screen is most similar to what you're building?",
-              header: "Reference",
-              options: [
-                {label: "I'll name it", description: "Reference an existing page/screen"},
-                {label: "Nothing similar", description: "This is a new pattern"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "What layout pattern fits this feature?",
-              header: "Layout",
-              options: [
-                {label: "List/table", description: "Data listing with sorting/filtering"},
-                {label: "Detail view", description: "Single-item view with sections"},
-                {label: "Form", description: "Input form with validation"},
-                {label: "Dashboard", description: "Multiple cards/panels overview"}
-              ],
-              multiSelect: false
-            },
-            {
-              question: "Which existing components can you reuse?",
-              header: "Components",
-              options: [
-                {label: "I'll list them", description: "Free-form list of reusable components"},
-                {label: "All new", description: "No existing components apply"}
-              ],
-              multiSelect: false
-            }
-          ])
-
-          Document all answers.
+          Skip this step entirely if the feature is backend-only (no UI changes).
+          Otherwise, run the design interview. Document answers in planning notes.
+          Focus on: reference pages, layout patterns, reusable components.
           Then: Mark this task completed via TaskUpdate
 
       - id: requirements-approval
@@ -336,6 +158,8 @@ phases:
     steps:
       - id: create-spec-file
         title: "Create spec file from template"
+        hints:
+          - bash: "ls planning/specs/_templates/ 2>/dev/null || ls planning/spec-templates/ 2>/dev/null"
         instruction: |
           Create a new spec file. Copy from the feature spec template:
           ```bash
@@ -663,6 +487,12 @@ phases:
     steps:
       - id: validate-spec
         title: "Validate spec before approval"
+        gate:
+          bash: "ls {spec_path_dir}/*{issue}* 2>/dev/null"
+          expect_exit: 0
+          on_fail: "No spec file found matching issue number in {spec_path_dir}."
+        hints:
+          - read: "{spec_path}"
         instruction: |
           Run validation before marking approved. Block on any failures.
 

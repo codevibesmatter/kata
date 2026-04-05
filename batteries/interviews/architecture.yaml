@@ -1,0 +1,20 @@
+name: "Architecture"
+description: "Integration points, error handling, performance"
+rounds:
+  - header: "Integration"
+    question: "What existing systems or APIs does this touch?"
+    options:
+      - {label: "I'll list them", description: "Free-form list of integration points"}
+  - header: "Errors"
+    question: "How should errors surface to users?"
+    options:
+      - {label: "Inline messages", description: "Error text near the action that failed"}
+      - {label: "Toast/notification", description: "Temporary popup notification"}
+      - {label: "Error page", description: "Full error state with recovery action"}
+      - {label: "Silent retry", description: "Auto-retry with fallback"}
+  - header: "Performance"
+    question: "Any latency or throughput requirements?"
+    options:
+      - {label: "Standard", description: "No special requirements (<2s page loads)"}
+      - {label: "Fast", description: "Sub-second response required (autocomplete, search)"}
+      - {label: "Background OK", description: "Can process async (jobs, queues)"}

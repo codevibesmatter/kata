@@ -1,0 +1,21 @@
+name: "Testing Strategy"
+description: "Test scenarios planned before implementation"
+rounds:
+  - header: "Happy Path"
+    question: "What scenarios verify the feature works correctly?"
+    options:
+      - {label: "CRUD operations", description: "Create, read, update, delete flows"}
+      - {label: "User journey", description: "End-to-end workflow completion"}
+      - {label: "API responses", description: "Correct data returned for valid inputs"}
+  - header: "Error Paths"
+    question: "What should fail gracefully?"
+    options:
+      - {label: "Validation errors", description: "Invalid input handling"}
+      - {label: "Permission denied", description: "Unauthorized access attempts"}
+      - {label: "Network failures", description: "Timeout and retry behavior"}
+  - header: "Test Types"
+    question: "What kinds of tests should we write?"
+    options:
+      - {label: "Unit tests", description: "Isolated function/component tests"}
+      - {label: "Integration tests", description: "Cross-module or API tests"}
+      - {label: "E2E tests", description: "Full user flow tests"}

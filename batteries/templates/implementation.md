@@ -12,40 +12,25 @@ phases:
     steps:
       - id: read-spec
         title: "Read and understand the spec"
+        gate:
+          bash: "test -f {spec_path}"
+          expect_exit: 0
+          on_fail: "Spec file not found at {spec_path}. Ask user for the spec file location."
+        hints:
+          - read: "{spec_path}"
         instruction: |
-          Find and read the approved spec:
-          ```bash
-          ls planning/specs/ | grep "{issue-number or keyword}"
-          ```
-
-          **Verify it is approved before proceeding:**
-          ```bash
-          grep 'status:' planning/specs/{spec-file}.md
-          ```
-          If `status:` is not `approved`, stop and tell the user:
-          "This spec has status '{status}' — it must be approved before implementation can start.
-          Run `kata enter planning --issue=N` to complete the review process."
-
-          Read the spec IN FULL. Understand:
-          - All behaviors (B1, B2, ...) and their acceptance criteria
-          - All implementation phases and their tasks
-          - Non-goals (what NOT to do)
-
-          If no spec exists, ask user for the spec file location.
+          Read the spec IN FULL. Verify it has `status: approved` before proceeding.
+          Understand all behaviors, implementation phases, tasks, and non-goals.
           Then: Mark this task completed via TaskUpdate
 
       - id: verify-environment
         title: "Verify dev environment is working"
+        hints:
+          - bash: "git status"
+          - bash: "git log --oneline -3"
         instruction: |
-          Run sanity checks before making any changes:
-          ```bash
-          # Check types pass on clean tree
-          # (use your project's typecheck command)
-          git status  # Should be clean
-          git log --oneline -3  # Confirm you're on the right branch
-          ```
-
-          Document: current branch, any pre-existing issues.
+          Run sanity checks before making any changes. Confirm clean tree
+          and correct branch. Document current branch and any pre-existing issues.
           Then: Mark this task completed via TaskUpdate
 
   - id: p1
@@ -87,7 +72,23 @@ phases:
   - id: p2
     name: Implement
     container: true
-    subphase_pattern: impl-test-review
+    subphase_pattern:
+      - id_suffix: impl
+        title_template: "IMPL - {task_summary}"
+        todo_template: "Implement {task_summary}"
+        active_form: "Implementing {phase_name}"
+        labels: [impl]
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+          on_fail: "Tests failing. Fix before marking complete."
+        hints:
+          - read: "{spec_path}"
+            section: "## Phase {phase_label}"
+        instruction: |
+          Implement the behavior described in the spec phase.
+          Reference the spec for detailed requirements.
+          Tests must pass before this task can be completed.
 
   - id: p3
     name: Close
@@ -98,15 +99,13 @@ phases:
     steps:
       - id: final-checks
         title: "Run final checks"
+        hints:
+          - bash: "git status"
+          - bash: "git diff --staged"
+          - bash: "{build_command} && {test_command}"
         instruction: |
-          Before closing:
-          ```bash
-          git status          # All changes staged?
-          git diff --staged   # Review what's being committed
-          ```
-
-          Run your project's test and typecheck commands.
-          Fix any remaining issues.
+          Run final checks before closing. Verify all changes are staged,
+          build and tests pass. Fix any remaining issues.
           Then: Mark this task completed via TaskUpdate
 
       - id: commit-and-push

@@ -3,9 +3,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveTemplatePath } from '../../session/lookup.js'
-import type { SubphasePattern } from '../../validation/index.js'
+import type { Hint, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
-import { applyPlaceholders } from './guidance.js'
+import { resolvePlaceholders } from './placeholder.js'
 import { parseTemplateYaml } from './template.js'
 
 export interface Task {
@@ -126,11 +126,8 @@ export function buildSpecTasks(
       let prevTaskId: string | null = null
 
       for (const patternItem of subphasePattern) {
-        const titleContent = applyPlaceholders(patternItem.title_template, {
-          taskSummary,
-          phaseName,
-          phaseLabel,
-          reviewers,
+        const titleContent = resolvePlaceholders(patternItem.title_template, {
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
         })
         const fullTitle = `GH#${issueNum}: ${phaseLabel}: ${titleContent}`
         const taskId = `p${containerPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
@@ -151,11 +148,8 @@ export function buildSpecTasks(
         let instruction: string | undefined
         if (patternItem.instruction) {
           const vpContent = specContent ? extractVerificationPlan(specContent) : null
-          instruction = applyPlaceholders(patternItem.instruction, {
-            taskSummary,
-            phaseName,
-            phaseLabel,
-            reviewers,
+          instruction = resolvePlaceholders(patternItem.instruction, {
+            extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
           })
             .replace(/{issue}/g, String(issueNum))
             .replace(/{verification_plan}/g, vpContent ?? VP_FALLBACK_TEXT)
@@ -164,9 +158,12 @@ export function buildSpecTasks(
           const agentLine = `\nRun this command:\n\`\`\`bash\nkata review --prompt=${patternItem.agent.prompt}` +
             (patternItem.agent.provider ? ` --provider=${patternItem.agent.provider}` : '') +
             (patternItem.agent.model ? ` --model=${patternItem.agent.model}` : '') +
-            `\n\`\`\`` +
-            (patternItem.agent.gate ? `\n(gate: score >= ${patternItem.agent.threshold ?? 75})` : '')
+            `\n\`\`\``
           instruction = (instruction ?? '') + agentLine
+        }
+        if (patternItem.hints?.length) {
+          const hintsBlock = renderHints(patternItem.hints)
+          instruction = (instruction ?? '') + '\n\n' + hintsBlock
         }
 
         tasks.push({
@@ -262,10 +259,15 @@ export function buildPhaseTasks(
           dependsOn.push(prevStepTaskId)
         }
 
-        const resolvedInstruction =
+        let finalInstruction: string | undefined =
           reviewers && step.instruction
             ? step.instruction.replace(/{reviewers}/g, reviewers)
             : step.instruction
+
+        if (step.hints?.length) {
+          const hintsBlock = renderHints(step.hints)
+          finalInstruction = (finalInstruction ?? '') + '\n\n' + hintsBlock
+        }
 
         tasks.push({
           id: taskId,
@@ -274,7 +276,7 @@ export function buildPhaseTasks(
           depends_on: dependsOn,
           completedAt: null,
           reason: null,
-          instruction: resolvedInstruction,
+          instruction: finalInstruction,
         })
 
         // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -428,6 +430,29 @@ export function writeNativeTaskFiles(
   console.error(`Native tasks written: ${tasksDir} (${tasks.length} tasks)`)
 
   return tasksDir
+}
+
+/**
+ * Render hints array into a markdown block for task instructions.
+ */
+function renderHints(hints: Hint[]): string {
+  const lines = ['## Hints', '']
+  for (const hint of hints) {
+    if ('read' in hint) {
+      lines.push(`- **Read:** ${hint.read}${hint.section ? ` (section: ${hint.section})` : ''}`)
+    } else if ('bash' in hint) {
+      lines.push(`- **Bash:** \`${hint.bash}\``)
+    } else if ('search' in hint) {
+      lines.push(`- **Search:** \`${hint.search}\`${hint.glob ? ` in ${hint.glob}` : ''}`)
+    } else if ('agent' in hint) {
+      lines.push(`- **Agent:** ${hint.agent.subagent_type} — ${hint.agent.prompt}`)
+    } else if ('skill' in hint) {
+      lines.push(`- **Skill:** /${hint.skill}${hint.args ? ` ${hint.args}` : ''}`)
+    } else if ('ask' in hint) {
+      lines.push(`- **Ask:** ${hint.ask.question}`)
+    }
+  }
+  return lines.join('\n')
 }
 
 /**
