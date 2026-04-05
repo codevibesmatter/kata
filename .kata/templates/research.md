@@ -3,17 +3,19 @@ id: research
 name: Research Mode
 description: Deep exploration with documented findings and agent-parallel search
 mode: research
-
 phases:
   - id: p0
     name: Initial Clarification
     task_config:
-      title: "P0: Clarify - understand what to research and why"
-      labels: [phase, phase-0, clarify]
+      title: 'P0: Clarify - understand what to research and why'
+      labels:
+        - phase
+        - phase-0
+        - clarify
     gate: false
     steps:
       - id: clarify-intent
-        title: "Clarify research intent"
+        title: Clarify research intent
         instruction: |
           Use AskUserQuestion IMMEDIATELY after mode activation to understand:
           - What topic/area they want to explore
@@ -47,17 +49,20 @@ phases:
 
           Based on answers, determine which phases to include/skip.
           Then: Mark this task completed via TaskUpdate
-
   - id: p1
     name: Scope Definition
     task_config:
-      title: "P1: Scope - define questions and success criteria"
-      labels: [phase, phase-1, scope]
-      depends_on: [p0]
+      title: 'P1: Scope - define questions and success criteria'
+      labels:
+        - phase
+        - phase-1
+        - scope
+      depends_on:
+        - p0
     gate: false
     steps:
       - id: define-questions
-        title: "Define specific research questions"
+        title: Define specific research questions
         instruction: |
           Write down the specific questions this research needs to answer:
 
@@ -71,9 +76,8 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
       - id: set-boundaries
-        title: "Set research boundaries"
+        title: Set research boundaries
         instruction: |
           Define explicit boundaries to prevent scope creep:
 
@@ -87,18 +91,22 @@ phases:
           Research expands indefinitely without boundaries.
 
           Then: Mark this task completed via TaskUpdate
-
   - id: p2
     name: Codebase Research
     optional: true
     task_config:
-      title: "P2: Codebase - parallel agent exploration (optional)"
-      labels: [phase, phase-2, codebase, optional]
-      depends_on: [p1]
+      title: 'P2: Codebase - parallel agent exploration (optional)'
+      labels:
+        - phase
+        - phase-2
+        - codebase
+        - optional
+      depends_on:
+        - p1
     gate: false
     steps:
       - id: spawn-explore-parallel
-        title: "Spawn parallel Explore agents"
+        title: Spawn parallel Explore agents
         instruction: |
           SPAWN 3 parallel Explore agents for fast codebase coverage:
 
@@ -129,9 +137,8 @@ phases:
           ", run_in_background=true)
 
           Store all 3 task IDs for aggregation step below.
-
       - id: aggregate-codebase-findings
-        title: "Aggregate codebase findings"
+        title: Aggregate codebase findings
         instruction: |
           Wait for all 3 agents:
           TaskOutput(task_id=..., block=true)  # each agent
@@ -144,18 +151,22 @@ phases:
           - Recent activity: {relevant commits or past research}
 
           Then: Mark this task completed via TaskUpdate
-
   - id: p3
     name: External Research
     optional: true
     task_config:
-      title: "P3: External - documentation and best practices (optional)"
-      labels: [phase, phase-3, external, optional]
-      depends_on: [p2]
+      title: 'P3: External - documentation and best practices (optional)'
+      labels:
+        - phase
+        - phase-3
+        - external
+        - optional
+      depends_on:
+        - p2
     gate: false
     steps:
       - id: web-research
-        title: "Web research and documentation review"
+        title: Web research and documentation review
         instruction: |
           Search for external context:
           WebSearch(query="{topic} best practices {year}")
@@ -166,17 +177,20 @@ phases:
 
           Document findings with sources (URLs).
           Then: Mark this task completed via TaskUpdate
-
   - id: p4
     name: Synthesis
     task_config:
-      title: "P4: Synthesize - compile findings, identify recommendations"
-      labels: [phase, phase-4, synthesize]
-      depends_on: [p3]
+      title: 'P4: Synthesize - compile findings, identify recommendations'
+      labels:
+        - phase
+        - phase-4
+        - synthesize
+      depends_on:
+        - p3
     gate: false
     steps:
       - id: synthesize-findings
-        title: "Synthesize all findings"
+        title: Synthesize all findings
         instruction: |
           Create structured summary:
 
@@ -193,6 +207,98 @@ phases:
           ### Recommendations
           | Option | Pros | Cons | Fit |
           |--------|------|------|-----|
+          | A      | ...  | ...  | High|
+          | B      | ...  | ...  | Med |
+
+          ### Open Questions
+          - {what's still unclear}
+
+          Then: Mark this task completed via TaskUpdate
+      - id: create-research-doc
+        title: Write research findings document
+        instruction: |
+          Read `research_path` from kata.yaml (default: `planning/research`).
+          Create persistent findings doc at:
+          `{research_path}/{YYYY-MM-DD}-{slug}.md`
+
+          Structure:
+          ```markdown
+          ---
+          date: {YYYY-MM-DD}
+          topic: {topic}
+          status: complete
+          github_issue: {N or null}
+          ---
+
+          # Research: {topic}
+
+          ## Context
+          Why this research was done.
+
+          ## Questions Explored
+          - {question 1}
+
+          ## Findings
+          ### Codebase
+          - {finding} (file:line)
+
+          ### External
+          - {finding} (URL)
+
+          ## Recommendations
+          {ranked options}
+
+          ## Open Questions
+          - {unclear things}
+
+          ## Next Steps
+          {none / create spec / more research}
+          ```
+
+          Then commit:
+          ```bash
+          git add {research_path}/
+          git commit -m "docs(research): {topic}"
+          git push
+          ```
+
+          Then: Mark this task completed via TaskUpdate
+  - id: p5
+    name: Present
+    task_config:
+      title: 'P5: Present - share findings, determine next steps'
+      labels:
+        - phase
+        - phase-5
+        - present
+      depends_on:
+        - p4
+    gate: false
+    steps:
+      - id: present-and-decide
+        title: Present findings and decide next step
+        instruction: |
+          Present the research summary to the user.
+
+          Then ask:
+          AskUserQuestion(questions=[{
+            question: "Research complete. What next?",
+            header: "Next Step",
+            options: [
+              {label: "Plan the feature", description: "Switch to planning mode to write a spec"},
+              {label: "More research needed", description: "Continue exploring specific questions"},
+              {label: "Done", description: "Research complete — summarize and stop"}
+            ],
+            multiSelect: false
+          }])
+
+          Follow through on their choice.
+          Then: Mark this task completed via TaskUpdate
+global_conditions:
+  - changes_committed
+  - changes_pushed
+workflow_id_format: RS-{session_last_4}-{MMDD}
+--------|------|------|-----|
           | A      | ...  | ...  | High|
           | B      | ...  | ...  | Med |
 

@@ -1,17 +1,19 @@
 ---
 id: implementation
-name: "Feature Implementation"
-description: "Execute approved spec — claim branch, implement, test, review, close with PR"
+name: Feature Implementation
+description: Execute approved spec — claim branch, implement, test, review, close with PR
 mode: implementation
 phases:
   - id: p0
     name: Baseline
     task_config:
-      title: "P0: Baseline - verify environment, read spec, confirm approach"
-      labels: [orchestration, baseline]
+      title: 'P0: Baseline - verify environment, read spec, confirm approach'
+      labels:
+        - orchestration
+        - baseline
     steps:
       - id: read-spec
-        title: "Read and understand the spec"
+        title: Read and understand the spec
         instruction: |
           Find and read the approved spec:
           ```bash
@@ -25,9 +27,8 @@ phases:
 
           If no spec exists, ask user for the spec file location.
           Then: Mark this task completed via TaskUpdate
-
       - id: verify-environment
-        title: "Verify dev environment is working"
+        title: Verify dev environment is working
         instruction: |
           Run sanity checks before making any changes:
           ```bash
@@ -39,16 +40,18 @@ phases:
 
           Document: current branch, any pre-existing issues.
           Then: Mark this task completed via TaskUpdate
-
   - id: p1
     name: Claim
     task_config:
-      title: "P1: Claim - create branch, link GitHub issue"
-      labels: [orchestration, claim]
-      depends_on: [p0]
+      title: 'P1: Claim - create branch, link GitHub issue'
+      labels:
+        - orchestration
+        - claim
+      depends_on:
+        - p0
     steps:
       - id: create-branch
-        title: "Create feature branch"
+        title: Create feature branch
         instruction: |
           Create a branch for this work:
           ```bash
@@ -63,9 +66,8 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
       - id: claim-github-issue
-        title: "Claim GitHub issue"
+        title: Claim GitHub issue
         instruction: |
           If GitHub issue exists, claim it:
           ```bash
@@ -75,21 +77,45 @@ phases:
 
           If no GitHub issue, skip this step.
           Then: Mark this task completed via TaskUpdate
-
   - id: p2
     name: Implement
     container: true
-    subphase_pattern: impl-test-review
-
+    subphase_pattern:
+      - id_suffix: impl
+        title_template: IMPL - {task_summary}
+        todo_template: Implement {task_summary}
+        active_form: Implementing {phase_name}
+        labels:
+          - impl
+        instruction: Implement the behavior described in the spec phase.
+      - id_suffix: test
+        title_template: TEST - {phase_name}
+        todo_template: Test {phase_name} implementation
+        active_form: Testing {phase_name}
+        labels:
+          - test
+        depends_on_previous: true
+        instruction: Run tests and typecheck.
+      - id_suffix: review
+        title_template: REVIEW - {reviewers}
+        todo_template: Review {phase_name} changes
+        active_form: Reviewing {phase_name}
+        labels:
+          - review
+        depends_on_previous: true
+        instruction: Run review-agent.
   - id: p3
     name: Close
     task_config:
-      title: "P3: Close - final checks, commit, PR, close issue"
-      labels: [orchestration, close]
-      depends_on: [p2]
+      title: 'P3: Close - final checks, commit, PR, close issue'
+      labels:
+        - orchestration
+        - close
+      depends_on:
+        - p2
     steps:
       - id: final-checks
-        title: "Run final checks"
+        title: Run final checks
         instruction: |
           Before closing:
           ```bash
@@ -100,9 +126,8 @@ phases:
           Run your project's test and typecheck commands.
           Fix any remaining issues.
           Then: Mark this task completed via TaskUpdate
-
       - id: commit-and-push
-        title: "Commit and push all changes"
+        title: Commit and push all changes
         instruction: |
           Commit all implementation work:
           ```bash
@@ -114,9 +139,8 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
       - id: create-pr
-        title: "Create pull request"
+        title: Create pull request
         instruction: |
           Create a PR:
           ```bash
@@ -139,9 +163,8 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
       - id: close-issue
-        title: "Update GitHub issue"
+        title: Update GitHub issue
         instruction: |
           If GitHub issue exists:
           ```bash
@@ -154,7 +177,6 @@ phases:
           gh issue edit {N} --remove-label "status:in-review" --add-label "status:done"
           ```
           Then: Mark this task completed via TaskUpdate
-
 global_conditions:
   - changes_committed
   - changes_pushed

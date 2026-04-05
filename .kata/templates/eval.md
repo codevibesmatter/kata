@@ -1,19 +1,20 @@
 ---
 id: eval
-name: "Eval Mode"
-description: "Run agentic eval scenarios against kata-wm"
+name: Eval Mode
+description: Run agentic eval scenarios against kata-wm
 mode: eval
-workflow_prefix: "EV"
-
+workflow_prefix: EV
 phases:
   - id: p0
-    name: "Run Scenario"
+    name: Run Scenario
     task_config:
-      title: "P0: Run — select scenario, execute, handle pauses"
-      labels: [eval, run]
+      title: 'P0: Run — select scenario, execute, handle pauses'
+      labels:
+        - eval
+        - run
     steps:
       - id: select-and-run
-        title: "Select and run eval scenario"
+        title: Select and run eval scenario
         instruction: |
           List available scenarios:
           ```bash
@@ -37,16 +38,18 @@ phases:
           ```
 
           Repeat resume until the scenario completes or fails.
-
   - id: p1
-    name: "Analyze Results"
+    name: Analyze Results
     task_config:
-      title: "P1: Analyze — check assertions, note observations"
-      labels: [eval, analyze]
-      depends_on: [p0]
+      title: 'P1: Analyze — check assertions, note observations'
+      labels:
+        - eval
+        - analyze
+      depends_on:
+        - p0
     steps:
       - id: check-results
-        title: "Check results and observations"
+        title: Check results and observations
         instruction: |
           Review the eval output:
           - Which assertions passed/failed?
@@ -58,16 +61,18 @@ phases:
           - Read the transcript in eval-transcripts/
           - Check the project state in eval-projects/
           - Identify root cause: template issue, hook issue, agent behavior?
-
   - id: p2
-    name: "Report"
+    name: Report
     task_config:
-      title: "P2: Report — summarize findings, action items"
-      labels: [eval, report]
-      depends_on: [p1]
+      title: 'P2: Report — summarize findings, action items'
+      labels:
+        - eval
+        - report
+      depends_on:
+        - p1
     steps:
       - id: summarize
-        title: "Write eval summary"
+        title: Write eval summary
         instruction: |
           Summarize:
           - Pass/fail per scenario
@@ -75,7 +80,6 @@ phases:
           - What worked well
           - What broke and why
           - Action items (template fixes, hook fixes, harness improvements)
-
 stop_hook: false
 ---
 

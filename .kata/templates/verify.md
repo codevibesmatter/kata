@@ -1,20 +1,21 @@
 ---
 id: verify
-name: "Verification Plan Execution"
-description: "Standalone VP execution with repair loop — run after implementation or task mode"
+name: Verification Plan Execution
+description: Standalone VP execution with repair loop — run after implementation or task mode
 mode: verify
-workflow_prefix: "VF"
+workflow_prefix: VF
 reviewer_prompt: verify-fix-review
-
 phases:
   - id: p0
     name: Setup
     task_config:
-      title: "P0: Setup - determine VP source, read verification tools, prepare environment"
-      labels: [orchestration, setup]
+      title: 'P0: Setup - determine VP source, read verification tools, prepare environment'
+      labels:
+        - orchestration
+        - setup
     steps:
       - id: determine-input
-        title: "Determine VP input source"
+        title: Determine VP input source
         instruction: |
           Determine where the Verification Plan comes from. Check in order:
 
@@ -46,9 +47,8 @@ phases:
 
           Document which input source you are using and list all VP step titles.
           Then: Mark this task completed via TaskUpdate
-
       - id: read-verification-tools
-        title: "Read verification tools config"
+        title: Read verification tools config
         instruction: |
           Read the project's verification tools config:
           - `.kata/verification-tools.md`
@@ -58,9 +58,8 @@ phases:
 
           If no verification-tools.md exists, check `wm.yaml` for `dev_server_command`.
           Then: Mark this task completed via TaskUpdate
-
       - id: start-dev-server
-        title: "Start dev server and confirm health"
+        title: Start dev server and confirm health
         instruction: |
           If `dev_server_command` is configured, start the dev server:
           ```bash
@@ -72,16 +71,17 @@ phases:
           Confirm the server is healthy before proceeding.
           If no dev server is needed (e.g., CLI-only or library project), skip and mark complete.
           Then: Mark this task completed via TaskUpdate
-
   - id: p1
     name: Execute
     container: true
     task_config:
-      title: "P1: Execute - run all VP steps"
-      labels: [execution, vp-steps]
+      title: 'P1: Execute - run all VP steps'
+      labels:
+        - execution
+        - vp-steps
     steps:
       - id: expand-vp-steps
-        title: "Expand VP steps as individual tasks"
+        title: Expand VP steps as individual tasks
         instruction: |
           For each VP step found in P0, create a native task using TaskCreate:
 
@@ -102,16 +102,18 @@ phases:
           3. Compare actual vs expected
           4. Record pass/fail with actual output in the task notes
           5. Mark the task completed
-
   - id: p2
     name: Fix Loop
     task_config:
-      title: "P2: Fix Loop - repair failures and re-verify"
-      labels: [execution, fix-loop]
-      depends_on: [p1]
+      title: 'P2: Fix Loop - repair failures and re-verify'
+      labels:
+        - execution
+        - fix-loop
+      depends_on:
+        - p1
     steps:
       - id: check-failures
-        title: "Check for VP failures"
+        title: Check for VP failures
         instruction: |
           Review results from P1. List all VP steps with their pass/fail status.
 
@@ -119,9 +121,8 @@ phases:
 
           If any VP steps failed: proceed to fix-and-reverify below.
           Then: Mark this task completed via TaskUpdate
-
       - id: fix-and-reverify
-        title: "Fix implementation and re-verify (max 3 cycles)"
+        title: Fix implementation and re-verify (max 3 cycles)
         instruction: |
           For each failed VP step, run up to 3 fix cycles:
 
@@ -144,16 +145,18 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
   - id: p2-review
     name: Fix Review
     task_config:
-      title: "P2-Review: Fix Review - review emergency fixes for regressions before committing evidence"
-      labels: [review, fix-review]
-      depends_on: [p2]
+      title: 'P2-Review: Fix Review - review emergency fixes for regressions before committing evidence'
+      labels:
+        - review
+        - fix-review
+      depends_on:
+        - p2
     steps:
       - id: check-fixes-made
-        title: "Check if fixes were made during P2"
+        title: Check if fixes were made during P2
         instruction: |
           Check whether any fix commits were made during the VP repair loop:
           ```bash
@@ -167,9 +170,8 @@ phases:
 
           If fixes WERE made: proceed to the review step below.
           Then: Mark this task completed via TaskUpdate
-
       - id: review-fixes
-        title: "Review fix changes — {reviewers}"
+        title: Review fix changes — {reviewers}
         instruction: |
           Run all reviewers sequentially on fix commits made during the VP repair loop.
 
@@ -221,16 +223,18 @@ phases:
 
           **If APPROVE from all reviewers:** Proceed to P3 Evidence.
           Then: Mark this task completed via TaskUpdate
-
   - id: p3
     name: Evidence
     task_config:
-      title: "P3: Evidence - write VP evidence, commit, report results"
-      labels: [orchestration, evidence]
-      depends_on: [p2-review]
+      title: 'P3: Evidence - write VP evidence, commit, report results'
+      labels:
+        - orchestration
+        - evidence
+      depends_on:
+        - p2-review
     steps:
       - id: write-evidence
-        title: "Write VP evidence file"
+        title: Write VP evidence file
         instruction: |
           Write VP evidence to `.kata/verification-evidence/`.
 
@@ -254,9 +258,8 @@ phases:
           ```
 
           Then: Mark this task completed via TaskUpdate
-
       - id: commit-evidence
-        title: "Commit evidence and push"
+        title: Commit evidence and push
         instruction: |
           Commit the VP evidence file:
           ```bash
@@ -267,9 +270,8 @@ phases:
 
           If any VP steps failed, note the failure summary in the commit message.
           Then: Mark this task completed via TaskUpdate
-
       - id: update-issue
-        title: "Update GitHub issue with verification results"
+        title: Update GitHub issue with verification results
         instruction: |
           If this is issue-based verification, comment on the issue:
 
@@ -281,6 +283,47 @@ phases:
 
           | Step | Result |
           |------|--------|
+          | VP1  | ✅ Passed |
+          | VP2  | ✅ Passed |
+
+          Evidence: \`.kata/verification-evidence/vp-p1-{N}.json\`"
+          ```
+
+          **If any failed:**
+          ```bash
+          gh issue comment {N} --body "## Verification Plan FAILED
+
+          {N}/{total} VP steps failed after 3 fix cycles.
+
+          | Step | Result | Notes |
+          |------|--------|-------|
+          | VP1  | ✅ Passed | |
+          | VP2  | ❌ Failed | {diagnosis} |
+
+          Implementation needs further work before this issue can close."
+          ```
+
+          If no issue number (infer/plan-file mode), skip this step.
+          Then: Mark this task completed via TaskUpdate
+      - id: report-results
+        title: Report verification results
+        instruction: |
+          Summarize results to the user:
+          - Input source: {issue spec | plan file | inferred from git diff}
+          - Total VP steps: {count}
+          - Passed: {count}
+          - Failed: {count}
+          - Fix cycles used: {count}
+
+          **Final verdict:**
+          - All passed → "✅ Verification Plan PASSED"
+          - Any failed → "❌ Verification Plan FAILED — {list failing steps with diagnosis}"
+
+          Then: Mark this task completed via TaskUpdate
+global_conditions:
+  - changes_committed
+  - changes_pushed
+------|--------|
           | VP1  | ✅ Passed |
           | VP2  | ✅ Passed |
 
