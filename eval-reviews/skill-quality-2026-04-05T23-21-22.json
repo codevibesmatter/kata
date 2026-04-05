@@ -1,0 +1,11 @@
+{
+  "scenarioId": "skill-quality",
+  "agentScore": 62,
+  "systemScore": 80,
+  "verdict": "FAIL_AGENT",
+  "provider": "claude",
+  "judgedAt": "2026-04-05T23:21:22.844Z",
+  "transcriptPath": "/data/projects/kata-wm/eval-transcripts/skill-quality-2026-04-05T23-13-19.jsonl",
+  "templatePath": "/data/projects/kata-wm/eval-projects/skill-quality-2026-04-05T23-13-19/.kata/templates/skill-eval.md",
+  "reviewPath": "/data/projects/kata-wm/eval-reviews/skill-quality-2026-04-05T23-21-22.md"
+}
