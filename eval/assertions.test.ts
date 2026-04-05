@@ -8,7 +8,7 @@
 import { describe, it, expect, afterAll } from 'bun:test'
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import type { EvalContext } from './harness.js'
 import {
   assertCurrentMode,
@@ -49,6 +49,10 @@ import {
   liveTaskDisciplinePresets,
   stopHookPresets,
   onboardPresets,
+  assertSkillRead,
+  assertSkillReadOrder,
+  assertSkillNotRead,
+  skillActivationPresets,
 } from './assertions.js'
 import type { SessionState } from '../src/state/schema.js'
 
@@ -736,15 +740,147 @@ describe('assertNativeTaskHasInstruction', () => {
 })
 
 describe('implTaskGenPresets', () => {
-  it('returns 5 checkpoints', () => {
+  it('returns 7 checkpoints', () => {
     const presets = implTaskGenPresets()
-    expect(presets).toHaveLength(5)
+    expect(presets).toHaveLength(7)
     expect(presets.map((p) => p.name)).toEqual([
       'native task exists with originalId: p2.1:impl',
       'native task exists with originalId: p2.1:test',
+      'native task exists with originalId: p2.1:review',
       'native task exists with originalId: p2.2:impl',
       'native task exists with originalId: p2.2:test',
+      'native task exists with originalId: p2.2:review',
       'native task has instruction: check-phase',
+    ])
+  })
+})
+
+// ─── Skill Activation Assertions ────────────────────────────────────────────
+
+const SKILL_TRANSCRIPT_DIR = join(tmpdir(), `skill-eval-test-${Date.now()}`)
+
+function writeTranscript(filename: string, events: object[]): string {
+  mkdirSync(SKILL_TRANSCRIPT_DIR, { recursive: true })
+  const path = join(SKILL_TRANSCRIPT_DIR, filename)
+  const content = events.map((e) => JSON.stringify(e)).join('\n')
+  writeFileSync(path, content)
+  return path
+}
+
+function makeReadEvent(filePath: string): object {
+  return {
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          name: 'Read',
+          input: { file_path: filePath },
+        },
+      ],
+    },
+  }
+}
+
+afterAll(() => {
+  rmSync(SKILL_TRANSCRIPT_DIR, { recursive: true, force: true })
+})
+
+describe('assertSkillRead', () => {
+  it('fails when no transcriptPath', async () => {
+    const ctx = mockContext({})
+    const result = await assertSkillRead('tdd').assert(ctx)
+    expect(result).toContain('No transcriptPath')
+  })
+
+  it('passes when skill was read', async () => {
+    const path = writeTranscript('skill-read-pass.jsonl', [
+      makeReadEvent('/home/user/project/.claude/skills/tdd/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillRead('tdd').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when skill was not read', async () => {
+    const path = writeTranscript('skill-read-fail.jsonl', [
+      makeReadEvent('/home/user/project/.claude/skills/tdd/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillRead('nonexistent').assert(ctx)
+    expect(result).toContain("Skill 'nonexistent' was never read")
+  })
+
+  it('passes with absolute path containing skill path', async () => {
+    const path = writeTranscript('skill-read-abs.jsonl', [
+      makeReadEvent('/tmp/eval-projects/test-123/.claude/skills/quick-planning/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillRead('quick-planning').assert(ctx)
+    expect(result).toBeNull()
+  })
+})
+
+describe('assertSkillReadOrder', () => {
+  it('passes when skills read in correct order', async () => {
+    const path = writeTranscript('skill-order-pass.jsonl', [
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'planning...' }] } },
+      makeReadEvent('/project/.claude/skills/tdd/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when skills read in wrong order', async () => {
+    const path = writeTranscript('skill-order-fail.jsonl', [
+      makeReadEvent('/project/.claude/skills/tdd/SKILL.md'),
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
+    expect(result).toContain('expected strictly increasing order')
+  })
+
+  it('fails when a skill was not read', async () => {
+    const path = writeTranscript('skill-order-missing.jsonl', [
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
+    expect(result).toContain("Skill 'tdd' was never read")
+  })
+})
+
+describe('assertSkillNotRead', () => {
+  it('passes when skill was not read', async () => {
+    const path = writeTranscript('skill-notread-pass.jsonl', [
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillNotRead('tdd').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when skill was read', async () => {
+    const path = writeTranscript('skill-notread-fail.jsonl', [
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillNotRead('quick-planning').assert(ctx)
+    expect(result).toContain("Skill 'quick-planning' was read")
+  })
+})
+
+describe('skillActivationPresets', () => {
+  it('returns 3 checkpoints with expected names', () => {
+    const presets = skillActivationPresets()
+    expect(presets).toHaveLength(3)
+    expect(presets.map((p) => p.name)).toEqual([
+      'skill read: quick-planning',
+      'skill read: tdd',
+      'skill read order: quick-planning -> tdd',
     ])
   })
 })

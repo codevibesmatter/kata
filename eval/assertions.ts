@@ -1171,6 +1171,123 @@ export function assertVerifySubagentRan(): EvalCheckpoint {
   }
 }
 
+// ─── Skill Activation Assertions ────────────────────────────────────────────
+
+/**
+ * Scan transcript JSONL for Read tool_use blocks targeting a skill's SKILL.md.
+ * Returns the line indices where the skill was read.
+ */
+function findSkillReadIndices(transcriptContent: string, skillName: string): number[] {
+  const lines = transcriptContent.split('\n').filter(Boolean)
+  const indices: number[] = []
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      const event = JSON.parse(lines[i])
+      if (event.type === 'assistant' && event.message?.content) {
+        for (const block of event.message.content) {
+          if (block.type === 'tool_use' && block.name === 'Read') {
+            const filePath = block.input?.file_path ?? ''
+            if (filePath.includes(`.claude/skills/${skillName}/SKILL.md`)) {
+              indices.push(i)
+            }
+          }
+        }
+      }
+    } catch {
+      // Skip unparseable lines
+    }
+  }
+  return indices
+}
+
+/**
+ * Assert that the agent read a specific skill's SKILL.md file during the session.
+ * Scans transcript for Read tool_use blocks targeting .claude/skills/{skillName}/SKILL.md.
+ */
+export function assertSkillRead(skillName: string): EvalCheckpoint {
+  return {
+    name: `skill read: ${skillName}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.transcriptPath) {
+        return fail('No transcriptPath on EvalContext — cannot check transcript')
+      }
+      let content: string
+      try {
+        content = readFileSync(ctx.transcriptPath, 'utf-8')
+      } catch {
+        return fail(`Cannot read transcript: ${ctx.transcriptPath}`)
+      }
+      const indices = findSkillReadIndices(content, skillName)
+      if (indices.length === 0) {
+        return fail(`Skill '${skillName}' was never read — no Read call for .claude/skills/${skillName}/SKILL.md found in transcript`)
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that skills were read in a specific order (first-occurrence ordering).
+ * Verifies all skills were read and that first-read positions are strictly increasing.
+ */
+export function assertSkillReadOrder(skills: string[]): EvalCheckpoint {
+  return {
+    name: `skill read order: ${skills.join(' -> ')}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.transcriptPath) {
+        return fail('No transcriptPath on EvalContext — cannot check transcript')
+      }
+      let content: string
+      try {
+        content = readFileSync(ctx.transcriptPath, 'utf-8')
+      } catch {
+        return fail(`Cannot read transcript: ${ctx.transcriptPath}`)
+      }
+      const firstIndices: number[] = []
+      for (const skill of skills) {
+        const indices = findSkillReadIndices(content, skill)
+        if (indices.length === 0) {
+          return fail(`Skill '${skill}' was never read — cannot verify ordering`)
+        }
+        firstIndices.push(indices[0])
+      }
+      for (let i = 1; i < firstIndices.length; i++) {
+        if (firstIndices[i] <= firstIndices[i - 1]) {
+          return fail(
+            `Skill '${skills[i]}' (first read at line ${firstIndices[i]}) was read before or at same line as '${skills[i - 1]}' (first read at line ${firstIndices[i - 1]}) — expected strictly increasing order`,
+          )
+        }
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Assert that a specific skill's SKILL.md was NOT read during the session.
+ */
+export function assertSkillNotRead(skillName: string): EvalCheckpoint {
+  return {
+    name: `skill NOT read: ${skillName}`,
+    assert(ctx: EvalContext) {
+      if (!ctx.transcriptPath) {
+        return fail('No transcriptPath on EvalContext — cannot check transcript')
+      }
+      let content: string
+      try {
+        content = readFileSync(ctx.transcriptPath, 'utf-8')
+      } catch {
+        return fail(`Cannot read transcript: ${ctx.transcriptPath}`)
+      }
+      const indices = findSkillReadIndices(content, skillName)
+      if (indices.length > 0) {
+        return fail(`Skill '${skillName}' was read at line(s) ${indices.join(', ')} — expected it to NOT be read`)
+      }
+      return pass()
+    },
+  }
+}
+
 // ─── Presets ──────────────────────────────────────────────────────────────────
 
 /**
@@ -1268,3 +1385,14 @@ export const onboardPresets: EvalCheckpoint[] = [
   assertWmYamlExists(),
   assertTemplatesExist(),
 ]
+
+/**
+ * Skill activation presets: both skills read, in correct order.
+ */
+export function skillActivationPresets(): EvalCheckpoint[] {
+  return [
+    assertSkillRead('quick-planning'),
+    assertSkillRead('tdd'),
+    assertSkillReadOrder(['quick-planning', 'tdd']),
+  ]
+}
