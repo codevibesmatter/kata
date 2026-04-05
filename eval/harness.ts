@@ -76,7 +76,7 @@ export interface EvalScenario {
    */
   templatePath?: string
   /**
-   * Shell commands to run after batteries --update but before git init.
+   * Shell commands to run after kata update but before git init.
    * Use for per-scenario fixture customization (e.g., overwriting a template file).
    * Commands run with cwd=projectDir and CLAUDE_PROJECT_DIR set.
    */
@@ -184,16 +184,29 @@ export async function runScenario(
     projectDir = join(EVAL_PROJECTS_DIR, `${scenario.id}-${ts}`)
     mkdirSync(projectDir, { recursive: true })
     cpSync(fixturePath, projectDir, { recursive: true })
-    // Refresh templates with latest batteries so fixtures never go stale
+    // Bootstrap kata config + refresh templates so fixtures never go stale.
+    // kata setup --yes creates .kata/kata.yaml if missing, then kata update
+    // refreshes templates to latest package versions.
+    const setupEnv = { ...process.env, CLAUDE_PROJECT_DIR: projectDir }
     try {
-      execSync(`kata batteries --update --cwd="${projectDir}"`, {
+      execSync(`kata setup --yes --cwd="${projectDir}"`, {
         cwd: projectDir,
-        env: { ...process.env, CLAUDE_PROJECT_DIR: projectDir },
+        env: setupEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
       })
     } catch (err) {
       const msg = (err as { stderr?: Buffer }).stderr?.toString() ?? String(err)
-      throw new Error(`kata batteries --update failed for fixture '${fixtureName}': ${msg}`)
+      throw new Error(`kata setup failed for fixture '${fixtureName}': ${msg}`)
+    }
+    try {
+      execSync(`kata update --cwd="${projectDir}"`, {
+        cwd: projectDir,
+        env: setupEnv,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+    } catch (err) {
+      const msg = (err as { stderr?: Buffer }).stderr?.toString() ?? String(err)
+      throw new Error(`kata update failed for fixture '${fixtureName}': ${msg}`)
     }
     // Run optional per-scenario fixture setup commands
     if (scenario.fixtureSetup?.length) {
