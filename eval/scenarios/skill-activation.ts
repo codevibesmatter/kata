@@ -30,15 +30,15 @@ export const skillActivationScenario: EvalScenario = {
   skill-eval:
     name: "Skill Eval"
     description: "Eval-only mode for testing skill activation reliability"
-    template: "skill-eval"
+    template: skill-eval.md
     stop_conditions: [tasks_complete, committed]
     issue_handling: "none"
-    intent_keywords: [skill, health, endpoint, plan and implement]
+    intent_keywords: ["skill-eval:"]
     workflow_prefix: "SE"
 EOF`,
   ],
   prompt:
-    'Add a /health endpoint that returns { status: "ok" }. Plan first, then implement using TDD.',
+    'skill-eval: Add a /health endpoint that returns { status: "ok" }. Plan the approach first, then write it using TDD.',
   timeoutMs: 12 * 60 * 1000,
   checkpoints: [
     assertCurrentMode('skill-eval'),

@@ -782,6 +782,21 @@ function makeReadEvent(filePath: string): object {
   }
 }
 
+function makeSkillEvent(skillName: string): object {
+  return {
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          name: 'Skill',
+          input: { skill: skillName },
+        },
+      ],
+    },
+  }
+}
+
 afterAll(() => {
   rmSync(SKILL_TRANSCRIPT_DIR, { recursive: true, force: true })
 })
@@ -819,6 +834,24 @@ describe('assertSkillRead', () => {
     const result = await assertSkillRead('quick-planning').assert(ctx)
     expect(result).toBeNull()
   })
+
+  it('passes when skill was invoked via Skill tool', async () => {
+    const path = writeTranscript('skill-tool-pass.jsonl', [
+      makeSkillEvent('tdd'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillRead('tdd').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when different skill was invoked via Skill tool', async () => {
+    const path = writeTranscript('skill-tool-diff.jsonl', [
+      makeSkillEvent('quick-planning'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillRead('tdd').assert(ctx)
+    expect(result).toContain("Skill 'tdd' was never read")
+  })
 })
 
 describe('assertSkillReadOrder', () => {
@@ -851,6 +884,27 @@ describe('assertSkillReadOrder', () => {
     const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
     expect(result).toContain("Skill 'tdd' was never read")
   })
+
+  it('passes with Skill tool invocations in correct order', async () => {
+    const path = writeTranscript('skill-order-tool.jsonl', [
+      makeSkillEvent('quick-planning'),
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'planning...' }] } },
+      makeSkillEvent('tdd'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('passes with mixed Read and Skill tool', async () => {
+    const path = writeTranscript('skill-order-mixed.jsonl', [
+      makeReadEvent('/project/.claude/skills/quick-planning/SKILL.md'),
+      makeSkillEvent('tdd'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillReadOrder(['quick-planning', 'tdd']).assert(ctx)
+    expect(result).toBeNull()
+  })
 })
 
 describe('assertSkillNotRead', () => {
@@ -861,6 +915,24 @@ describe('assertSkillNotRead', () => {
     const ctx = mockContext({ transcriptPath: path })
     const result = await assertSkillNotRead('tdd').assert(ctx)
     expect(result).toBeNull()
+  })
+
+  it('passes when only different skill was invoked via Skill tool', async () => {
+    const path = writeTranscript('skill-notread-tool-pass.jsonl', [
+      makeSkillEvent('tdd'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillNotRead('quick-planning').assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when skill was invoked via Skill tool', async () => {
+    const path = writeTranscript('skill-notread-tool-fail.jsonl', [
+      makeSkillEvent('quick-planning'),
+    ])
+    const ctx = mockContext({ transcriptPath: path })
+    const result = await assertSkillNotRead('quick-planning').assert(ctx)
+    expect(result).toContain("Skill 'quick-planning' was read")
   })
 
   it('fails when skill was read', async () => {

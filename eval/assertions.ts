@@ -1174,8 +1174,11 @@ export function assertVerifySubagentRan(): EvalCheckpoint {
 // ─── Skill Activation Assertions ────────────────────────────────────────────
 
 /**
- * Scan transcript JSONL for Read tool_use blocks targeting a skill's SKILL.md.
- * Returns the line indices where the skill was read.
+ * Scan transcript JSONL for skill activation evidence.
+ * Detects both:
+ * - Read tool_use blocks targeting .claude/skills/{skillName}/SKILL.md
+ * - Skill tool_use blocks with skill name matching the skill
+ * Returns the line indices where the skill was activated.
  */
 function findSkillReadIndices(transcriptContent: string, skillName: string): number[] {
   const lines = transcriptContent.split('\n').filter(Boolean)
@@ -1185,10 +1188,22 @@ function findSkillReadIndices(transcriptContent: string, skillName: string): num
       const event = JSON.parse(lines[i])
       if (event.type === 'assistant' && event.message?.content) {
         for (const block of event.message.content) {
-          if (block.type === 'tool_use' && block.name === 'Read') {
-            const filePath = block.input?.file_path ?? ''
-            if (filePath.includes(`.claude/skills/${skillName}/SKILL.md`)) {
-              indices.push(i)
+          if (block.type === 'tool_use') {
+            // Direct Read of SKILL.md file
+            if (block.name === 'Read') {
+              const filePath = block.input?.file_path ?? ''
+              if (filePath.includes(`.claude/skills/${skillName}/SKILL.md`)) {
+                indices.push(i)
+                break
+              }
+            }
+            // Skill tool invocation (Claude Code native skill system)
+            if (block.name === 'Skill') {
+              const skill = block.input?.skill ?? ''
+              if (skill === skillName) {
+                indices.push(i)
+                break
+              }
             }
           }
         }
@@ -1201,8 +1216,9 @@ function findSkillReadIndices(transcriptContent: string, skillName: string): num
 }
 
 /**
- * Assert that the agent read a specific skill's SKILL.md file during the session.
- * Scans transcript for Read tool_use blocks targeting .claude/skills/{skillName}/SKILL.md.
+ * Assert that the agent activated a specific skill during the session.
+ * Scans transcript for Read calls targeting .claude/skills/{skillName}/SKILL.md
+ * or Skill tool invocations matching the skill name.
  */
 export function assertSkillRead(skillName: string): EvalCheckpoint {
   return {
