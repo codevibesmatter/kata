@@ -3,7 +3,6 @@ id: stop-hook-test
 name: Stop Hook Test
 description: Eval-only mode that exercises each stop condition in sequence
 mode: stop-hook-test
-mode_skill: stop-hook-test-mode
 workflow_prefix: "SH"
 
 phases:
