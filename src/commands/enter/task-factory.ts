@@ -127,7 +127,7 @@ export function buildSpecTasks(
 
       for (const patternItem of subphasePattern) {
         const titleContent = resolvePlaceholders(patternItem.title_template, {
-          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'Invoke /code-review' },
         })
         const fullTitle = `GH#${issueNum}: ${phaseLabel}: ${titleContent}`
         const taskId = `p${containerPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
@@ -149,7 +149,7 @@ export function buildSpecTasks(
         if (patternItem.instruction) {
           const vpContent = specContent ? extractVerificationPlan(specContent) : null
           instruction = resolvePlaceholders(patternItem.instruction, {
-            extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
+            extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'Invoke /code-review' },
           })
             .replace(/{issue}/g, String(issueNum))
             .replace(/{verification_plan}/g, vpContent ?? VP_FALLBACK_TEXT)
@@ -162,7 +162,7 @@ export function buildSpecTasks(
           instruction = (instruction ?? '') + agentLine
         }
         if (patternItem.skill) {
-          const skillSection = `## Skill\nActivate /${patternItem.skill} before starting this task.\n`
+          const skillSection = `## Skill\nInvoke /${patternItem.skill} before starting this task.\n`
           instruction = skillSection + '\n' + (instruction ?? '')
         }
         if (patternItem.hints?.length) {
@@ -270,7 +270,7 @@ export function buildPhaseTasks(
 
         // Skill activation section (prepended before instruction)
         if (step.skill) {
-          const skillSection = `## Skill\nActivate /${step.skill} before starting this task.\n`
+          const skillSection = `## Skill\nInvoke /${step.skill} before starting this task.\n`
           finalInstruction = skillSection + '\n' + (finalInstruction ?? '')
         }
 

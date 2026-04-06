@@ -44,7 +44,7 @@ tsup produces ESM-only output with two entry points:
 
 ### Runtime data layout
 
-All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/settings.json`, `.claude/agents/`) remain in `.claude/`.
+All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/settings.json`, `.claude/skills/`) remain in `.claude/`.
 
 | Path | Contents |
 |---|---|
@@ -55,7 +55,6 @@ All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/setting
 | `.kata/verification-evidence/` | Verify-phase output |
 | `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned) |
 | `.claude/settings.json` | Hook registration (Claude-owned) |
-| `.claude/agents/` | Agent definitions (Claude-owned) |
 | `planning/spec-templates/` | Spec document stubs |
 
 ### Hook architecture

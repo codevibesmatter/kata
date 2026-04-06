@@ -3,7 +3,7 @@ id: verify
 name: "Verification Plan Execution"
 description: "Standalone VP execution with repair loop — run after implementation or task mode"
 mode: verify
-mode_skill: verify-mode
+mode_skill: verification
 workflow_prefix: "VF"
 reviewer_prompt: verify-fix-review
 
@@ -212,9 +212,9 @@ phases:
 
           **Reviewers to run: {reviewers}**
 
-          1. Spawn review-agent:
+          1. Invoke /code-review — read the verification skill's fix-reviewer-prompt.md for review focus, then spawn:
           ```
-          Task(subagent_type="review-agent", prompt="
+          Task(subagent_type="general-purpose", prompt="
             Review the fix changes made during VP failure resolution in verify mode.
 
             Identify fix commits: git log --oneline -20

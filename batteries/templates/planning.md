@@ -3,7 +3,7 @@ id: planning
 name: "Planning Mode"
 description: "Feature planning with research, interviews, spec writing, and review"
 mode: planning
-mode_skill: planning-mode
+mode_skill: planning
 phases:
   - id: p0
     name: Research
@@ -204,7 +204,7 @@ phases:
 
       - id: spawn-spec-writer
         title: "Spawn spec writer agent"
-        skill: spec-writing
+        skill: planning
         instruction: |
           **Do NOT write the spec yourself.** Spawn an agent to preserve context.
 
@@ -371,8 +371,9 @@ phases:
 
           In ONE message, launch all reviewers in parallel:
 
-          - Reviewer 1 — review-agent:
-            Task(subagent_type="review-agent", prompt="
+          - Reviewer 1 — Invoke /code-review:
+            Read the code-review skill's reviewer-prompt.md for review instructions, then spawn:
+            Task(subagent_type="general-purpose", prompt="
               Review the spec at planning/specs/{spec-file}.md for quality and completeness.
               Check: behaviors have ID/Trigger/Expected/Verify, no placeholder text,
               phases cover all behaviors, each phase has test_cases, non-goals present.
@@ -385,14 +386,14 @@ phases:
               Print the full output including score and issues found.
             ", run_in_background=true)
 
-          Read kata.yaml to find configured providers. If none configured, only spawn the review-agent.
+          Read kata.yaml to find configured providers. If none configured, only spawn the code-review reviewer.
 
           Then wait for ALL task IDs before reading results:
-          TaskOutput(task_id=<review-agent-id>, block=true)
+          TaskOutput(task_id=<reviewer-id>, block=true)
           TaskOutput(task_id=<provider-id>, block=true)  # one per provider
 
           Print each result. Use the external provider score for the gate
-          (if no external provider, use review-agent verdict: PASS = proceed, GAPS_FOUND = fix loop).
+          (if no external provider, use code-review verdict: PASS = proceed, GAPS_FOUND = fix loop).
 
           **Check result:**
           - **PASS (score >= 75):** Skip to close-review step.

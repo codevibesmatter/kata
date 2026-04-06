@@ -88,7 +88,7 @@ function outputModeSkillActivation(skillName: string): void {
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.error('═══════════════════════════════════════════════════════════════════════════════')
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`  MODE SKILL: Activate /${skillName} to understand your role and workflow.`)
+  console.error(`  MODE SKILL: Invoke /${skillName} to understand your role and workflow.`)
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.error('═══════════════════════════════════════════════════════════════════════════════')
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -590,7 +590,7 @@ export async function enter(args: string[]): Promise<void> {
   // Read reviewer_prompt from template frontmatter (default: 'code-review')
   const reviewerPrompt = modeConfig.template ? getTemplateReviewerPrompt(modeConfig.template) : 'code-review'
   const reviewerParts = [
-    'review-agent',
+    'Invoke /code-review',
     ...externalProviders.filter(Boolean).map((p) => `kata review --prompt=${reviewerPrompt} --provider=${p}`),
   ]
   const reviewers = reviewerParts.join(', ')

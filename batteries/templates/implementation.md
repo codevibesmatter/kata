@@ -3,7 +3,7 @@ id: implementation
 name: "Feature Implementation"
 description: "Execute approved spec — claim branch, implement, test, review, close with PR"
 mode: implementation
-mode_skill: implementation-mode
+mode_skill: implementation
 phases:
   - id: p0
     name: Baseline

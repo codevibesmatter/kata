@@ -3,7 +3,7 @@ id: task
 name: Task Mode
 description: Combined planning + implementation for small tasks, chores, and quick fixes
 mode: task
-mode_skill: task-mode
+mode_skill: task
 workflow_prefix: "TK"
 
 phases:
@@ -15,7 +15,7 @@ phases:
     steps:
       - id: understand-task
         title: "Understand and classify the task"
-        skill: quick-planning
+        skill: task
         hints:
           - bash: "gh issue list --search \"{task_description}\" --limit 3"
         instruction: |

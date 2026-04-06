@@ -3,7 +3,7 @@ id: freeform
 name: Freeform Mode
 description: Quick questions and discussion without heavy structure
 mode: freeform
-mode_skill: freeform-mode
+mode_skill: freeform
 
 # Zero phases - free exploration
 phases: []

@@ -445,12 +445,6 @@ export async function setup(args: string[]): Promise<void> {
           process.stdout.write(`    .kata/templates/${t}\n`)
         }
       }
-      if (result.agents.length > 0) {
-        process.stdout.write(`  Agents (${result.agents.length}):\n`)
-        for (const a of result.agents) {
-          process.stdout.write(`    .claude/agents/${a}\n`)
-        }
-      }
       if (result.specTemplates.length > 0) {
         process.stdout.write(`  Spec templates (${result.specTemplates.length}):\n`)
         for (const s of result.specTemplates) {
@@ -498,7 +492,7 @@ Usage:
 
 Flags:
   --yes         Write config and register hooks using auto-detected defaults
-  --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
+  --batteries   Scaffold mode templates, skills, spec templates, and GitHub issue templates
                 (implies --yes)
   --strict      Also register PreToolUse hooks: task-deps, task-evidence
   --cwd=PATH    Run setup in a different directory

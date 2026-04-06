@@ -3,7 +3,7 @@ id: debug
 name: Debug Mode
 description: Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix
 mode: debug
-mode_skill: debug-mode
+mode_skill: debugging
 aliases: [investigate]
 
 phases:
@@ -15,7 +15,7 @@ phases:
     steps:
       - id: reproduce-bug
         title: "Reproduce the bug and find related issue"
-        skill: debug-methodology
+        skill: debugging
         hints:
           - bash: "gh issue list --search \"{bug_keywords}\" --state open --limit 5"
           - bash: "git log --oneline --since=\"2 weeks ago\""
@@ -121,7 +121,7 @@ phases:
     steps:
       - id: form-hypotheses
         title: "Form 3 hypotheses (not just 1)"
-        skill: debug-methodology
+        skill: debugging
         instruction: |
           List 3 possible root causes (ranked by likelihood):
 
@@ -134,7 +134,7 @@ phases:
 
       - id: trace-code-path
         title: "Trace the code path"
-        skill: debug-methodology
+        skill: debugging
         hints:
           - search: "error handling"
             glob: "src/**/*.ts"

@@ -8,7 +8,7 @@ import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
   templates: string[]
-  agents: string[]
+
   prompts: string[]
   providerPlugins: string[]
   skills: string[]
@@ -74,7 +74,6 @@ function backupFile(filePath: string, backupDir: string, filename: string): void
  *
  * Copies from the kata package's batteries/ directory:
  *   batteries/templates/              → .kata/templates/
- *   batteries/agents/                 → .claude/agents/
  *   batteries/spec-templates/         → planning/spec-templates/
  *   batteries/github/ISSUE_TEMPLATE/  → .github/ISSUE_TEMPLATE/
  *   batteries/github/labels.json      → .github/wm-labels.json  (read by setup mode)
@@ -96,7 +95,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
 
   const result: BatteriesResult = {
     templates: [],
-    agents: [],
+
     prompts: [],
     providerPlugins: [],
     skills: [],
@@ -139,17 +138,6 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     result.updated,
     update,
     backupRoot ? join(backupRoot, 'templates') : undefined,
-  )
-
-  // Agent definitions → .claude/agents/
-  copyDirectory(
-    join(batteryRoot, 'agents'),
-    join(projectRoot, '.claude', 'agents'),
-    result.agents,
-    result.skipped,
-    result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'agents') : undefined,
   )
 
   // Skills → .claude/skills/ (two-level: skills/<name>/SKILL.md)

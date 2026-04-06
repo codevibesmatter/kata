@@ -3,7 +3,7 @@ id: research
 name: Research Mode
 description: Deep exploration with documented findings and agent-parallel search
 mode: research
-mode_skill: research-mode
+mode_skill: research
 
 phases:
   - id: p0
