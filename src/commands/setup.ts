@@ -429,7 +429,7 @@ export async function setup(args: string[]): Promise<void> {
     // --yes / --batteries: write everything with auto-detected defaults
     applySetup(parsed.cwd, profile, parsed.explicitCwd)
 
-    // --batteries: scaffold full mode templates, agents, and spec templates
+    // --batteries: scaffold full mode templates, skills, and spec templates
     if (parsed.batteries) {
       const { scaffoldBatteries } = await import('./scaffold-batteries.js')
       const result = scaffoldBatteries(projectRoot)

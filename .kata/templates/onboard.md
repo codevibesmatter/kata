@@ -128,7 +128,7 @@ Ask the user to restart and re-run `kata enter onboard` before continuing.
 
 **With batteries:**
 - `.kata/templates/` — 6 full mode templates with GitHub integration
-- `.claude/agents/` — 3 Claude Code sub-agent definitions
+- `.claude/skills/` — Skill definitions with prompt templates
 - `planning/spec-templates/` — Feature, epic, and bug spec templates
 - `.kata/interviews.yaml` — Planning interview categories (customizable)
 
@@ -146,21 +146,9 @@ When asked "Install batteries-included starter content?", choosing Yes scaffolds
 | `debug.md` | Reproduce → hypotheses → trace → minimal fix |
 | `freeform.md` | Free exploration with structured exit patterns |
 
-**Agents** (`.claude/agents/`):
-| Agent | Description |
-|-------|-------------|
-| `impl-agent` | Implements a specific spec phase |
-| `test-agent` | Writes tests for spec behaviors |
-| `review-agent` | Reviews code and specs for quality |
-
-Agents are invoked via subphase patterns. The orchestrator spawns them with Claude Code's Task tool:
-```
-Task(subagent_type="impl-agent", prompt="
-  SPEC PHASE: P2.1
-  TASK: Implement auth middleware from planning/specs/123-feature.md
-  Do NOT complete tasks — return results to orchestrator.
-")
-```
+**Skills** (`.claude/skills/`):
+Each skill directory contains a `SKILL.md` and optional prompt templates (e.g., `reviewer-prompt.md`).
+Skills are invoked via the `/skill-name` syntax in task instructions.
 
 **Spec templates** (`planning/spec-templates/`):
 - `feature.md` — Feature spec with behaviors, phases, acceptance criteria
