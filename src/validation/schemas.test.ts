@@ -5,6 +5,7 @@ import {
   phaseStepSchema,
   subphasePatternSchema,
   agentStepConfigSchema,
+  templateYamlSchema,
 } from './schemas.js'
 
 describe('gateSchema', () => {
@@ -172,6 +173,68 @@ describe('subphasePatternSchema with gate and hints', () => {
       hints: [{ read: '{spec_path}', section: '## Phase {phase_label}' }],
     })
     expect(result.success).toBe(true)
+  })
+})
+
+describe('skill fields (issue #42)', () => {
+  it('phaseStepSchema accepts optional skill field', () => {
+    const result = phaseStepSchema.safeParse({
+      id: 's1',
+      title: 'Step with skill',
+      skill: 'tdd',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.skill).toBe('tdd')
+    }
+  })
+
+  it('phaseStepSchema parses without skill (backwards compat)', () => {
+    const result = phaseStepSchema.safeParse({
+      id: 's2',
+      title: 'Step without skill',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.skill).toBeUndefined()
+    }
+  })
+
+  it('subphasePatternSchema accepts optional skill field', () => {
+    const result = subphasePatternSchema.safeParse({
+      id_suffix: 'impl',
+      title_template: 'IMPL - {task_summary}',
+      todo_template: 'Implement {task_summary}',
+      active_form: 'Implementing {phase_name}',
+      skill: 'implementation',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.skill).toBe('implementation')
+    }
+  })
+
+  it('templateYamlSchema accepts optional mode_skill field', () => {
+    const result = templateYamlSchema.safeParse({
+      id: 'task',
+      mode: 'task',
+      mode_skill: 'task-mode',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.mode_skill).toBe('task-mode')
+    }
+  })
+
+  it('templateYamlSchema parses without mode_skill (backwards compat)', () => {
+    const result = templateYamlSchema.safeParse({
+      id: 'freeform',
+      mode: 'freeform',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.mode_skill).toBeUndefined()
+    }
   })
 })
 
