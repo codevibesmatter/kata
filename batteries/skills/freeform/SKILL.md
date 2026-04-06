@@ -1,5 +1,5 @@
 ---
-name: freeform-mode
+name: freeform
 description: "Free exploration and discussion without heavy structure. Quick questions, brainstorming, informal code review."
 ---
 

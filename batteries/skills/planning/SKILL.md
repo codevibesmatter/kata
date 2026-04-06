@@ -1,5 +1,5 @@
 ---
-name: planning-mode
+name: planning
 description: "Feature planning with research, interviews, spec writing, and review. Activate when entering planning mode."
 ---
 
@@ -63,6 +63,17 @@ P4: Finalize
     ├── Commit + push
     └── Comment on GitHub issue
 ```
+
+## Subagent Prompt Templates
+
+This skill includes sibling prompt templates for subagents:
+
+| Template | When to use |
+|----------|------------|
+| `planning/spec-writer-prompt.md` | Spawn spec writer for creating/editing specs |
+| `planning/reviewer-prompt.md` | Spawn review-agent for spec review |
+
+Invoke subagents with the Agent tool, passing the prompt template content plus task-specific context.
 
 ## Interview Categories
 
@@ -134,3 +145,48 @@ The template uses `${providers.spec_reviewer}` which resolves from
 - Spec file exists with `status: approved`
 - Changes committed and pushed
 - GitHub issue linked or explicitly skipped
+
+---
+
+# Spec Writing Methodology
+
+## Spec Structure
+
+Every spec must include these sections:
+
+### Overview
+1-3 sentences: what problem this solves, for whom, and why now.
+
+### Feature Behaviors
+For each behavior:
+- **ID:** kebab-case identifier
+- **Trigger:** what causes this behavior
+- **Expected:** what should happen
+- **Verify:** how to confirm it works
+- **UI Layer:** what the user sees
+- **API Layer:** endpoints, input, output
+- **Data Layer:** schema changes
+
+### Non-Goals
+Explicit list of what is NOT being built.
+
+### Implementation Phases
+2-5 phases with concrete tasks per phase. Each phase gets test_cases.
+
+### Verification Plan
+Concrete, executable steps a fresh agent can run:
+- Every step must be a literal command or URL
+- Include expected response bodies, status codes, or visible UI state
+- "Verify that it works" is NOT a valid step
+
+### Implementation Hints
+1. Key Imports table — exact package subpath exports
+2. Code Patterns — 2-5 copy-pasteable snippets
+3. Gotchas — subpath export quirks, peer deps, TS config
+4. Reference Doc URLs with descriptions
+
+## Rules
+- No TBD/TODO/placeholder text
+- File paths must reference real files
+- Every behavior must have all Core fields filled
+- Verification Plan must have executable steps

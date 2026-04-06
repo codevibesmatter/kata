@@ -1,5 +1,5 @@
 ---
-name: task-mode
+name: task
 description: "Combined planning + implementation for small tasks, chores, and quick fixes. Activate when entering task mode."
 ---
 
@@ -44,3 +44,13 @@ P2: Complete
 ## Key Principle
 
 **Do less, verify more.** Task mode is for focused, bounded work.
+
+---
+
+# Quick Planning Methodology
+
+1. **Understand the request** — Read the task prompt carefully. Identify what is being asked.
+2. **Scope the work** — List the files that will change and the ones that won't.
+3. **Identify risks** — What could go wrong? Are there edge cases?
+4. **Define verification** — How will you know the implementation is correct?
+5. **Outline steps** — Write a short numbered plan before touching any code.

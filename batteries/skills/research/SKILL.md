@@ -1,5 +1,5 @@
 ---
-name: research-mode
+name: research
 description: "Deep exploration with parallel agent search and documented findings. Activate when entering research mode."
 ---
 

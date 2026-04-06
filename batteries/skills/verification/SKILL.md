@@ -1,5 +1,5 @@
 ---
-name: verify-mode
+name: verification
 description: "Execute Verification Plans literally, fix failures with repair loop, record evidence. Activate when entering verify mode."
 ---
 
@@ -52,6 +52,12 @@ P3: Evidence
     ├── Update GitHub issue (if issue-based)
     └── Report pass/fail results
 ```
+
+## Subagent Prompt Templates
+
+| Template | When to use |
+|----------|------------|
+| `verification/fix-reviewer-prompt.md` | Spawn review-agent to review verification fixes |
 
 ## TaskCreate Exception
 
