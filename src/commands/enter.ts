@@ -78,6 +78,22 @@ function outputFullTemplateContent(
     // Template read error - silently ignore, guidance already output above
   }
 }
+
+/**
+ * Output mode_skill activation instruction to stderr
+ */
+function outputModeSkillActivation(skillName: string): void {
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('═══════════════════════════════════════════════════════════════════════════════')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`  MODE SKILL: Activate /${skillName} to understand your role and workflow.`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('═══════════════════════════════════════════════════════════════════════════════')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+}
 import { findSpecFile } from './enter/spec.js'
 import {
   type Task,
@@ -284,16 +300,7 @@ async function enterWithCustomTemplate(
   // Output full template content or mode_skill activation instruction
   if (!parsed.dryRun) {
     if (template.mode_skill) {
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('═══════════════════════════════════════════════════════════════════════════════')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`  MODE SKILL: Activate /${template.mode_skill} to understand your role and workflow.`)
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('═══════════════════════════════════════════════════════════════════════════════')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
+      outputModeSkillActivation(template.mode_skill)
     } else {
       outputFullTemplateContent(templatePath, modeName, workflowId, issueNum, effectivePhases[0])
     }
@@ -736,16 +743,7 @@ export async function enter(args: string[]): Promise<void> {
   // Output full template content or mode_skill activation instruction
   if (!parsed.dryRun && modeConfig.template) {
     if (parsedTemplate?.mode_skill) {
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('═══════════════════════════════════════════════════════════════════════════════')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`  MODE SKILL: Activate /${parsedTemplate.mode_skill} to understand your role and workflow.`)
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('═══════════════════════════════════════════════════════════════════════════════')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
+      outputModeSkillActivation(parsedTemplate.mode_skill)
     } else {
       outputFullTemplateContent(
         modeConfig.template,

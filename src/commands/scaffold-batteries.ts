@@ -156,7 +156,9 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
   const skillsSrc = join(batteryRoot, 'skills')
   if (existsSync(skillsSrc)) {
     const skillsDest = getProjectSkillsDir(projectRoot)
-    for (const skillName of readdirSync(skillsSrc)) {
+    for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const skillName = entry.name
       const srcDir = join(skillsSrc, skillName)
       const destDir = join(skillsDest, skillName)
       copyDirectory(

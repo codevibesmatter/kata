@@ -377,16 +377,15 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   const skillsSrc = join(getPackageRoot(), 'batteries', 'skills')
   if (existsSync(skillsSrc)) {
     const skillsDest = getProjectSkillsDir(projectRoot)
-    for (const skillName of readdirSync(skillsSrc)) {
-      const skillSrcDir = join(skillsSrc, skillName)
-      const skillDestDir = join(skillsDest, skillName)
+    for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const skillSrcDir = join(skillsSrc, entry.name)
+      const skillDestDir = join(skillsDest, entry.name)
       mkdirSync(skillDestDir, { recursive: true })
       for (const f of readdirSync(skillSrcDir)) {
         const src = join(skillSrcDir, f)
         const dest = join(skillDestDir, f)
-        if (!existsSync(dest)) {
-          copyFileSync(src, dest)
-        }
+        copyFileSync(src, dest)
       }
     }
   }
@@ -456,6 +455,12 @@ export async function setup(args: string[]): Promise<void> {
         process.stdout.write(`  Spec templates (${result.specTemplates.length}):\n`)
         for (const s of result.specTemplates) {
           process.stdout.write(`    planning/spec-templates/${s}\n`)
+        }
+      }
+      if (result.skills.length > 0) {
+        process.stdout.write(`  Skills (${result.skills.length}):\n`)
+        for (const s of result.skills) {
+          process.stdout.write(`    .claude/skills/${s}\n`)
         }
       }
       if (result.skipped.length > 0) {
