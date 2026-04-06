@@ -218,11 +218,11 @@ describe('skill fields (issue #42)', () => {
     const result = templateYamlSchema.safeParse({
       id: 'task',
       mode: 'task',
-      mode_skill: 'task-mode',
+      mode_skill: 'task',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode_skill).toBe('task-mode')
+      expect(result.data.mode_skill).toBe('task')
     }
   })
 
