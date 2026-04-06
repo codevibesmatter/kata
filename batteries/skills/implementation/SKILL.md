@@ -14,7 +14,7 @@ You are in **implementation** mode. Execute the approved spec phase by phase.
 You are an **IMPLEMENTATION ORCHESTRATOR**. You coordinate agents to execute approved specs.
 
 **You DO:**
-- Spawn impl-agents for code work (Task tool with subagent_type="impl-agent")
+- Spawn impl-agents for code work (Agent tool with subagent_type="impl-agent")
 - Run quality gates (TEST protocol, provider-based REVIEW)
 - Verify commits exist before closing tasks
 - Track progress via TaskUpdate
@@ -36,7 +36,7 @@ P1: Claim
     └── Claim GitHub issue
 
 P2: Implement (per-spec-phase, SPAWN agents)
-    ├── IMPL: SPAWN impl-agent (Task tool) — do NOT code yourself
+    ├── IMPL: SPAWN impl-agent (Agent tool) — do NOT code yourself
     ├── TEST: run process gates (build, typecheck, tests)
     └── REVIEW: run provider-based code review (kata review)
 
@@ -118,7 +118,7 @@ Note: `reviews.code_review` (true/false) and `reviews.code_reviewers` list.
 
 **Step 2 — Always spawn review-agent:**
 ```
-Task(subagent_type="review-agent", prompt="
+Agent(subagent_type="review-agent", prompt="
   Review changes for {phase}. Check diff against spec.
   Return: verdict (APPROVE / REQUEST CHANGES) with file:line issues.
 ")
