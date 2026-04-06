@@ -3,6 +3,7 @@ id: debug
 name: Debug Mode
 description: Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix
 mode: debug
+mode_skill: debug-mode
 aliases: [investigate]
 
 phases:
@@ -14,6 +15,7 @@ phases:
     steps:
       - id: reproduce-bug
         title: "Reproduce the bug and find related issue"
+        skill: debug-methodology
         hints:
           - bash: "gh issue list --search \"{bug_keywords}\" --state open --limit 5"
           - bash: "git log --oneline --since=\"2 weeks ago\""
@@ -119,6 +121,7 @@ phases:
     steps:
       - id: form-hypotheses
         title: "Form 3 hypotheses (not just 1)"
+        skill: debug-methodology
         instruction: |
           List 3 possible root causes (ranked by likelihood):
 
@@ -131,6 +134,7 @@ phases:
 
       - id: trace-code-path
         title: "Trace the code path"
+        skill: debug-methodology
         hints:
           - search: "error handling"
             glob: "src/**/*.ts"
@@ -280,51 +284,3 @@ global_conditions:
   - changes_committed
   - changes_pushed
 ---
-
-# Debug Mode
-
-Systematic, hypothesis-driven debugging. No guessing — reproduce first, hypothesize, trace, fix.
-
-## Phase Flow
-
-```
-P0: Reproduce & Map
-    ├── Capture exact error evidence
-    ├── Map affected system layers
-    └── Classify bug type
-
-P1: Investigate
-    ├── Form 3 hypotheses (ranked)
-    ├── Trace code path (Explore agent)
-    └── Confirm root cause
-
-P2: Fix
-    ├── Minimal targeted fix
-    └── Regression test/guard
-
-P3: Verify
-    ├── Confirm original bug resolved
-    ├── Check for regressions
-    └── Commit + close issue
-```
-
-## Observability Tools
-
-```bash
-pnpm at tail gateway                     # Live-stream worker logs (staging)
-pnpm at tail web dataforge               # Tail multiple workers
-pnpm at tail gateway --env=preview       # Tail your PR preview slot
-pnpm at tail gateway --env=production    # Tail production
-pnpm at tail web --search="timeout"      # Filter by text
-pnpm at tail gateway --status=500        # Filter by HTTP status
-pnpm at logs -w gateway -l error         # Query historical logs (Loki)
-pnpm at traces -w web --since 30m        # Query traces (Tempo)
-```
-
-## Rules
-
-- **Reproduce first** — never fix what you haven't reproduced
-- **Map before reading** — understand the system before diving into code
-- **Three hypotheses** — don't anchor on the first idea
-- **Minimal fix** — fix the root cause, not symptoms
-- **Regression guard** — leave a test so it can't come back silently
