@@ -88,6 +88,60 @@ hooks:
 
 This means skills can self-enforce — a TDD skill could block writes unless a test file was modified first. This is powerful but should be used sparingly to avoid hook conflicts.
 
+### Two-Layer Skill Model: Meta + Step
+
+Skills load at two points — mode entry and per-step:
+
+| Layer | When Loaded | Content | Size |
+|-------|------------|---------|------|
+| **Mode skill** | `kata enter <mode>` (once) | Role, phase flow overview, key rules, anti-patterns | ~50-100 lines |
+| **Step skill** | Agent starts a task with `skills:` | Specific methodology for the work at hand | ~100-300 lines |
+
+**Mode skills** replace the current markdown body below `---` in templates. Today that prose gets injected at session start and compresses away over long sessions. As a skill, it gets loaded via Claude Code's native system and stays discoverable.
+
+**Step skills** inject methodology JIT when the agent actually needs it — not at session start when it's irrelevant, and not compressed away 2 hours later.
+
+The template declares the mode skill at the top level:
+
+```yaml
+---
+id: implementation
+mode: implementation
+mode_skill: implementation-mode    # ← loaded at entry
+phases: [...]
+---
+# (no markdown body — it's all in the skill)
+```
+
+**One skill per step.** Claude Code's Skill tool invokes one skill at a time. If a step needs both TEST protocol and orchestrator details, combine them into a single skill rather than forcing two sequential invocations.
+
+### Swappable Methodologies
+
+Skills decouple **structure** (what must happen) from **methodology** (how to do it). Projects can swap skills without changing the template:
+
+```yaml
+# Default batteries template:
+subphase_pattern:
+  - id_suffix: impl
+    skills: [implementation]     # TDD + TEST protocol
+    gate:
+      bash: "{test_command}"
+      expect_exit: 0
+```
+
+A project overrides by placing a different skill at `.claude/skills/implementation/SKILL.md`:
+
+| Project Style | Skill Content | Gate Still Runs? |
+|--------------|---------------|------------------|
+| Strict TDD | Red-green-refactor, test-first mandatory | Yes — tests must pass |
+| Prototype-first | Write code first, add tests after | Yes — tests must pass |
+| No tests | Skip test protocol, focus on types + lint | Gate uses `{typecheck_command}` instead |
+| AI-review-heavy | Spawn 3 review agents, consensus required | Yes — review score gate |
+
+The **gate enforces the quality bar**. The **skill determines the path to get there**. Same template, different methodologies, same guardrails.
+
+This also enables project-specific skills that batteries templates don't know about. A game studio might have a `performance-budget/SKILL.md` that the agent auto-discovers when touching rendering code — no template change needed.
+
 ### Current Template Content Classification
 
 Analyzing all batteries templates (task, implementation, planning, debug, research), each piece of content falls into one of three buckets:
@@ -99,15 +153,21 @@ Analyzing all batteries templates (task, implementation, planning, debug, resear
 - Container + subphase pattern for spec-driven expansion
 - Global conditions / stop hooks
 
-**Becomes a skill (methodology / context injection):**
-- Interview workflows (planning P1) → `interview/SKILL.md`
-- Planning orchestrator role + anti-patterns → `planning-orchestrator/SKILL.md`
-- Implementation TEST protocol (~30 lines) → `test-protocol/SKILL.md`
-- Implementation REVIEW protocol (~30 lines) → `review-protocol/SKILL.md`
-- Debug hypothesis methodology → `debug-methodology/SKILL.md`
-- TDD workflow → `tdd/SKILL.md` (already exists in eval fixtures)
-- Quick planning → `quick-planning/SKILL.md` (already exists in eval fixtures)
-- Spec writing structure + requirements → `spec-writing/SKILL.md`
+**Becomes a mode skill (loaded at entry):**
+- Implementation orchestrator role + phase flow + key rules → `implementation-mode`
+- Planning orchestrator role + spawn patterns + anti-patterns → `planning-mode`
+- Debug hypothesis-driven overview + observability tools → `debug-mode`
+- Task "do less, verify more" + scope guidelines → `task-mode`
+- Research parallel exploration + synthesis patterns → `research-mode`
+
+**Becomes a step skill (loaded JIT per task):**
+- Implementation TEST protocol + orchestrator details → `implementation`
+- Code review spawn + score gate + fix loop → `code-review`
+- Interview workflow (4 categories) → `interview`
+- Spec structure + behavior format + VP requirements → `spec-writing`
+- TDD red-green-refactor → `tdd` (already exists)
+- Quick planning scope + risk → `quick-planning` (already exists)
+- Debug reproduce → map → hypothesize → trace → `debug-methodology`
 
 **Stays as `instruction:` in steps (phase-specific, not reusable):**
 - "Read the spec IN FULL", "Create feature branch", "Commit and push"
@@ -125,44 +185,54 @@ Analyzing all batteries templates (task, implementation, planning, debug, resear
 
 ### Schema Design
 
-New field on steps and subphase patterns:
+New fields at template level and on steps/subphase patterns:
 
 ```typescript
+// In templateYamlSchema — add:
+mode_skill: z.string().optional()    // skill loaded at mode entry
+
 // In phaseStepSchema — add:
-skills: z.array(z.string()).optional()
+skill: z.string().optional()         // single skill per step (not array)
 
 // In subphasePatternSchema — add:
-skills: z.array(z.string()).optional()
+skill: z.string().optional()         // single skill per subphase task
 ```
+
+**Why `skill` (singular) not `skills` (array):** Claude Code's Skill tool invokes one skill at a time. Multiple skills per step would require sequential invocations, splitting methodology across context injections. If a step needs multiple methodologies, combine them into one skill.
 
 Template YAML usage:
 
 ```yaml
-steps:
-  - id: make-changes
-    title: "Make the changes"
-    skills: [tdd]                    # agent reads SKILL.md before executing
-    gate:
-      bash: "{test_command}"
-      expect_exit: 0
-    instruction: |
-      Follow your plan. Make minimal, focused changes.
+---
+id: implementation
+mode: implementation
+mode_skill: implementation-mode      # loaded at kata enter
+phases:
+  - id: p2
+    container: true
+    subphase_pattern:
+      - id_suffix: impl
+        skill: implementation        # loaded when agent starts each P2.X task
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+---
 ```
 
-At task creation time (`task-factory.ts`), skill references render into the task instruction:
+At mode entry, `kata enter` outputs the mode skill reference in session-start hook context. At task creation time (`task-factory.ts`), step skill references render into the task instruction:
 
 ```markdown
-## Skills
-- Read .claude/skills/tdd/SKILL.md before starting this task
+## Skill
+Read /implementation before starting this task.
 
 ## Hints
-- **Bash:** `git status`
+- **Read:** {spec_path} (section: ## Phase P2.1)
 
 ## Instructions
-Follow your plan. Make minimal, focused changes.
+Implement the behavior described in the spec phase.
 ```
 
-The agent then uses Claude Code's native skill auto-discovery + the explicit hint to load the skill JIT.
+The agent invokes the skill via `/implementation` (Claude Code native Skill tool) or reads `.claude/skills/implementation/SKILL.md` directly.
 
 ### Concrete Template Mockup: Task Mode
 
@@ -171,6 +241,7 @@ The agent then uses Claude Code's native skill auto-discovery + the explicit hin
 id: task
 name: Task Mode
 mode: task
+mode_skill: task-mode              # "do less, verify more" + scope guidelines
 workflow_prefix: "TK"
 
 phases:
@@ -182,7 +253,7 @@ phases:
     steps:
       - id: understand-task
         title: "Understand and classify the task"
-        skills: [quick-planning]
+        skill: quick-planning
         instruction: |
           Classify the task (chore/feature/fix).
           If larger scope detected, suggest planning or implementation mode.
@@ -205,7 +276,7 @@ phases:
     steps:
       - id: make-changes
         title: "Make the changes"
-        skills: [tdd]
+        skill: tdd
       - id: verify-as-you-go
         title: "Verify after each logical change"
         gate:
@@ -229,9 +300,7 @@ phases:
 global_conditions: [changes_committed]
 workflow_id_format: "TK-{session_last_4}-{MMDD}"
 ---
-
-# Task Mode
-For small tasks and chores — combined planning + implementation.
+# (no markdown body — mode_skill handles it)
 ```
 
 ### Concrete Template Mockup: Implementation Mode
@@ -241,6 +310,7 @@ For small tasks and chores — combined planning + implementation.
 id: implementation
 name: "Feature Implementation"
 mode: implementation
+mode_skill: implementation-mode    # orchestrator role, phase flow, key rules
 
 phases:
   - id: p0
@@ -278,7 +348,7 @@ phases:
         title_template: "IMPL - {task_summary}"
         todo_template: "Implement {task_summary}"
         active_form: "Implementing {phase_name}"
-        skills: [tdd, test-protocol]
+        skill: implementation              # TEST protocol + orchestrator details
         gate:
           bash: "{test_command}"
           expect_exit: 0
@@ -294,7 +364,7 @@ phases:
     steps:
       - id: final-checks
         title: "Run final checks"
-        skills: [review-protocol]
+        skill: code-review                 # spawn reviewers, score gate, fix loop
         gate:
           bash: "{build_command} && {test_command}"
           expect_exit: 0
@@ -307,23 +377,34 @@ phases:
 
 global_conditions: [changes_committed, changes_pushed]
 ---
-
-# Implementation Mode
-Execute the approved spec phase by phase.
+# (no markdown body — mode_skill handles it)
 ```
 
 ### Skills Inventory (Batteries)
 
-| Skill | Source | Used By Modes | Content Summary |
-|-------|--------|---------------|-----------------|
-| `quick-planning` | Exists (eval fixture) | task, debug | Scope analysis, risk identification, verification strategy |
-| `tdd` | Exists (eval fixture) | task, implementation | Red-green-refactor methodology |
-| `interview` | Extract from planning + batteries/interviews/ | planning | 4 categories of structured interviews via AskUserQuestion |
-| `test-protocol` | Extract from implementation template | implementation, task | Build -> test -> check hints, retry limits (max 3) |
-| `review-protocol` | Extract from impl + planning templates | implementation, planning | Spawn reviewers, score gates, fix loops |
-| `spec-writing` | Extract from planning template | planning | Spec structure, behavior format, VP requirements |
-| `debug-methodology` | Extract from debug template | debug | Reproduce -> map -> hypothesize -> trace -> confirm |
-| `planning-orchestrator` | Extract from planning template | planning | "Don't do deep work inline" + spawn patterns |
+**Mode skills** (loaded once at `kata enter`):
+
+| Skill | Source | Content |
+|-------|--------|---------|
+| `task-mode` | Extract from task.md markdown body | "Do less, verify more", scope guidelines, when NOT to use task mode |
+| `implementation-mode` | Extract from implementation.md markdown body | Orchestrator role, phase flow diagram, key rules, anti-patterns |
+| `planning-mode` | Extract from planning.md markdown body | Orchestrator role, spawn patterns, anti-patterns, interview categories |
+| `debug-mode` | Extract from debug.md markdown body | Hypothesis-driven overview, observability tools, bug type table |
+| `research-mode` | Extract from research.md markdown body | Parallel exploration patterns, synthesis structure |
+
+**Step skills** (loaded JIT per task):
+
+| Skill | Source | Used By | Content |
+|-------|--------|---------|---------|
+| `quick-planning` | Exists (eval fixture) | task P0 | Scope, risk, verification strategy |
+| `tdd` | Exists (eval fixture) | task P1 | Red-green-refactor |
+| `implementation` | Extract from impl template | implementation P2 | TEST protocol + orchestrator details for each spec phase |
+| `code-review` | Extract from impl + planning | implementation P3, planning P3 | Spawn reviewers, score gate (75), fix loop (max 3) |
+| `interview` | Extract from planning + batteries/interviews/ | planning P1 | 4 categories via AskUserQuestion |
+| `spec-writing` | Extract from planning template | planning P2 | Spec structure, behavior format, VP requirements |
+| `debug-methodology` | Extract from debug template | debug P0-P1 | Reproduce → map → hypothesize → trace → confirm |
+
+**5 mode skills + 7 step skills = 12 total.** Each step references at most one skill. Projects can swap any step skill by placing a different SKILL.md at the same path.
 
 ### How Skills Compose with Native Claude Code Features
 
@@ -372,17 +453,16 @@ The skill wraps the existing CLI command via dynamic context injection. No need 
 
 ## Tradeoffs
 
-### Skill-per-methodology vs skill-per-phase
+### One skill per step (combining methodologies)
 
-| | Skill-per-methodology | Skill-per-phase |
-|--|----------------------|-----------------|
-| Example | `tdd`, `review-protocol` | `planning-p1-interview` |
-| Reusable across modes? | **Yes** | No |
-| Content size | Small, focused | Large, coupled |
-| Composable? | **Yes** — mix per step | No |
-| Discovery | Clear names | Opaque |
+Claude Code's Skill tool invokes one skill at a time. If a step conceptually needs both "TEST protocol" and "orchestrator details," don't declare two skills — combine them into one (`implementation`) that bundles everything the agent needs for that step.
 
-**Verdict:** Skill-per-methodology. Skills are methodologies, not phase scripts.
+| Approach | Invocations | Context | Practical? |
+|----------|-------------|---------|------------|
+| `skill: implementation` (combined) | 1 | All methodology in one load | **Yes** |
+| `skills: [test-protocol, orchestrator]` | 2 sequential | Split across loads | No — agent reads first, may not read second |
+
+Skills are still methodology-scoped (not phase-scoped) — `implementation` is reusable wherever the agent needs to run tests and orchestrate. But it's a single coherent document, not two separate skills stapled together.
 
 ### Template-declared `skills:` vs pure auto-discovery
 
