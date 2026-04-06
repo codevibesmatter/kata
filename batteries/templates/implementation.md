@@ -79,7 +79,7 @@ phases:
         active_form: "Implementing {phase_name}"
         labels: [impl]
         gate:
-          bash: "{test_command}"
+          bash: "{test_command_changed}"
           expect_exit: 0
           on_fail: "Tests failing. Fix before marking complete."
         hints:

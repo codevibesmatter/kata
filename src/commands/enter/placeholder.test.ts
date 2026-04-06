@@ -52,6 +52,20 @@ describe('resolvePlaceholders', () => {
     expect(result).toBe('npm run build')
   })
 
+  it('resolves {test_command_changed} from kata.yaml config', () => {
+    const result = resolvePlaceholders('{test_command_changed}', {
+      config: { ...mockConfig, project: { ...mockConfig.project, test_command_changed: 'vitest --changed' } } as KataConfig,
+    })
+    expect(result).toBe('vitest --changed')
+  })
+
+  it('resolves {test_command_changed} falls back to test_command', () => {
+    const result = resolvePlaceholders('{test_command_changed}', {
+      config: mockConfig as KataConfig,
+    })
+    expect(result).toBe('npm test')
+  })
+
   it('resolves {spec_path_dir} from kata.yaml config', () => {
     const result = resolvePlaceholders('{spec_path_dir}', {
       config: mockConfig as KataConfig,

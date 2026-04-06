@@ -5,6 +5,7 @@
 project:
   name: ""
   # test_command: "npm test"
+  # test_command_changed: "vitest --changed"  # scoped to changed files (used by impl gates; falls back to test_command)
   # build_command: "npm run build"
 
 spec_path: planning/specs

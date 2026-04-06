@@ -58,6 +58,7 @@ function resolveFromSession(key: string, session: SessionState): string | undefi
 function resolveFromConfig(key: string, config: KataConfig): string | undefined {
   const map: Record<string, string | undefined> = {
     test_command: config.project?.test_command,
+    test_command_changed: config.project?.test_command_changed ?? config.project?.test_command,
     build_command: config.project?.build_command ?? undefined,
     typecheck_command: config.project?.typecheck_command ?? undefined,
     smoke_command: config.project?.smoke_command ?? undefined,
@@ -74,7 +75,7 @@ const KNOWN_PLACEHOLDERS = new Set([
   // Session
   'issue', 'workflow_id', 'mode', 'spec_path', 'phase',
   // Config
-  'test_command', 'build_command', 'typecheck_command', 'smoke_command',
+  'test_command', 'test_command_changed', 'build_command', 'typecheck_command', 'smoke_command',
   'spec_path_dir', 'research_path', 'project_name', 'diff_base',
   // Runtime-only (resolved during container expansion, not at enter time)
   'phase_name', 'phase_label', 'task_summary', 'reviewers',

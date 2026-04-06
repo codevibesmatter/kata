@@ -33,6 +33,7 @@ export const KataProjectSchema = z.object({
   name: z.string().optional(),
   build_command: z.string().nullable().optional(),
   test_command: z.string().optional(),
+  test_command_changed: z.string().optional(),
   typecheck_command: z.string().nullable().optional(),
   smoke_command: z.string().nullable().optional(),
   diff_base: z.string().optional(),
