@@ -161,6 +161,10 @@ export function buildSpecTasks(
             `\n\`\`\``
           instruction = (instruction ?? '') + agentLine
         }
+        if (patternItem.skill) {
+          const skillSection = `## Skill\nActivate /${patternItem.skill} before starting this task.\n`
+          instruction = skillSection + '\n' + (instruction ?? '')
+        }
         if (patternItem.hints?.length) {
           const hintsBlock = renderHints(patternItem.hints)
           instruction = (instruction ?? '') + '\n\n' + hintsBlock
@@ -263,6 +267,12 @@ export function buildPhaseTasks(
           reviewers && step.instruction
             ? step.instruction.replace(/{reviewers}/g, reviewers)
             : step.instruction
+
+        // Skill activation section (prepended before instruction)
+        if (step.skill) {
+          const skillSection = `## Skill\nActivate /${step.skill} before starting this task.\n`
+          finalInstruction = skillSection + '\n' + (finalInstruction ?? '')
+        }
 
         if (step.hints?.length) {
           const hintsBlock = renderHints(step.hints)

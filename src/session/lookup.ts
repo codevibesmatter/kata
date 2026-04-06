@@ -132,6 +132,14 @@ export function getProjectPromptsDir(projectRoot?: string): string {
 }
 
 /**
+ * Get path to project skills directory (.claude/skills/)
+ */
+export function getProjectSkillsDir(projectRoot?: string): string {
+  const root = projectRoot ?? findProjectDir()
+  return path.join(root, '.claude', 'skills')
+}
+
+/**
  * Get path to project providers directory
  */
 export function getProjectProvidersDir(projectRoot?: string): string {

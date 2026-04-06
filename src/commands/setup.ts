@@ -15,7 +15,7 @@ type WmConfig = Record<string, unknown> & {
   reviews?: { spec_review?: boolean; code_review?: boolean; code_reviewer?: string | null }
   wm_version?: string
 }
-import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
+import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir, getProjectSkillsDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
 
 /**
@@ -368,6 +368,24 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
         const dest = join(projectInterviewsDir, f)
         if (!existsSync(dest)) {
           copyFileSync(join(batteriesInterviewsDir, f), dest)
+        }
+      }
+    }
+  }
+
+  // Copy skills from batteries (two-level: skills/<name>/SKILL.md)
+  const skillsSrc = join(getPackageRoot(), 'batteries', 'skills')
+  if (existsSync(skillsSrc)) {
+    const skillsDest = getProjectSkillsDir(projectRoot)
+    for (const skillName of readdirSync(skillsSrc)) {
+      const skillSrcDir = join(skillsSrc, skillName)
+      const skillDestDir = join(skillsDest, skillName)
+      mkdirSync(skillDestDir, { recursive: true })
+      for (const f of readdirSync(skillSrcDir)) {
+        const src = join(skillSrcDir, f)
+        const dest = join(skillDestDir, f)
+        if (!existsSync(dest)) {
+          copyFileSync(src, dest)
         }
       }
     }

@@ -16,6 +16,7 @@ export interface TemplateYaml {
   name?: string
   description?: string
   mode?: string
+  mode_skill?: string
   phases?: PhaseDefinition[]
   global_conditions?: string[]
   workflow_id_format?: string

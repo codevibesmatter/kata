@@ -3,7 +3,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
-import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectVerificationToolsPath } from '../session/lookup.js'
+import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectVerificationToolsPath, getProjectSkillsDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
@@ -11,6 +11,7 @@ export interface BatteriesResult {
   agents: string[]
   prompts: string[]
   providerPlugins: string[]
+  skills: string[]
   specTemplates: string[]
   githubTemplates: string[]
   interviews: string[]
@@ -98,6 +99,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     agents: [],
     prompts: [],
     providerPlugins: [],
+    skills: [],
     specTemplates: [],
     githubTemplates: [],
     interviews: [],
@@ -149,6 +151,25 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     update,
     backupRoot ? join(backupRoot, 'agents') : undefined,
   )
+
+  // Skills → .claude/skills/ (two-level: skills/<name>/SKILL.md)
+  const skillsSrc = join(batteryRoot, 'skills')
+  if (existsSync(skillsSrc)) {
+    const skillsDest = getProjectSkillsDir(projectRoot)
+    for (const skillName of readdirSync(skillsSrc)) {
+      const srcDir = join(skillsSrc, skillName)
+      const destDir = join(skillsDest, skillName)
+      copyDirectory(
+        srcDir,
+        destDir,
+        result.skills,
+        result.skipped,
+        result.updated,
+        update,
+        backupRoot ? join(backupRoot, 'skills', skillName) : undefined,
+      )
+    }
+  }
 
   // Review prompts → .kata/prompts/
   copyDirectory(
