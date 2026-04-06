@@ -3,6 +3,7 @@ id: research
 name: Research Mode
 description: Explore and synthesize findings
 mode: research
+mode_skill: research-mode
 
 phases:
   - id: p0

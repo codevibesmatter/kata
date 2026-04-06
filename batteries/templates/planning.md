@@ -3,7 +3,7 @@ id: planning
 name: "Planning Mode"
 description: "Feature planning with research, interviews, spec writing, and review"
 mode: planning
-mode_skill: planning
+mode_skill: planning-mode
 phases:
   - id: p0
     name: Research
@@ -204,7 +204,7 @@ phases:
 
       - id: spawn-spec-writer
         title: "Spawn spec writer agent"
-        skill: planning
+        skill: spec-writing
         instruction: |
           **Do NOT write the spec yourself.** Spawn an agent to preserve context.
 
