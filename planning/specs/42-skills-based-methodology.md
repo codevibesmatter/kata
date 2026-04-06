@@ -16,8 +16,8 @@ phases:
       - "Add skill field to phaseStepSchema and subphasePatternSchema in src/validation/schemas.ts"
       - "Add mode_skill to TemplateYaml interface in src/yaml/types.ts"
       - "Add getProjectSkillsDir() to src/session/lookup.ts"
-      - "Update scaffoldBatteries() in src/commands/scaffold-batteries.ts to copy batteries/skills/"
-      - "Update applySetup() in src/commands/setup.ts to copy batteries/skills/ on fresh setup"
+      - "Merge batteries into setup — kata setup copies templates + skills in one pass, deprecate kata batteries"
+      - "Update setup.ts to copy batteries/skills/ to .claude/skills/"
       - "Update task-factory.ts renderHints and buildPhaseTasks/buildSpecTasks to emit skill activation instructions"
       - "Update enter.ts to emit mode_skill activation instruction instead of full template markdown body"
     test_cases:
@@ -28,7 +28,7 @@ phases:
         description: "templateYamlSchema accepts optional mode_skill field"
         type: unit
       - id: "skills-copied-on-setup"
-        description: "kata setup --batteries copies skills to .claude/skills/"
+        description: "kata setup copies skills to .claude/skills/"
         type: integration
   - id: p2
     name: "Create Skills Content"
@@ -66,7 +66,7 @@ phases:
       - "Remove eval/scenarios/skill-activation.ts and skill-activation-control.ts prototype scenarios"
       - "Remove skill-eval mode from eval fixture configs"
       - "Add skill activation assertions to existing mode eval scenarios (task-mode, implementation-mode)"
-      - "Verify skills are copied during fixture setup (kata setup --batteries)"
+      - "Verify skills are copied during fixture setup (kata setup)"
     test_cases:
       - id: "eval-skill-activation"
         description: "Existing mode eval scenarios verify skill activation"
@@ -162,23 +162,24 @@ batteries/skills/
 
 ---
 
-### B3: Skills Copied on Setup and Batteries Update
+### B3: Skills Copied on Setup
 
 **Core:**
 - **ID:** skills-copied-on-setup
-- **Trigger:** User runs `kata setup --batteries` or `kata batteries --update`
-- **Expected:** All skill directories from `batteries/skills/` are copied to `.claude/skills/` in the project. Existing skills are not overwritten on initial setup (matching template copy behavior). On `--update`, existing skills are overwritten with backups created. Skills follow the Claude Code native convention (`.claude/skills/<name>/SKILL.md`), so they are auto-discovered by Claude Code.
-- **Verify:** Run `kata setup --batteries --cwd=/tmp/test-project` in a fresh directory, then `ls .claude/skills/*/SKILL.md | wc -l` returns 12. Run again with `kata batteries --update` and verify files are refreshed.
-- **Source:** `src/commands/scaffold-batteries.ts:86` (scaffoldBatteries), `src/commands/setup.ts:337` (applySetup)
+- **Trigger:** User runs `kata setup`. All files (templates, skills, config) are copied in one pass. The separate `kata batteries` command is deprecated — `kata setup` is the single entry point for installing and updating project files.
+- **Expected:** All skill directories from `batteries/skills/` are copied to `.claude/skills/` in the project. On first run, files are copied fresh. On subsequent runs (`kata setup` again), existing files are overwritten with backups created. Skills follow the Claude Code native convention (`.claude/skills/<name>/SKILL.md`), so they are auto-discovered by Claude Code. Users customize skills by editing the installed copies in place.
+- **Verify:** Run `kata setup --cwd=/tmp/test-project` in a fresh directory, then `ls .claude/skills/*/SKILL.md | wc -l` returns 12. Run again and verify files are refreshed.
+- **Source:** `src/commands/setup.ts` (applySetup)
 
 #### UI Layer
 
-Setup output includes a new "Skills" section:
+Setup output includes a "Skills" section:
 
 ```
-kata setup --batteries complete:
-  ...
-Batteries scaffolded:
+kata setup complete:
+  Templates (8):
+    .kata/templates/task.md
+    ...
   Skills (12):
     .claude/skills/task-mode/SKILL.md
     .claude/skills/implementation-mode/SKILL.md
@@ -277,7 +278,7 @@ N/A -- no schema changes. The `Task.instruction` string field carries the skill 
 
 **Core:**
 - **ID:** templates-pure-yaml
-- **Trigger:** `kata batteries --update` copies converted templates to `.kata/templates/`
+- **Trigger:** `kata setup` copies converted templates to `.kata/templates/`
 - **Expected:** All five batteries templates (task.md, implementation.md, planning.md, debug.md, research.md) are converted to pure YAML frontmatter with no markdown body below the closing `---`. Each declares `mode_skill:` at the top level. Steps and subphase patterns that previously contained inline methodology prose now declare `skill:` instead, with only phase-specific `instruction:` text remaining for non-reusable guidance (e.g., "Create feature branch", "Commit and push"). Template sizes reduce by 68-85%.
 - **Verify:** For each template in `batteries/templates/{task,implementation,planning,debug,research}.md`, confirm: (1) `grep "^mode_skill:" <file>` returns a value, (2) the file content after the closing `---` is empty or whitespace only, (3) `node -e "require('./dist/index.js')"` does not throw (templates still parse).
 - **Source:** `batteries/templates/task.md`, `batteries/templates/implementation.md`, `batteries/templates/planning.md`, `batteries/templates/debug.md`, `batteries/templates/research.md`
@@ -350,7 +351,7 @@ Explicitly out of scope for this feature:
 - **New mode definitions** -- no new modes are added. Only existing modes (task, implementation, planning, debug, research) are converted.
 - **Changes to modes.yaml / intent detection** -- the `modes.yaml` schema, `suggest.ts`, and `prime.ts` are untouched. No `skill` field in mode config.
 - **Skill validation at entry** -- `kata enter` does not validate that referenced skills exist in `.claude/skills/`. This is a future enhancement.
-- **Skill version tracking** -- `kata batteries --update` does not track skill versions separately from template versions.
+- **Skill version tracking** -- `kata setup` does not track skill versions separately from template versions.
 - **Conditional skills** -- no mechanism for conditionally activating skills based on project state (e.g., "only use TDD if test infrastructure exists").
 - **Skill-scoped hooks** -- skills do not ship with their own hook definitions. Hook registration remains centralized in `.claude/settings.json`.
 - **Changes to the verify-run sub-agent** -- verify-run continues to work as-is.
@@ -363,7 +364,7 @@ See YAML frontmatter `phases:` above. Each phase should be 1-4 hours of focused 
 
 ### Phase 1: Schema + Infrastructure (2-3 hours)
 
-Add the `skill` and `mode_skill` fields to Zod schemas, update task-factory to render skill activation instructions in native task descriptions, update scaffold-batteries to copy skills, and modify `kata enter` to emit mode_skill activation instead of full template body.
+Add the `skill` and `mode_skill` fields to Zod schemas, update task-factory to render skill activation instructions in native task descriptions, merge batteries into `kata setup` so it copies templates + skills in one pass, and modify `kata enter` to emit mode_skill activation instead of full template body.
 
 ### Phase 2: Create Skills Content (2-3 hours)
 
@@ -402,7 +403,7 @@ Steps:
 ### VP2: Skills Installed by Setup
 
 Steps:
-1. `mkdir -p /tmp/vp2-test && cd /tmp/vp2-test && git init && kata setup --batteries --cwd=/tmp/vp2-test`
+1. `mkdir -p /tmp/vp2-test && cd /tmp/vp2-test && git init && kata setup --cwd=/tmp/vp2-test`
    Expected: Output includes "Skills (12):" section listing all 12 skill paths.
 2. `ls /tmp/vp2-test/.claude/skills/*/SKILL.md | wc -l`
    Expected: Returns `12`
@@ -413,7 +414,7 @@ Steps:
 ### VP3: Mode Skill Referenced at Entry
 
 Steps:
-1. `mkdir -p /tmp/vp3-test && cd /tmp/vp3-test && git init && kata setup --batteries --cwd=/tmp/vp3-test`
+1. `mkdir -p /tmp/vp3-test && cd /tmp/vp3-test && git init && kata setup --cwd=/tmp/vp3-test`
 2. `kata enter task --session=vp3-test --cwd=/tmp/vp3-test 2>&1 | grep -i "skill"`
    Expected: Output contains a reference to activating `/task-mode` skill. Does NOT contain 200+ lines of markdown methodology.
 3. `rm -rf /tmp/vp3-test`
@@ -421,7 +422,7 @@ Steps:
 ### VP4: Step Skill in Native Task Description
 
 Steps:
-1. `cd /tmp/vp4-test && git init && kata setup --batteries --cwd=/tmp/vp4-test`
+1. `cd /tmp/vp4-test && git init && kata setup --cwd=/tmp/vp4-test`
 2. `kata enter task --session=vp4-test --cwd=/tmp/vp4-test`
 3. `cat ~/.claude/tasks/vp4-test/1.json | grep -A2 "Skill"`
    Expected: Task description contains `Activate /quick-planning before starting this task.`
@@ -457,7 +458,7 @@ No new npm dependencies. Skills are plain markdown files. Claude Code's native S
 | `src/validation/schemas.ts` | `phaseStepSchema`, `subphasePatternSchema`, `templateYamlSchema` | Adding `skill` / `mode_skill` fields |
 | `src/yaml/types.ts` | `TemplateYaml` | Adding `mode_skill` to TypeScript interface |
 | `src/commands/enter/task-factory.ts` | `buildPhaseTasks`, `buildSpecTasks` | Rendering skill activation in task descriptions |
-| `src/commands/scaffold-batteries.ts` | `scaffoldBatteries`, `copyDirectory` | Copying `batteries/skills/` to `.claude/skills/` |
+| `src/commands/setup.ts` | `applySetup` | Copying templates + skills in unified `kata setup` |
 | `src/session/lookup.ts` | `getPackageRoot` | Resolving `batteries/skills/` source path |
 
 ### Code Patterns
@@ -475,9 +476,9 @@ if (step.skill) {
 
 Same pattern applies in `buildSpecTasks` for `patternItem.skill`.
 
-**Adding skills to scaffoldBatteries (scaffold-batteries.ts):**
+**Adding skills to setup (setup.ts):**
 
-Skills use a two-level directory structure (`<name>/SKILL.md`), unlike templates (flat files). The `copyDirectory` helper copies one level deep, so a new `copySkillsDirectory` helper is needed that iterates skill name directories:
+`kata setup` becomes the single command that copies templates AND skills. The existing `scaffoldBatteries()` function (or its logic) is absorbed into `applySetup()`. Skills use a two-level directory structure (`<name>/SKILL.md`), unlike templates (flat files):
 
 ```typescript
 const skillsSrc = join(batteryRoot, 'skills')
@@ -488,11 +489,12 @@ if (existsSync(skillsSrc)) {
       join(skillsSrc, skillName),
       join(skillsDest, skillName),
       result.skills, result.skipped, result.updated,
-      update, backupRoot ? join(backupRoot, 'skills', skillName) : undefined,
     )
   }
 }
 ```
+
+The `kata batteries` command is deprecated — `kata setup` handles everything. Existing `kata batteries --update` callers should be migrated to `kata setup`.
 
 **Mode skill output in enter.ts:**
 
