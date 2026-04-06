@@ -20,13 +20,73 @@ Issue #42 proposes adopting skills-based methodology injection in mode templates
 
 ## Findings
 
-### The Three-Layer Model
+### The Four-Layer Model
 
-| Layer | Owns | Enforced By | Changes Often? |
-|-------|------|-------------|----------------|
-| **Tasks** (template frontmatter) | What to do, in what order | Native task system + dependency chains | Per-mode (rarely) |
-| **Gates** (template frontmatter) | Quality bars that must pass | Runtime bash execution, exit code checks | Per-project (kata.yaml placeholders) |
-| **Skills** (`.claude/skills/`) | How to do each type of work | Agent reads SKILL.md, follows methodology | Per-project, composable |
+| Layer | Owns | Mechanism | Enforcement Tier |
+|-------|------|-----------|-----------------|
+| **Tasks** (template frontmatter) | What to do, in what order | Native task system + dependency chains | Hard (hooks block out-of-order work) |
+| **Gates** (template frontmatter) | Quality bars that must pass | Bash assertions with exit code checks | Hard (hooks block task completion on failure) |
+| **Skills** (`.claude/skills/`) | How to do each type of work | Agent reads SKILL.md, follows methodology | Medium (explicit declaration + auto-discovery) |
+| **Hooks** (`.claude/settings.json`) | Enforcement of all the above | Deterministic code, fires every time | Hard (cannot be bypassed by the agent) |
+
+Hooks are not a separate concern from the other three — they're the **enforcement backbone** that makes tasks, gates, and skills real. Without hooks:
+- Tasks are just suggestions (agent could skip phases)
+- Gates are just hints (agent could ignore test failures)
+- Skills are just context (agent could "wing it" without reading)
+
+With hooks:
+- `task-deps` (PreToolUse) blocks tool use when task dependencies aren't met
+- `task-evidence` (PreToolUse) runs gate bash commands when a task tries to complete, blocks on failure
+- `mode-gate` (PreToolUse) prevents writes outside the current mode's scope
+- `stop-conditions` (Stop) blocks session exit while tasks are incomplete
+- `session-start` (SessionStart) initializes session state and injects mode context
+- `user-prompt` (UserPromptSubmit) detects mode intent and suggests entering a mode
+
+#### How Hooks Enforce Gates
+
+Today gates are declared in templates but enforcement is agent-trust-based — the instruction says "tests must pass" and the agent is expected to comply. With hook-backed enforcement:
+
+```
+Agent calls TaskUpdate(status="completed") on a step with a gate
+  → PreToolUse hook fires (task-evidence)
+  → Hook reads the step's gate from template: bash: "{test_command}", expect_exit: 0
+  → Hook resolves placeholders from kata.yaml
+  → Hook executes the bash command
+  → If exit code != 0: hook returns { continue: false, reason: "Gate failed: tests failing" }
+  → Agent cannot mark the task complete until the gate passes
+```
+
+This turns gates from "please check tests" into "you literally cannot proceed until tests pass."
+
+#### How Hooks Enforce Skill Activation
+
+Skills are activated reliably (100% in evals), but a hook could add hard enforcement:
+
+```
+Agent calls Edit/Write on a file during a step with skills: [tdd]
+  → PreToolUse hook fires (skill-evidence)
+  → Hook checks transcript: was .claude/skills/tdd/SKILL.md read?
+  → If not: hook returns { continue: false, reason: "Read TDD skill before writing code" }
+```
+
+This is likely overkill given 100% activation reliability, but the option exists. More practical: a stop-condition hook that checks all declared skills were read during the session.
+
+#### Skills Can Declare Their Own Hooks
+
+Claude Code's native skill system supports `hooks:` in SKILL.md frontmatter:
+
+```yaml
+---
+name: tdd
+description: Test-driven development methodology
+hooks:
+  PreToolUse:
+    - matcher: "Edit|Write"
+      command: "check-test-first.sh"
+---
+```
+
+This means skills can self-enforce — a TDD skill could block writes unless a test file was modified first. This is powerful but should be used sparingly to avoid hook conflicts.
 
 ### Current Template Content Classification
 
@@ -345,11 +405,25 @@ The skill wraps the existing CLI command via dynamic context injection. No need 
 
 **Verdict:** Ship batteries skills in `batteries/skills/`. `kata setup` and `kata batteries --update` copy them to `.claude/skills/`. Projects own their copies and can customize. This matches the existing batteries/templates pattern.
 
+### Hook-backed gate enforcement vs agent-trust gates
+
+| | Hook-enforced gates | Agent-trust gates (current) |
+|--|--------------------|-----------------------------|
+| Reliability | **100%** — deterministic code | ~95% — agent usually complies |
+| Complexity | Hook must parse template, resolve placeholders, execute bash | Zero runtime code |
+| Latency | Adds bash execution to every TaskUpdate | None |
+| Debugging | Hook failures are explicit | Agent might silently skip |
+| Scope creep risk | Hook code must stay in sync with template schema | Template is self-contained |
+
+**Verdict:** Hook-enforce gates for critical quality bars (test_command, build_command). Leave lightweight gates (file existence checks, git status) as agent-trust. The `gate:` schema already distinguishes these — gates with `expect_exit: 0` are candidates for hook enforcement.
+
 ## Open Questions
 
 1. **Skill validation at entry**: Should `kata enter` validate that all `skills: [name]` referenced in the template exist in `.claude/skills/`? (Mirrors gate placeholder validation)
 2. **Skill version tracking**: Should `kata batteries --update` track skill versions like template versions?
 3. **Conditional skills**: Some steps should only activate a skill if a condition is met (e.g., TDD only if test infrastructure exists). How to express this?
+4. **Hook-gate boundary**: Which gates get hook enforcement vs agent trust? Should this be a per-gate field (`enforce: true`)?
+5. **Skill-scoped hooks**: Should batteries skills ship with their own hooks, or should hook registration remain centralized in settings.json?
 
 ## Next Steps
 
