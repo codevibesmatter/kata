@@ -3,6 +3,8 @@ name: research-mode
 description: "Deep exploration with parallel agent search and documented findings. Activate when entering research mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter research` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Research Mode
 
 Deep exploration with parallel agent search and documented findings.

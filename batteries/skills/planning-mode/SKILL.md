@@ -3,6 +3,8 @@ name: planning-mode
 description: "Feature planning with research, interviews, spec writing, and review. Activate when entering planning mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter planning` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Planning Mode
 
 You are in **planning** mode. Create a feature spec through research, interviews, writing, and review.

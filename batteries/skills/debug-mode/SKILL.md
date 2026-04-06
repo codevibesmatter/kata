@@ -3,6 +3,8 @@ name: debug-mode
 description: "Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix. Activate when entering debug mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter debug` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Debug Mode
 
 Systematic, hypothesis-driven debugging. No guessing — reproduce first, hypothesize, trace, fix.

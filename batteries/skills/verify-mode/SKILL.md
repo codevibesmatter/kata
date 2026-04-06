@@ -3,6 +3,8 @@ name: verify-mode
 description: "Execute Verification Plans literally, fix failures with repair loop, record evidence. Activate when entering verify mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter verify` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Verify Mode
 
 You are in **verify** mode. Execute a Verification Plan and fix any failures.

@@ -3,6 +3,8 @@ name: freeform-mode
 description: "Free exploration and discussion without heavy structure. Quick questions, brainstorming, informal code review."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter freeform` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Freeform Mode
 
 Free exploration and discussion mode. No upfront phases or tasks.

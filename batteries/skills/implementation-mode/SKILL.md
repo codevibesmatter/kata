@@ -3,6 +3,8 @@ name: implementation-mode
 description: "Execute approved specs — claim branch, implement phase by phase, test, review, close with PR. Activate when entering implementation mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter implementation` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Implementation Mode
 
 You are in **implementation** mode. Execute the approved spec phase by phase.

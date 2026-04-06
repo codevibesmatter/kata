@@ -3,6 +3,8 @@ name: task-mode
 description: "Combined planning + implementation for small tasks, chores, and quick fixes. Activate when entering task mode."
 ---
 
+> **Session setup:** If you haven't already, run `kata enter task` to register this session for task tracking, stop-condition enforcement, and phase guidance. The skill provides methodology; the CLI provides workflow infrastructure.
+
 # Task Mode
 
 **For small tasks and chores** — combined planning + implementation in one flow.
