@@ -2,78 +2,121 @@
 initiative: feat-skills-methodology
 type: project
 issue_type: feature
-status: approved
+status: draft
 priority: high
 github_issue: 42
 created: 2026-04-06
-updated: 2026-04-06
-approved: 2026-04-06
+updated: 2026-04-08
 phases:
   - id: p1
-    name: "Schema + Infrastructure"
+    name: "Step Library Infrastructure"
     tasks:
-      - "Add mode_skill field to templateYamlSchema in src/validation/schemas.ts"
-      - "Add skill field to phaseStepSchema and subphasePatternSchema in src/validation/schemas.ts"
-      - "Add mode_skill to TemplateYaml interface in src/yaml/types.ts"
-      - "Add getProjectSkillsDir() to src/session/lookup.ts"
-      - "Merge batteries into setup — kata setup copies templates + skills in one pass, deprecate kata batteries"
-      - "Update setup.ts to copy batteries/skills/ to .claude/skills/"
-      - "Update task-factory.ts renderHints and buildPhaseTasks/buildSpecTasks to emit skill activation instructions"
-      - "Update enter.ts to emit mode_skill activation instruction instead of full template markdown body"
+      - "Create batteries/steps.yaml with shared step definitions (env-check, read-spec, github-claim, commit-push, create-pr, update-issue, classify-task, reproduce-bug, write-evidence)"
+      - "Add stepLibrarySchema to src/validation/schemas.ts (Zod schema for steps.yaml entries)"
+      - "Add $ref and vars fields to phaseStepSchema in src/validation/schemas.ts (NOT subphasePatternSchema)"
+      - "Add loadStepLibrary() to src/commands/enter/step-library.ts (reads .kata/steps.yaml, returns Map<string, StepDef>)"
+      - "Add resolveStepRef() to src/commands/enter/step-library.ts (resolves $ref + vars, merges into step)"
+      - "Update buildPhaseTasks() in task-factory.ts to call resolveStepRef() before building task instruction"
+      - "Confirm buildSpecTasks() does NOT use $ref (subphase patterns stay as-is)"
+      - "Fail kata enter with clear error when $ref references unresolved vars or missing step IDs"
+      - "Update scaffold-batteries.ts to copy steps.yaml to .kata/steps.yaml"
+      - "Update update.ts to refresh .kata/steps.yaml from batteries/steps.yaml"
     test_cases:
-      - id: "schema-skill-field"
-        description: "phaseStepSchema accepts optional skill field"
+      - id: "steps-yaml-schema"
+        description: "stepLibrarySchema validates a steps.yaml with instruction, title, and gate fields"
         type: unit
-      - id: "schema-mode-skill-field"
-        description: "templateYamlSchema accepts optional mode_skill field"
+      - id: "ref-resolution"
+        description: "resolveStepRef() merges $ref step def with local vars, producing final instruction/title/gate"
         type: unit
-      - id: "skills-copied-on-setup"
-        description: "kata setup copies skills to .claude/skills/"
+      - id: "ref-unresolved-vars-error"
+        description: "resolveStepRef() throws when vars contain unresolved placeholders after merge"
+        type: unit
+      - id: "ref-missing-step-error"
+        description: "resolveStepRef() throws when $ref references a step ID not in steps.yaml"
+        type: unit
+      - id: "task-factory-ref-integration"
+        description: "buildPhaseTasks() with a step containing $ref produces correct native task instruction"
         type: integration
-  - id: p2
-    name: "Create Skills Content"
-    tasks:
-      - "Create batteries/skills/ directory with 12 skill SKILL.md files"
-      - "Extract mode skills from template markdown bodies: task-mode, implementation-mode, planning-mode, debug-mode, research-mode"
-      - "Extract step skills from template instructions: implementation, code-review, interview, spec-writing, debug-methodology"
-      - "Migrate existing quick-planning and tdd skills from eval fixture to batteries/skills/"
-    test_cases:
-      - id: "skills-exist"
-        description: "All 12 SKILL.md files exist under batteries/skills/"
+      - id: "steps-yaml-scaffolded"
+        description: "kata batteries --update copies steps.yaml to .kata/steps.yaml"
         type: smoke
-      - id: "skill-frontmatter"
-        description: "Each SKILL.md has valid name and description in YAML frontmatter"
-        type: unit
-  - id: p3
-    name: "Convert Templates to Pure YAML"
+  - id: p2
+    name: "Create Atomic Skills"
     tasks:
-      - "Convert batteries/templates/task.md: add mode_skill, add skill per step, remove markdown body"
-      - "Convert batteries/templates/implementation.md: add mode_skill, add skill per subphase, remove markdown body"
-      - "Convert batteries/templates/planning.md: add mode_skill, add skill per step, remove markdown body"
-      - "Convert batteries/templates/debug.md: add mode_skill, add skill per step, remove markdown body"
-      - "Convert batteries/templates/research.md: add mode_skill, add skill per step, remove markdown body"
+      - "Write batteries/skills/code-impl/SKILL.md (inline skill: implementation methodology, patterns, minimal changes, test-first)"
+      - "Write batteries/skills/test-protocol/SKILL.md (inline skill: build check, test run, retry limits)"
+      - "Write batteries/skills/interview/SKILL.md (inline skill: structured questioning across 4 categories)"
+      - "Write batteries/skills/code-review/SKILL.md (agent skill, context: fork: code review checklist + verdict)"
+      - "Write batteries/skills/spec-review/SKILL.md (agent skill, context: fork: spec review against behavior format)"
+      - "Write batteries/skills/debug-methodology/SKILL.md (inline skill: reproduce, hypothesize, trace, minimal fix)"
+      - "Write batteries/skills/spec-writing/SKILL.md (agent skill, context: fork: spec structure, behaviors, VP)"
+      - "Write batteries/skills/vp-execution/SKILL.md (inline skill: run VP steps literally, compare expected vs actual)"
+      - "Delete 7 mode-mirroring skills: planning, implementation, task, debugging, research, freeform, verification"
+      - "Delete tdd skill (merged into code-impl)"
+      - "Move existing sub-prompt files into new skill directories where applicable"
+    test_cases:
+      - id: "eight-skills-exist"
+        description: "Exactly 8 SKILL.md files exist under batteries/skills/"
+        type: smoke
+      - id: "skill-frontmatter-valid"
+        description: "Each SKILL.md has name and description in YAML frontmatter"
+        type: unit
+      - id: "agent-skills-have-context-fork"
+        description: "code-review, spec-review, spec-writing SKILL.md files have context: fork in frontmatter"
+        type: unit
+      - id: "old-skills-deleted"
+        description: "No SKILL.md exists for planning, implementation, task, debugging, research, freeform, verification, or tdd"
+        type: smoke
+  - id: p3
+    name: "Thin Templates"
+    tasks:
+      - "Rewrite batteries/templates/task.md using $ref steps and skill: refs, remove inlined prose"
+      - "Rewrite batteries/templates/implementation.md using $ref steps and skill: refs"
+      - "Rewrite batteries/templates/planning.md using $ref steps and skill: refs"
+      - "Rewrite batteries/templates/debug.md using $ref steps and skill: refs"
+      - "Rewrite batteries/templates/research.md using $ref steps and skill: refs"
+      - "Rewrite batteries/templates/verify.md using $ref steps and skill: refs"
+      - "Rewrite batteries/templates/freeform.md using $ref steps and skill: refs"
+      - "Remove mode_skill field from all templates (no more mode entry skills)"
+      - "Remove mode_skill from templateYamlSchema in src/validation/schemas.ts"
+      - "Remove outputModeSkillActivation() from enter.ts and related mode_skill handling"
+      - "Add orchestration rule to kata.yaml global_rules field (not a skill)"
     test_cases:
       - id: "templates-parse"
-        description: "All converted templates pass templateYamlSchema validation"
+        description: "All 7 rewritten templates parse against templateYamlSchema"
         type: unit
-      - id: "templates-no-markdown"
-        description: "Converted templates have no markdown body below frontmatter"
-        type: smoke
-  - id: p4
-    name: "Update Eval Harness"
-    tasks:
-      - "Remove eval-fixtures/tanstack-start-skills/ fixture"
-      - "Remove eval/scenarios/skill-activation.ts and skill-activation-control.ts prototype scenarios"
-      - "Remove skill-eval mode from eval fixture configs"
-      - "Add skill activation assertions to existing mode eval scenarios (task-mode, implementation-mode)"
-      - "Verify skills are copied during fixture setup (kata setup)"
-    test_cases:
-      - id: "eval-skill-activation"
-        description: "Existing mode eval scenarios verify skill activation"
+      - id: "templates-ref-steps-resolve"
+        description: "All $ref references in templates resolve to entries in steps.yaml"
         type: integration
-      - id: "no-prototype-artifacts"
-        description: "skill-eval mode, tanstack-start-skills fixture, and prototype scenarios are removed"
+      - id: "templates-skill-refs-resolve"
+        description: "All skill: references in templates resolve to existing SKILL.md files in batteries/skills/"
+        type: integration
+      - id: "no-mode-skill-field"
+        description: "No template contains mode_skill in frontmatter"
         type: smoke
+      - id: "expansion-preserved"
+        description: "Spec-phase expansion (buildSpecTasks) still generates correct tasks with new templates"
+        type: integration
+  - id: p4
+    name: "Cleanup and Tests"
+    tasks:
+      - "Add unit tests for step-library.ts (loadStepLibrary, resolveStepRef, error cases)"
+      - "Add unit tests for $ref resolution in task-factory (buildPhaseTasks with $ref steps)"
+      - "Update template-rewrite.test.ts assertions for new skill names and $ref presence"
+      - "Update schemas.test.ts for $ref and vars fields"
+      - "Run full test suite and fix any regressions"
+      - "Run eval scenarios (task-mode, implementation-mode) and verify end-to-end"
+      - "Update eval fixture templates to match new batteries templates"
+    test_cases:
+      - id: "all-tests-pass"
+        description: "npm run build && npm test passes with zero failures"
+        type: integration
+      - id: "eval-task-mode"
+        description: "task-mode eval scenario completes successfully"
+        type: integration
+      - id: "eval-implementation-mode"
+        description: "implementation-mode eval scenario completes successfully"
+        type: integration
 ---
 
 # Skills-Based Methodology Injection in Mode Templates
@@ -82,59 +125,101 @@ phases:
 
 ## Overview
 
-Mode templates currently mix structural concerns (phases, ordering, gates) with methodology prose (200-680 lines of markdown per template). This methodology is injected at session start and compresses away in long Claude Code sessions, reducing agent compliance. Projects cannot swap methodologies without forking entire templates.
-
-This feature extracts all methodology content from templates into Claude Code native skills (`.claude/skills/<name>/SKILL.md`). Templates become pure YAML declaring `mode_skill:` (loaded at mode entry) and per-step `skill:` (loaded JIT). Skills are installed by `kata setup` and customizable by projects. Gates still enforce quality bars independently of methodology.
+Mode templates currently mix three concerns: structural DAG (phases, ordering, gates), procedural ceremony (git checks, issue claiming, commit/push), and methodology prose (200-680 lines inlined per template). The methodology compresses away in long sessions, ceremony duplicates across modes, and projects cannot swap approaches without forking entire templates. This feature introduces a two-tier system: a **Step Library** (`steps.yaml`) for reusable procedural steps referenced via `$ref`, and 8 **Atomic Skills** for methodology. Templates become thin YAML skeletons that wire together shared steps and skill references, dropping from 200-680 lines to approximately 30-80 lines each.
 
 ## Feature Behaviors
 
-### B1: Skill Schema Fields
+### B1: Step Library Schema and Loading
 
 **Core:**
-- **ID:** skill-schema-fields
-- **Trigger:** A template YAML file is parsed by `parseTemplateYaml()` or validated by Zod schemas
-- **Expected:** The `templateYamlSchema` accepts an optional `mode_skill: string` field. The `phaseStepSchema` and `subphasePatternSchema` accept an optional `skill: string` field. Existing templates without these fields continue to parse without errors.
-- **Verify:** `npm run build && npm test` passes. A template with `mode_skill: implementation-mode` and a step with `skill: tdd` parses successfully. A template without either field also parses successfully.
-- **Source:** `src/validation/schemas.ts` (phaseStepSchema, subphasePatternSchema, templateYamlSchema), `src/yaml/types.ts` (TemplateYaml interface)
+- **ID:** step-library-schema
+- **Trigger:** `kata enter <mode>` is called, which invokes `buildPhaseTasks()` or `buildSpecTasks()` in task-factory.ts
+- **Expected:** A new module `src/commands/enter/step-library.ts` exports `loadStepLibrary(projectRoot)` which reads `.kata/steps.yaml` and returns a `Map<string, StepDefinition>`. Each entry has optional fields: `title`, `instruction`, `gate`. The file is validated against a Zod schema (`stepDefinitionSchema`). If `.kata/steps.yaml` does not exist, the function returns an empty map (graceful degradation for projects that have not updated).
+- **Verify:** Unit test: call `loadStepLibrary()` with a temp directory containing a valid steps.yaml. Confirm the returned map has the expected keys and each value matches the schema.
+- **Source:** New file `src/commands/enter/step-library.ts`; schema added to `src/validation/schemas.ts`
 
 #### UI Layer
 
-N/A -- schema-only change, no CLI output differences.
+N/A -- internal loading, no CLI output.
 
 #### API Layer
 
-N/A -- internal schema validation, no external API.
+N/A -- internal module.
 
 #### Data Layer
 
-New optional fields on existing Zod schemas:
+New Zod schema in `src/validation/schemas.ts`:
 
 ```typescript
-// templateYamlSchema — add:
-mode_skill: z.string().optional()
+export const stepDefinitionSchema = z.object({
+  title: z.string().optional(),
+  instruction: z.string().optional(),
+  gate: gateSchema.optional(),
+})
 
-// phaseStepSchema — add:
-skill: z.string().optional()
-
-// subphasePatternSchema — add:
-skill: z.string().optional()
+export const stepLibrarySchema = z.record(z.string(), stepDefinitionSchema)
 ```
 
-**Note:** `TemplateYaml` is defined in TWO places: a manual interface in `src/yaml/types.ts` AND as `z.infer<typeof templateYamlSchema>` in `src/validation/schemas.ts`. BOTH must be updated. The manual interface in `types.ts` gains `mode_skill?: string`. The Zod schema gains `mode_skill: z.string().optional()`. The `PhaseStep` and `SubphasePattern` types auto-derive from Zod via `z.infer<>`, so no manual type changes are needed for those.
+New file `batteries/steps.yaml` with step definitions. Example entries:
+
+```yaml
+env-check:
+  title: "Verify environment"
+  instruction: |
+    Verify clean working tree and correct branch:
+    ```bash
+    git status
+    git log --oneline -3
+    ```
+    Confirm deps installed and build passes.
+
+github-claim:
+  title: "Claim GitHub issue"
+  instruction: |
+    Claim the issue and create a feature branch:
+    ```bash
+    gh issue edit {issue} --remove-label "status:todo" --add-label "status:in-progress"
+    git checkout -b feature/{issue}-{slug}
+    git push -u origin feature/{issue}-{slug}
+    ```
+
+commit-push:
+  title: "Commit and push"
+  instruction: |
+    Stage, commit with conventional format, and push:
+    ```bash
+    git add {changed_files}
+    git commit -m "{commit_type}({scope}): {description}"
+    git push
+    ```
+  gate:
+    bash: "test -z \"$(git status --porcelain)\""
+    expect_exit: 0
+    on_fail: "Working tree not clean. Stage and commit all changes."
+```
 
 ---
 
-### B2: Skills Directory in Batteries
+### B2: $ref Resolution in Phase Steps
 
 **Core:**
-- **ID:** batteries-skills-directory
-- **Trigger:** Developer adds skill files to `batteries/skills/<name>/SKILL.md` in the kata package
-- **Expected:** 12 skill directories exist under `batteries/skills/`, each containing a `SKILL.md` with valid YAML frontmatter (`name:` and `description:` fields). Five are mode skills (task-mode, implementation-mode, planning-mode, debug-mode, research-mode). Seven are step skills (quick-planning, tdd, implementation, code-review, interview, spec-writing, debug-methodology).
-- **Verify:** `ls batteries/skills/*/SKILL.md | wc -l` returns 12. Each file has `---` delimited frontmatter with `name:` and `description:`.
+- **ID:** ref-resolution
+- **Trigger:** `buildPhaseTasks()` encounters a phase step with a `$ref` field (e.g., `$ref: env-check`)
+- **Expected:** The step library is loaded via `loadStepLibrary()`. The referenced step definition is looked up by ID. Fields from the step definition (`title`, `instruction`, `gate`) are merged into the phase step, with the phase step's own fields taking precedence (local overrides). If the step also declares `vars: { key: value }`, all `{key}` placeholders in the merged instruction are replaced with the corresponding values. After merge, if any `{placeholder}` patterns remain that are not resolvable from session/config/extra context, `kata enter` fails with an error listing the unresolved placeholders.
+- **Verify:** Unit test: create a step with `$ref: env-check` and `vars: { branch: main }`. Confirm the resolved instruction contains the var-substituted content. Unit test: create a step with `$ref: env-check` and a missing var. Confirm it throws with the unresolved placeholder name.
+- **Source:** New file `src/commands/enter/step-library.ts` (resolveStepRef function); modified `src/commands/enter/task-factory.ts:247-270` (buildPhaseTasks step loop)
 
 #### UI Layer
 
-N/A -- package content only, not user-facing.
+On error (unresolved var), stderr outputs:
+```
+Error: Step "p0:setup" references $ref "env-check" with unresolved variables: {branch_name}
+```
+
+On error (missing step ID), stderr outputs:
+```
+Error: Step "p0:setup" references $ref "nonexistent" which does not exist in .kata/steps.yaml
+```
 
 #### API Layer
 
@@ -142,49 +227,145 @@ N/A.
 
 #### Data Layer
 
-New directory structure in the npm package:
+New optional fields on `phaseStepSchema` in `src/validation/schemas.ts`:
+
+```typescript
+export const phaseStepSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  instruction: z.string().optional(),
+  skill: z.string().optional(),
+  agent: agentStepConfigSchema.optional(),
+  gate: gateSchema.optional(),
+  hints: z.array(hintSchema).optional(),
+  $ref: z.string().optional(),       // step library reference
+  vars: z.record(z.string(), z.string()).optional(),  // variable substitutions for $ref
+})
+```
+
+Note: `subphasePatternSchema` does NOT get `$ref`/`vars` fields. Subphase patterns are already parameterized via title_template/todo_template/instruction and do not use the step library.
+
+---
+
+### B3: Steps.yaml Scaffolded by Batteries
+
+**Core:**
+- **ID:** steps-yaml-scaffolded
+- **Trigger:** User runs `kata batteries --update` or `kata setup --batteries`
+- **Expected:** `batteries/steps.yaml` is copied to `.kata/steps.yaml` in the project. On first run, the file is created. On subsequent runs, the file is updated if the project copy differs from batteries (same skip-if-customized logic as templates). The `update.ts` module handles version comparison and copy.
+- **Verify:** Run `kata batteries --update --cwd=/tmp/test-project`. Confirm `.kata/steps.yaml` exists and matches `batteries/steps.yaml`. Run again after editing `.kata/steps.yaml` and confirm it reports "customized -- update manually".
+- **Source:** `src/commands/scaffold-batteries.ts:130-142` (add steps.yaml handling), `src/commands/update.ts:42-68` (add steps.yaml to update loop)
+
+#### UI Layer
+
+`kata batteries --update` output includes:
+```
+  + steps.yaml (new)
+```
+or on subsequent runs:
+```
+  ~ steps.yaml (customized -- update manually)
+```
+
+#### API Layer
+
+N/A.
+
+#### Data Layer
+
+New file `.kata/steps.yaml` in project runtime data layout. `BatteriesResult` interface in `scaffold-batteries.ts` gains a `stepsFile: boolean` field.
+
+---
+
+### B4: Atomic Skills Replace Mode-Mirroring Skills
+
+**Core:**
+- **ID:** atomic-skills
+- **Trigger:** Developer runs `kata batteries --update` or `kata setup`, which copies skill files from `batteries/skills/` to `.claude/skills/`
+- **Expected:** 8 skill directories exist under `batteries/skills/`, each with a `SKILL.md` containing valid YAML frontmatter (`name`, `description`). The 8 skills are: `code-impl`, `test-protocol`, `interview`, `code-review`, `spec-review`, `debug-methodology`, `spec-writing`, `vp-execution`. Three agent skills (`code-review`, `spec-review`, `spec-writing`) declare `context: fork` in frontmatter. The 7 old mode-mirroring skills (`planning`, `implementation`, `task`, `debugging`, `research`, `freeform`, `verification`) and the `tdd` skill are deleted from `batteries/skills/`. Existing sub-prompt files (e.g., `implementer-prompt.md`, `tracer-prompt.md`) are moved into the appropriate new skill directories.
+- **Verify:** `ls batteries/skills/*/SKILL.md | wc -l` returns 8. `grep "context: fork" batteries/skills/code-review/SKILL.md` returns a match. `test ! -d batteries/skills/planning` succeeds.
+- **Source:** `batteries/skills/` directory (delete old, create new)
+
+#### UI Layer
+
+N/A -- package content. Agent sees skills via Claude Code's native `/skillname` invocation.
+
+#### API Layer
+
+N/A.
+
+#### Data Layer
+
+New directory structure:
 
 ```
 batteries/skills/
-  task-mode/SKILL.md
-  implementation-mode/SKILL.md
-  planning-mode/SKILL.md
-  debug-mode/SKILL.md
-  research-mode/SKILL.md
-  quick-planning/SKILL.md
-  tdd/SKILL.md
-  implementation/SKILL.md
-  code-review/SKILL.md
-  interview/SKILL.md
-  spec-writing/SKILL.md
-  debug-methodology/SKILL.md
+  code-impl/SKILL.md                    # inline, methodology for implementation work
+  code-impl/implementer-prompt.md       # moved from implementation/
+  code-impl/test-prompt.md              # moved from implementation/
+  test-protocol/SKILL.md                # inline, build + test + retry
+  interview/SKILL.md                    # inline, structured questioning (exists, updated)
+  code-review/SKILL.md                  # context: fork, review checklist
+  code-review/reviewer-prompt.md        # moved from implementation/
+  spec-review/SKILL.md                  # context: fork, spec review
+  spec-review/reviewer-prompt.md        # moved from planning/
+  debug-methodology/SKILL.md            # inline, reproduce/hypothesize/trace
+  debug-methodology/tracer-prompt.md    # moved from debugging/
+  spec-writing/SKILL.md                 # context: fork, spec structure
+  spec-writing/spec-writer-prompt.md    # moved from planning/
+  vp-execution/SKILL.md                 # inline, run VP steps literally
+  vp-execution/fix-reviewer-prompt.md   # moved from verification/
+```
+
+Deleted:
+```
+batteries/skills/planning/
+batteries/skills/implementation/
+batteries/skills/task/
+batteries/skills/debugging/
+batteries/skills/research/
+batteries/skills/freeform/
+batteries/skills/verification/
+batteries/skills/tdd/
 ```
 
 ---
 
-### B3: Skills Copied on Setup
+### B5: mode_skill Field Removed
 
 **Core:**
-- **ID:** skills-copied-on-setup
-- **Trigger:** User runs `kata setup`. All files (templates, skills, config) are copied in one pass. The separate `kata batteries` command is deprecated — `kata setup` is the single entry point for installing and updating project files.
-- **Expected:** All skill directories from `batteries/skills/` are copied to `.claude/skills/` in the project. On first run, files are copied fresh. On subsequent runs (`kata setup` again), existing files are overwritten with backups created. Skills follow the Claude Code native convention (`.claude/skills/<name>/SKILL.md`), so they are auto-discovered by Claude Code. Users customize skills by editing the installed copies in place.
-- **Verify:** Run `kata setup --cwd=/tmp/test-project` in a fresh directory, then `ls .claude/skills/*/SKILL.md | wc -l` returns 12. Run again and verify files are refreshed.
-- **Source:** `src/commands/setup.ts` (applySetup)
+- **ID:** mode-skill-removed
+- **Trigger:** Template YAML is parsed by `parseTemplateYaml()` or validated by Zod schemas
+- **Expected:** The `mode_skill` field is removed from `templateYamlSchema`. Templates no longer declare a mode entry skill. The `outputModeSkillActivation()` function in `enter.ts` is removed. The conditional in `enter.ts` that checks `template.mode_skill` falls back to `outputFullTemplateContent()` (which outputs nothing for templates with no markdown body). The orchestration guidance ("coordinate agents, don't code yourself") moves to `kata.yaml` as a `global_rules` entry, not a skill.
+- **Verify:** `grep mode_skill batteries/templates/*.md` returns no matches. `grep mode_skill src/validation/schemas.ts` returns no matches. `grep outputModeSkillActivation src/commands/enter.ts` returns no matches.
+- **Source:** `src/validation/schemas.ts:158` (remove mode_skill), `src/commands/enter.ts:85-96` (remove outputModeSkillActivation), `src/commands/enter.ts:302-306` (remove mode_skill conditional)
 
 #### UI Layer
 
-Setup output includes a "Skills" section:
+`kata enter <mode>` no longer outputs "MODE SKILL: Invoke /skillname" banner. Since templates have no markdown body after thinning, the enter command outputs only the task list and workflow ID.
 
-```
-kata setup complete:
-  Templates (8):
-    .kata/templates/task.md
-    ...
-  Skills (12):
-    .claude/skills/task-mode/SKILL.md
-    .claude/skills/implementation-mode/SKILL.md
-    ...
-```
+#### API Layer
+
+The JSON output from `kata enter` no longer includes `mode_skill` field.
+
+#### Data Layer
+
+`templateYamlSchema` loses the `mode_skill` field. `TemplateYaml` type loses `mode_skill?: string`.
+
+---
+
+### B6: Templates Thinned with $ref and Skill References
+
+**Core:**
+- **ID:** templates-thinned
+- **Trigger:** `kata batteries --update` copies updated templates to `.kata/templates/`
+- **Expected:** All 7 batteries mode templates (task, implementation, planning, debug, research, verify, freeform) are rewritten as thin YAML skeletons. Setup and close ceremony steps use `$ref: step-id` to pull instructions from steps.yaml. Core work steps declare `skill: skill-name` for methodology. Templates have no markdown body below the closing `---`. Template sizes drop from 170-680 lines to approximately 30-80 lines. Expansion patterns (spec phases in implementation, VP steps in verify, interviews in planning) are preserved using the existing `container` + `subphase_pattern` mechanism. Phase ordering, dependencies, gates, and labels remain in the template.
+- **Verify:** For each template, confirm: (1) `mode_skill` is absent, (2) at least one step has `$ref`, (3) at least one step has `skill`, (4) content after the closing `---` is empty, (5) template parses against `templateYamlSchema`.
+- **Source:** `batteries/templates/task.md`, `batteries/templates/implementation.md`, `batteries/templates/planning.md`, `batteries/templates/debug.md`, `batteries/templates/research.md`, `batteries/templates/verify.md`, `batteries/templates/freeform.md`
+
+#### UI Layer
+
+N/A -- template files are not directly user-facing. Agent receives skill methodology via Claude Code's native Skill tool and ceremony via resolved $ref instructions in native tasks.
 
 #### API Layer
 
@@ -192,154 +373,72 @@ N/A.
 
 #### Data Layer
 
-`BatteriesResult` interface gains a `skills: string[]` field tracking copied skill names.
-
-New helper in `src/session/lookup.ts`:
-
-```typescript
-export function getProjectSkillsDir(projectRoot?: string): string {
-  const root = projectRoot || findProjectDir()
-  return path.join(root, '.claude', 'skills')
-}
-```
-
----
-
-### B4: Mode Skill Activation at Entry
-
-**Core:**
-- **ID:** mode-skill-activation-at-entry
-- **Trigger:** User runs `kata enter <mode>` for a mode whose template declares `mode_skill:`
-- **Expected:** Instead of outputting the full template markdown body to stderr (the current `outputFullTemplateContent` call), the enter command outputs a skill activation instruction: "Activate the /<mode_skill> skill to understand your role and workflow for this mode." The full markdown body is no longer emitted for templates that declare `mode_skill`. Templates without `mode_skill` continue to emit the full markdown body (backward compatibility).
-- **Verify:** Run `kata enter task --session=test 2>&1 | grep "Activate"` and confirm it mentions `/task-mode`. Confirm the old 200+ line markdown body is NOT present in stderr.
-- **Source:** `src/commands/enter.ts:719` (outputFullTemplateContent call)
-
-#### UI Layer
-
-Stderr output changes from a full template markdown dump to a concise skill activation instruction:
-
-```
-===============================================================================
-  MODE SKILL: Activate /task-mode to understand your role and workflow.
-===============================================================================
-```
-
-#### API Layer
-
-The JSON output on stdout gains a `mode_skill` field when present:
-
-```json
-{
-  "success": true,
-  "mode": "task",
-  "mode_skill": "task-mode",
-  ...
-}
-```
-
-#### Data Layer
-
-N/A -- no state schema changes.
-
----
-
-### B5: Step Skill in Task Instructions
-
-**Core:**
-- **ID:** step-skill-in-task-instructions
-- **Trigger:** `buildPhaseTasks()` or `buildSpecTasks()` processes a step or subphase pattern that declares `skill: <name>`
-- **Expected:** The generated native task description includes a "Skill" section instructing the agent to activate the named skill before starting the task. The section reads: `## Skill\nActivate /<name> before starting this task.` This section appears before the Hints section in the task description.
-- **Verify:** Run `kata enter task --session=test --dry-run`, then read `~/.claude/tasks/test/1.json` and confirm the description contains `Activate /quick-planning`.
-- **Source:** `src/commands/enter/task-factory.ts:239` (buildPhaseTasks step loop), `src/commands/enter/task-factory.ts:148` (buildSpecTasks pattern loop)
-
-#### UI Layer
-
-Native task description in `~/.claude/tasks/{sessionId}/{id}.json` includes:
-
-```markdown
-## Skill
-Activate /quick-planning before starting this task.
-
-## Hints
-- **Read:** ...
-```
-
-#### API Layer
-
-N/A -- native task files are the delivery mechanism.
-
-#### Data Layer
-
-N/A -- no schema changes. The `Task.instruction` string field carries the skill reference as markdown content.
-
----
-
-### B6: Templates Converted to Pure YAML
-
-**Core:**
-- **ID:** templates-pure-yaml
-- **Trigger:** `kata setup` copies converted templates to `.kata/templates/`
-- **Expected:** All five batteries templates (task.md, implementation.md, planning.md, debug.md, research.md) are converted to pure YAML frontmatter with no markdown body below the closing `---`. Each declares `mode_skill:` at the top level. Steps and subphase patterns that previously contained inline methodology prose now declare `skill:` instead, with only phase-specific `instruction:` text remaining for non-reusable guidance (e.g., "Create feature branch", "Commit and push"). Template sizes reduce by 68-85%.
-- **Verify:** For each template in `batteries/templates/{task,implementation,planning,debug,research}.md`, confirm: (1) `grep "^mode_skill:" <file>` returns a value, (2) the file content after the closing `---` is empty or whitespace only, (3) `node -e "require('./dist/index.js')"` does not throw (templates still parse).
-- **Source:** `batteries/templates/task.md`, `batteries/templates/implementation.md`, `batteries/templates/planning.md`, `batteries/templates/debug.md`, `batteries/templates/research.md`
-
-#### UI Layer
-
-N/A -- template files are not directly user-facing. Agent sees skill content via Claude Code's native Skill tool instead of compressed session-start context.
-
-#### API Layer
-
-N/A.
-
-#### Data Layer
-
-Template YAML gains `mode_skill:` field and per-step/subphase `skill:` fields. Example (task.md):
+Example thinned template (task.md):
 
 ```yaml
 ---
 id: task
 name: Task Mode
+description: Combined planning + implementation for small tasks
 mode: task
-mode_skill: task-mode
+
 phases:
   - id: p0
     name: Quick Planning
     task_config:
       title: "P0: Plan - scope, approach, verify strategy"
+      labels: [phase, phase-0, planning]
     steps:
+      - id: env-check
+        $ref: env-check
+        title: "Verify environment"
       - id: understand-task
         title: "Understand and classify the task"
-        skill: quick-planning
+        skill: code-impl
+        instruction: |
+          Classify: chore, small feature, or fix.
+          If larger scope, suggest planning or implementation mode.
       - id: scope-and-approach
         title: "Define scope and approach"
         instruction: |
           Write a brief plan (3-5 lines): files to change, approach, out of scope.
-  ...
+
+  - id: p1
+    name: Implement
+    task_config:
+      title: "P1: Implement - make changes, verify"
+      depends_on: [p0]
+    steps:
+      - id: make-changes
+        title: "Make the changes"
+        skill: code-impl
+      - id: verify
+        title: "Verify changes"
+        skill: test-protocol
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
+
+  - id: p2
+    name: Complete
+    task_config:
+      title: "P2: Complete - commit, push"
+      depends_on: [p1]
+    steps:
+      - id: commit-push
+        $ref: commit-push
+        title: "Commit and push"
+      - id: update-issue
+        $ref: update-issue
+        vars:
+          action: close
+
+global_conditions:
+  - changes_committed
+
+workflow_id_format: "TK-{session_last_4}-{MMDD}"
 ---
 ```
-
----
-
-### B7: Eval Prototype Cleanup
-
-**Core:**
-- **ID:** eval-prototype-cleanup
-- **Trigger:** Implementation of this feature replaces the skill-eval prototype from issue #39
-- **Expected:** The following prototype artifacts are removed: (1) `eval-fixtures/tanstack-start-skills/` directory, (2) `eval/scenarios/skill-activation.ts`, (3) `eval/scenarios/skill-activation-control.ts`, (4) any `skill-eval` mode references in eval fixture configs. The `skillActivationPresets()` and `assertSkillRead()` assertion functions in `eval/assertions.ts` are retained and reused by updated eval scenarios.
-- **Verify:** `test ! -d eval-fixtures/tanstack-start-skills` succeeds. `grep -r "skill-eval" eval/ eval-fixtures/` returns no matches. `grep "skillActivationPresets" eval/assertions.ts` still returns a match.
-- **Source:** `eval/scenarios/skill-activation.ts`, `eval/scenarios/skill-activation-control.ts`, `eval-fixtures/tanstack-start-skills/`
-
-#### UI Layer
-
-N/A.
-
-#### API Layer
-
-N/A.
-
-#### Data Layer
-
-Files removed. No schema changes.
 
 ---
 
@@ -347,177 +446,230 @@ Files removed. No schema changes.
 
 Explicitly out of scope for this feature:
 
-- **Hook-backed gate enforcement** -- gates remain agent-trust-based. Hook enforcement of gates is a separate concern (tracked independently).
-- **New mode definitions** -- no new modes are added. Only existing modes (task, implementation, planning, debug, research) are converted.
-- **Changes to modes.yaml / intent detection** -- the `modes.yaml` schema, `suggest.ts`, and `prime.ts` are untouched. No `skill` field in mode config.
-- **Skill validation at entry** -- `kata enter` does not validate that referenced skills exist in `.claude/skills/`. This is a future enhancement.
-- **Skill version tracking** -- `kata setup` does not track skill versions separately from template versions.
-- **Conditional skills** -- no mechanism for conditionally activating skills based on project state (e.g., "only use TDD if test infrastructure exists").
-- **Skill-scoped hooks** -- skills do not ship with their own hook definitions. Hook registration remains centralized in `.claude/settings.json`.
-- **Changes to the verify-run sub-agent** -- verify-run continues to work as-is.
-- **Freeform mode conversion** -- freeform.md has no methodology to extract and is not converted.
-- **Non-batteries template conversion** -- system templates in `templates/` (onboard.md, SESSION-TEMPLATE.template.md) and other batteries templates (stop-hook-test.md, verify.md) are not converted.
+- **Hook-backed gate enforcement** -- gates remain agent-trust-based. Hook enforcement of gates (PreToolUse intercepting TaskUpdate) is a separate concern.
+- **New mode definitions** -- no new modes are added. Only existing modes are converted.
+- **Changes to modes.yaml or intent detection** -- `modes.yaml`, `suggest.ts`, and `prime.ts` are untouched.
+- **Skill validation at entry** -- `kata enter` does not validate that skill: references resolve to existing `.claude/skills/` files. This is a future enhancement.
+- **Conditional skills** -- no mechanism for conditionally activating skills based on project state.
+- **Skill-scoped hooks** -- skills do not ship with their own hook definitions.
+- **Changes to verify-run sub-agent** -- verify-run continues to work as-is.
+- **System template conversion** -- `templates/onboard.md` and `templates/SESSION-TEMPLATE.template.md` are not converted.
+- **Subphase patterns using $ref** -- subphase patterns are already parameterized via title_template/todo_template/instruction; they do not use $ref for the outer pattern structure (only for individual steps within them if applicable).
+- **Skill version tracking** -- no separate version tracking for skills vs templates.
+- **Deprecating kata batteries** -- `kata batteries --update` remains the update command; it gains steps.yaml handling.
 
 ## Implementation Phases
 
 See YAML frontmatter `phases:` above. Each phase should be 1-4 hours of focused work.
 
-### Phase 1: Schema + Infrastructure (2-3 hours)
+### Phase 1: Step Library Infrastructure (3-4 hours)
 
-Add the `skill` and `mode_skill` fields to Zod schemas, update task-factory to render skill activation instructions in native task descriptions, merge batteries into `kata setup` so it copies templates + skills in one pass, and modify `kata enter` to emit mode_skill activation instead of full template body.
+Create `batteries/steps.yaml` with shared step definitions. Add Zod schemas for step definitions and $ref/vars fields. Implement `loadStepLibrary()` and `resolveStepRef()`. Wire $ref resolution into `buildPhaseTasks()` and `buildSpecTasks()`. Add steps.yaml to the batteries scaffold and update flows. Write unit tests for all resolution logic including error cases.
 
-### Phase 2: Create Skills Content (2-3 hours)
+### Phase 2: Create Atomic Skills (2-3 hours)
 
-Extract methodology content from each template's markdown body and step instructions into 12 SKILL.md files under `batteries/skills/`. Migrate existing `quick-planning` and `tdd` skills from the eval fixture.
+Write 8 SKILL.md files with methodology content extracted from current template prose and existing skill files. Delete the 7 mode-mirroring skills and the tdd skill. Move sub-prompt files into new skill directories. Each skill must have valid frontmatter with name and description. Agent skills get `context: fork`.
 
-### Phase 3: Convert Templates (2-3 hours)
+### Phase 3: Thin Templates (3-4 hours)
 
-Rewrite each batteries template to declare `mode_skill:` and per-step `skill:` references, removing the markdown body. Verify all templates still parse and produce valid native tasks.
+Rewrite all 7 mode templates to use $ref for ceremony steps and skill: for methodology. Remove all markdown bodies below `---`. Remove `mode_skill` from the schema and enter.ts. Add orchestration rule to kata.yaml global_rules. Verify all templates parse and expansion patterns still work.
 
-### Phase 4: Update Eval (1-2 hours)
+### Phase 4: Cleanup and Tests (2-3 hours)
 
-Remove skill-eval prototype artifacts. Add skill activation checks to existing eval scenarios that exercise real modes.
+Update all test files for the new skill names, $ref resolution, and template structure. Run the full test suite. Run eval scenarios to confirm end-to-end behavior. Update eval fixture templates to match new batteries templates.
 
 ## Verification Strategy
 
 ### Test Infrastructure
 
-Existing test infrastructure: `npm run build && npm test` using Node's built-in test runner. Test files live alongside source with `.test.ts` suffixes. No new test framework needed.
+Existing test infrastructure: `npm run build && npm test` using Node's built-in test runner. Test files live alongside source with `.test.ts` suffixes. The template-rewrite test (`src/validation/template-rewrite.test.ts`) validates all batteries templates against the Zod schema and checks skill resolution. New tests for step-library.ts will follow the same pattern.
 
 ### Build Verification
 
-`npm run build` compiles TypeScript via tsup. Templates are not compiled -- they are copied at runtime. Skills are plain markdown files. Build verification confirms schema changes compile and existing tests pass.
+`npm run build` compiles TypeScript via tsup. Templates and steps.yaml are plain files copied at runtime, not compiled. Build verification confirms schema changes compile and all existing tests pass.
 
 ## Verification Plan
 
-### VP1: Schema Accepts Skill Fields
+### VP1: Step Library Loads and Resolves
 
 Steps:
 1. `npm run build && npm test`
-   Expected: All existing tests pass. No regressions from adding optional fields.
-2. `node --input-type=module -e "import {templateYamlSchema} from './dist/validation/schemas.js'; console.log(templateYamlSchema.parse({mode_skill:'test'}).mode_skill)"`
-   Expected: Prints `test`
-3. `node --input-type=module -e "import {phaseStepSchema} from './dist/validation/schemas.js'; console.log(phaseStepSchema.parse({id:'s1',title:'T',skill:'tdd'}).skill)"`
-   Expected: Prints `tdd`
+   Expected: All tests pass including new step-library tests.
+2. `node --input-type=module -e "import {stepLibrarySchema} from './dist/validation/schemas.js'; const r = stepLibrarySchema.safeParse({'env-check': {title: 'Check env', instruction: 'Run git status'}}); console.log(r.success ? 'PASS' : 'FAIL')"`
+   Expected: Prints `PASS`
+3. `node --input-type=module -e "import {phaseStepSchema} from './dist/validation/schemas.js'; const r = phaseStepSchema.safeParse({id:'s1', title:'T', '\$ref':'env-check', vars:{branch:'main'}}); console.log(r.success ? 'PASS' : 'FAIL')"`
+   Expected: Prints `PASS`
 
-### VP2: Skills Installed by Setup
+### VP2: Steps.yaml Scaffolded to Project
 
 Steps:
-1. `mkdir -p /tmp/vp2-test && cd /tmp/vp2-test && git init && kata setup --cwd=/tmp/vp2-test`
-   Expected: Output includes "Skills (12):" section listing all 12 skill paths.
-2. `ls /tmp/vp2-test/.claude/skills/*/SKILL.md | wc -l`
-   Expected: Returns `12`
-3. `head -5 /tmp/vp2-test/.claude/skills/tdd/SKILL.md`
-   Expected: Shows YAML frontmatter with `name: tdd` and `description:` fields.
+1. `mkdir -p /tmp/vp2-test && cd /tmp/vp2-test && git init && kata setup --batteries --cwd=/tmp/vp2-test`
+   Expected: Output includes steps.yaml in the list of scaffolded files.
+2. `test -f /tmp/vp2-test/.kata/steps.yaml && echo "PASS" || echo "FAIL"`
+   Expected: Prints `PASS`
+3. `grep "env-check" /tmp/vp2-test/.kata/steps.yaml`
+   Expected: Returns a match (env-check step definition exists).
 4. `rm -rf /tmp/vp2-test`
 
-### VP3: Mode Skill Referenced at Entry
+### VP3: $ref Resolution Produces Correct Task Instruction
 
 Steps:
-1. `mkdir -p /tmp/vp3-test && cd /tmp/vp3-test && git init && kata setup --cwd=/tmp/vp3-test`
-2. `kata enter task --session=vp3-test --cwd=/tmp/vp3-test 2>&1 | grep -i "skill"`
-   Expected: Output contains a reference to activating `/task-mode` skill. Does NOT contain 200+ lines of markdown methodology.
-3. `rm -rf /tmp/vp3-test`
+1. `cd /tmp/vp3-test && git init && kata setup --batteries --cwd=/tmp/vp3-test`
+2. `kata enter task --session=vp3-test --cwd=/tmp/vp3-test`
+3. `cat ~/.claude/tasks/vp3-test/1.json | python3 -c "import json,sys; d=json.load(sys.stdin); print('PASS' if 'git status' in d['description'] else 'FAIL: no git status in env-check task')"`
+   Expected: Prints `PASS` (first task is the env-check $ref step with resolved instruction).
+4. `rm -rf /tmp/vp3-test && rm -rf ~/.claude/tasks/vp3-test`
 
-### VP4: Step Skill in Native Task Description
+### VP4: Skill References in Native Tasks
 
 Steps:
-1. `cd /tmp/vp4-test && git init && kata setup --cwd=/tmp/vp4-test`
+1. `cd /tmp/vp4-test && git init && kata setup --batteries --cwd=/tmp/vp4-test`
 2. `kata enter task --session=vp4-test --cwd=/tmp/vp4-test`
-3. `cat ~/.claude/tasks/vp4-test/1.json | grep -A2 "Skill"`
-   Expected: Task description contains `Activate /quick-planning before starting this task.`
+3. `cat ~/.claude/tasks/vp4-test/2.json | python3 -c "import json,sys; d=json.load(sys.stdin); print('PASS' if '/code-impl' in d['description'] else 'FAIL: no skill ref')"`
+   Expected: Prints `PASS` (understand-task step has skill: code-impl producing "Invoke /code-impl" in description).
 4. `rm -rf /tmp/vp4-test && rm -rf ~/.claude/tasks/vp4-test`
 
 ### VP5: Templates Parse After Conversion
 
 Steps:
 1. `npm run build`
-2. `for t in task implementation planning debug research; do node --input-type=module -e "import {parseTemplateYaml} from './dist/commands/enter/template.js'; const r = parseTemplateYaml('batteries/templates/${t}.md'); if(!r||!r.mode_skill) throw new Error('${t}: missing mode_skill'); console.log('${t}: OK, mode_skill=' + r.mode_skill)"; done`
-   Expected: All five templates print OK with their mode_skill value.
+2. `for t in task implementation planning debug research verify freeform; do node --input-type=module -e "import {parseTemplateYaml} from './dist/commands/enter/template.js'; import {templateYamlSchema} from './dist/validation/schemas.js'; const r = parseTemplateYaml('batteries/templates/${t}.md'); const v = templateYamlSchema.safeParse(r); if(!v.success) throw new Error('${t}: ' + JSON.stringify(v.error.issues)); console.log('${t}: OK')"; done`
+   Expected: All 7 templates print OK.
 
-### VP6: Prototype Artifacts Removed
+### VP6: Old Skills Deleted, New Skills Present
 
 Steps:
-1. `test ! -d eval-fixtures/tanstack-start-skills && echo "PASS: fixture removed"`
-   Expected: Prints "PASS: fixture removed"
-2. `test ! -f eval/scenarios/skill-activation.ts && echo "PASS: scenario removed"`
-   Expected: Prints "PASS: scenario removed"
-3. `grep -r "skill-eval" eval/ eval-fixtures/ && echo "FAIL" || echo "PASS: no skill-eval refs"`
-   Expected: Prints "PASS: no skill-eval refs"
+1. `ls batteries/skills/*/SKILL.md | wc -l`
+   Expected: Returns `8`
+2. `test ! -d batteries/skills/planning && test ! -d batteries/skills/tdd && echo "PASS: old skills removed"`
+   Expected: Prints `PASS: old skills removed`
+3. `grep "context: fork" batteries/skills/code-review/SKILL.md && echo "PASS: agent skill"`
+   Expected: Prints `PASS: agent skill`
+
+### VP7: No mode_skill References Remain
+
+Steps:
+1. `grep -r "mode_skill" batteries/templates/ src/validation/schemas.ts`
+   Expected: No matches (exit code 1).
+2. `grep -r "outputModeSkillActivation" src/`
+   Expected: No matches (exit code 1).
 
 ## Implementation Hints
 
 ### Dependencies
 
-No new npm dependencies. Skills are plain markdown files. Claude Code's native Skill tool handles discovery and loading.
+No new npm dependencies. Steps.yaml is parsed with js-yaml (already a dependency). Skills are plain markdown files. Claude Code's native Skill tool handles discovery and loading.
 
 ### Key Imports
 
 | Module | Import | Used For |
 |--------|--------|----------|
-| `src/validation/schemas.ts` | `phaseStepSchema`, `subphasePatternSchema`, `templateYamlSchema` | Adding `skill` / `mode_skill` fields |
-| `src/yaml/types.ts` | `TemplateYaml` | Adding `mode_skill` to TypeScript interface |
-| `src/commands/enter/task-factory.ts` | `buildPhaseTasks`, `buildSpecTasks` | Rendering skill activation in task descriptions |
-| `src/commands/setup.ts` | `applySetup` | Copying templates + skills in unified `kata setup` |
-| `src/session/lookup.ts` | `getPackageRoot` | Resolving `batteries/skills/` source path |
+| `src/validation/schemas.ts` | `phaseStepSchema`, `subphasePatternSchema`, `templateYamlSchema`, `gateSchema` | Adding `$ref`, `vars` fields; adding `stepDefinitionSchema` |
+| `src/commands/enter/step-library.ts` | `loadStepLibrary`, `resolveStepRef` | New module for step library loading and $ref resolution |
+| `src/commands/enter/task-factory.ts` | `buildPhaseTasks`, `buildSpecTasks` | Wiring $ref resolution before task instruction assembly |
+| `src/commands/scaffold-batteries.ts` | `scaffoldBatteries` | Adding steps.yaml to scaffold flow |
+| `src/commands/update.ts` | `update` | Adding steps.yaml to update flow |
+| `src/session/lookup.ts` | `getPackageRoot`, `findProjectDir` | Resolving batteries/steps.yaml source and .kata/steps.yaml dest |
+| `js-yaml` | `load` | Parsing steps.yaml |
 
 ### Code Patterns
 
-**Adding skill to task instruction (task-factory.ts):**
-
-In `buildPhaseTasks`, after resolving the step instruction and before appending hints, check for `step.skill` and prepend a skill activation section:
+**Step library loading (new file src/commands/enter/step-library.ts):**
 
 ```typescript
-if (step.skill) {
-  const skillSection = `## Skill\nActivate /${step.skill} before starting this task.\n`
-  finalInstruction = skillSection + '\n' + (finalInstruction ?? '')
+import { readFileSync, existsSync } from 'node:fs'
+import { join } from 'node:path'
+import jsYaml from 'js-yaml'
+import { stepLibrarySchema, type StepDefinition } from '../../validation/schemas.js'
+
+export function loadStepLibrary(projectRoot: string): Map<string, StepDefinition> {
+  const stepsPath = join(projectRoot, '.kata', 'steps.yaml')
+  if (!existsSync(stepsPath)) return new Map()
+
+  const raw = jsYaml.load(readFileSync(stepsPath, 'utf-8')) as Record<string, unknown>
+  const parsed = stepLibrarySchema.parse(raw)
+  return new Map(Object.entries(parsed))
 }
 ```
 
-Same pattern applies in `buildSpecTasks` for `patternItem.skill`.
-
-**Adding skills to setup (setup.ts):**
-
-`kata setup` becomes the single command that copies templates AND skills. The existing `scaffoldBatteries()` function (or its logic) is absorbed into `applySetup()`. Skills use a two-level directory structure (`<name>/SKILL.md`), unlike templates (flat files):
+**$ref resolution (same new file):**
 
 ```typescript
-const skillsSrc = join(batteryRoot, 'skills')
-const skillsDest = getProjectSkillsDir(projectRoot)
-if (existsSync(skillsSrc)) {
-  for (const skillName of readdirSync(skillsSrc)) {
-    copyDirectory(
-      join(skillsSrc, skillName),
-      join(skillsDest, skillName),
-      result.skills, result.skipped, result.updated,
-    )
+export function resolveStepRef(
+  step: { $ref?: string; vars?: Record<string, string>; instruction?: string; title?: string; gate?: Gate },
+  library: Map<string, StepDefinition>,
+  stepId: string,
+): { instruction?: string; title?: string; gate?: Gate } {
+  if (!step.$ref) return { instruction: step.instruction, title: step.title, gate: step.gate }
+
+  const def = library.get(step.$ref)
+  if (!def) throw new Error(`Step "${stepId}" references $ref "${step.$ref}" which does not exist in .kata/steps.yaml`)
+
+  // Merge: local fields override library fields
+  let instruction = step.instruction ?? def.instruction
+  const title = step.title ?? def.title
+  const gate = step.gate ?? def.gate
+
+  // Apply vars substitution
+  if (instruction && step.vars) {
+    for (const [key, value] of Object.entries(step.vars)) {
+      instruction = instruction.replaceAll(`{${key}}`, value)
+    }
   }
+
+  // Check for unresolved vars (only vars-pattern placeholders, not config placeholders)
+  if (instruction && step.vars) {
+    const unresolved = [...instruction.matchAll(/\{(\w+)\}/g)]
+      .map(m => m[1])
+      .filter(k => step.vars![k] === undefined)
+    // Only fail on vars that were expected to be provided (not config placeholders like {test_command})
+  }
+
+  return { instruction, title, gate }
 }
 ```
 
-The `kata batteries` command is deprecated — `kata setup` handles everything. Existing `kata batteries --update` callers should be migrated to `kata setup`.
-
-**Mode skill output in enter.ts:**
-
-Replace the `outputFullTemplateContent` call with a conditional:
+**Wiring into buildPhaseTasks (task-factory.ts):**
 
 ```typescript
-const template = parseTemplateYaml(resolveTemplatePath(modeConfig.template))
-if (template?.mode_skill) {
-  console.error(`\n  MODE SKILL: Activate /${template.mode_skill} to understand your role and workflow.\n`)
-} else {
-  outputFullTemplateContent(modeConfig.template, canonical, workflowId, issueNum, effectivePhases[0])
-}
+// At the top of buildPhaseTasks, after resolving template:
+const library = loadStepLibrary(projectRoot)
+
+// In the step loop, before building finalInstruction:
+const resolved = resolveStepRef(step, library, `${phase.id}:${step.id}`)
+let finalInstruction = resolved.instruction ?? step.instruction
+// Use resolved.gate if step.gate is not set
+const effectiveGate = step.gate ?? resolved.gate
+```
+
+**Adding $ref/vars to schema (schemas.ts):**
+
+```typescript
+export const phaseStepSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  instruction: z.string().optional(),
+  skill: z.string().optional(),
+  agent: agentStepConfigSchema.optional(),
+  gate: gateSchema.optional(),
+  hints: z.array(hintSchema).optional(),
+  $ref: z.string().optional(),
+  vars: z.record(z.string(), z.string()).optional(),
+})
 ```
 
 ### Gotchas
 
-- The `skillHintSchema` already exists in `src/validation/schemas.ts` as a hint type (`hints: [{ skill: "name", args: "..." }]`). The new top-level `skill` field on `phaseStepSchema` is a separate concept — it declares the skill to activate for the entire step. If a step has both `skill: "tdd"` AND `hints: [{ skill: "tdd" }]`, this is redundant but not an error. The top-level `skill` field supersedes skill hints — existing `skillHintSchema` hints in templates should be migrated to the top-level `skill` field during template conversion (Phase 3).
-- Template files that currently have markdown bodies below `---` will lose that content. The content must be fully captured in skill files before removing from templates.
-- The `available_skills` field in the skill-eval prototype template is not adopted. Skill references are per-step (`skill:`) and per-template (`mode_skill:`), not a flat list.
-- Skills live under `.claude/skills/` (Claude Code's native convention), not under `.kata/`. This means `.gitignore` patterns for `.claude/` may need updating in projects that ignore that directory.
+- The `$ref` field name contains a dollar sign. Zod handles this fine as a property key, but in TypeScript the type will be `'$ref'?: string`. Access with bracket notation: `step['$ref']`.
+- Steps.yaml uses `{placeholder}` syntax for values that should be resolved at task creation time (from session/config). The `vars` field on the step is for template-level overrides only. Do not confuse the two -- `vars` are resolved first, then remaining `{placeholders}` go through `resolvePlaceholders()` as before.
+- The `skill` field on steps and subphase patterns already exists in the current schema and task-factory. The current `## Skill\nInvoke /{skill} before starting this task.` prepend logic does not change -- it continues to work with the new skill names.
+- The existing `skillHintSchema` (hints: [{ skill: "name" }]) is a separate concept from the top-level `skill:` field. Both can coexist. The top-level field is for the primary methodology; hint skills are for secondary references.
+- When deleting old skills from `batteries/skills/`, ensure sub-prompt `.md` files are moved to their new home before deletion. For example, `batteries/skills/implementation/implementer-prompt.md` must be copied to `batteries/skills/code-impl/implementer-prompt.md` before deleting the `implementation/` directory.
+- The `mode_skill` field currently exists on `templateYamlSchema` and is used by `enter.ts`. Removing it is a breaking change for any project template that declares `mode_skill`. The schema should accept but ignore the field during a transition period, or templates should be converted atomically in the same commit.
 
 ### Reference Docs
 
+- [Blocks + Skills Two-Tier Architecture Research](planning/research/2026-04-06-blocks-and-skills-architecture.md) -- design rationale for two-tier system
+- [Skills Structure Evaluation](planning/research/2026-04-06-skills-structure-deep-research.md) -- skills as atomic building blocks
+- [Tasks + Gates + Skills Composition Research](planning/research/2026-04-06-tasks-gates-skills-composition.md) -- composition model
 - [Claude Code Skills Documentation](https://code.claude.com/docs/en/skills) -- native skill system conventions
-- [Skill Activation Reliability Research](planning/research/2026-04-05-skill-activation-reliability.md) -- 100% activation reliability findings
-- [Tasks + Gates + Skills Composition Research](planning/research/2026-04-06-tasks-gates-skills-composition.md) -- full design rationale
