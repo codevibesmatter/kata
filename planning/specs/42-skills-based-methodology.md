@@ -2,11 +2,12 @@
 initiative: feat-skills-methodology
 type: project
 issue_type: feature
-status: draft
+status: approved
 priority: high
 github_issue: 42
 created: 2026-04-06
 updated: 2026-04-08
+approved: 2026-04-08
 phases:
   - id: p1
     name: "Step Library Infrastructure"
