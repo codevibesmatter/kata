@@ -1,7 +1,9 @@
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readdirSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { findProjectDir } from '../session/lookup.js'
 import { loadKataConfig } from '../config/kata-config.js'
+import { parseYamlFrontmatterWithError } from '../yaml/parser.js'
+import type { SpecYaml } from '../yaml/types.js'
 
 interface ValidationResult {
   valid: boolean
@@ -34,7 +36,8 @@ export function findSpecFile(issueNum: number): string | null {
 }
 
 /**
- * Parse and validate spec YAML frontmatter
+ * Parse and validate spec YAML frontmatter using js-yaml parser.
+ * Handles all valid YAML string formats (quoted, unquoted, folded, literal).
  */
 export function validateSpec(specPath: string): ValidationResult {
   const result: ValidationResult = {
@@ -53,39 +56,30 @@ export function validateSpec(specPath: string): ValidationResult {
     return result
   }
 
-  const content = readFileSync(specPath, 'utf-8')
-
-  // Check YAML frontmatter exists
-  const match = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!match) {
+  // Parse YAML frontmatter with js-yaml
+  const parseResult = parseYamlFrontmatterWithError<SpecYaml>(specPath)
+  if (!parseResult.ok) {
     result.valid = false
-    result.errors.push('No YAML frontmatter found (must start with --- and end with ---)')
+    result.errors.push(parseResult.error)
     return result
   }
 
-  const yaml = match[1]
+  const data = parseResult.data
 
   // Parse github_issue
-  const issueMatch = yaml.match(/github_issue:\s*(\d+)/)
-  if (issueMatch) {
-    result.issueNumber = Number.parseInt(issueMatch[1], 10)
+  if (typeof data.github_issue === 'number') {
+    result.issueNumber = data.github_issue
   } else {
     result.warnings.push('No github_issue field in frontmatter')
   }
 
-  // Check for phases section
-  const phasesMatch = yaml.match(/phases:\s*\n([\s\S]*?)(?:\n[a-z_]+:|\n---|\n$|$)/i)
-  if (!phasesMatch) {
+  // Check for phases
+  if (!data.phases || !Array.isArray(data.phases)) {
     result.warnings.push('No phases section found in frontmatter')
     return result
   }
 
-  const phasesSection = phasesMatch[1]
-
-  // Parse each phase block
-  const phaseBlocks = `\n${phasesSection}`.split(/\n {2}- id:/).slice(1)
-
-  if (phaseBlocks.length === 0) {
+  if (data.phases.length === 0) {
     result.errors.push(
       'phases section exists but contains no phases (each phase needs "  - id: pN")',
     )
@@ -95,34 +89,11 @@ export function validateSpec(specPath: string): ValidationResult {
 
   const seenIds = new Set<string>()
 
-  for (let phaseIdx = 0; phaseIdx < phaseBlocks.length; phaseIdx++) {
-    const block = phaseBlocks[phaseIdx]
-    const lines = `id:${block}`.split('\n')
+  for (let phaseIdx = 0; phaseIdx < data.phases.length; phaseIdx++) {
+    const phase = data.phases[phaseIdx]
 
-    let phaseId = ''
-    let phaseName = ''
-    let inTasks = false
-    let taskCount = 0
-
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-
-      const indent = line.length - line.trimStart().length
-
-      if (indent <= 4 && trimmed.startsWith('id:')) {
-        phaseId = trimmed.slice(3).trim()
-      } else if (indent <= 4 && trimmed.startsWith('name:')) {
-        phaseName = trimmed.slice(5).trim().replace(/^"|"$/g, '')
-      } else if (trimmed === 'tasks:') {
-        inTasks = true
-      } else if ((inTasks && trimmed.startsWith('- "')) || (inTasks && trimmed.startsWith("- '"))) {
-        // Task is a simple string like: - "Task description"
-        taskCount++
-      }
-    }
-
-    // Validate phase
+    // Validate phase id
+    const phaseId = phase?.id
     if (!phaseId) {
       result.errors.push(`Phase ${phaseIdx + 1}: Missing id field`)
       result.valid = false
@@ -135,9 +106,12 @@ export function validateSpec(specPath: string): ValidationResult {
     }
     seenIds.add(phaseId)
 
-    if (!phaseName) {
+    if (!phase.name) {
       result.warnings.push(`Phase ${phaseId}: Missing name field`)
     }
+
+    // Count tasks — js-yaml handles all string formats (quoted, unquoted, folded, etc.)
+    const taskCount = Array.isArray(phase.tasks) ? phase.tasks.filter((t) => typeof t === 'string' && t.trim().length > 0).length : 0
 
     result.phases++
     result.totalTasks += taskCount

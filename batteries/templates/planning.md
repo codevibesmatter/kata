@@ -488,29 +488,32 @@ phases:
       - id: validate-spec
         title: "Validate spec before approval"
         gate:
-          bash: "ls {spec_path_dir}/*{issue}* 2>/dev/null"
+          bash: "kata validate-spec planning/specs/{spec-file}.md"
           expect_exit: 0
-          on_fail: "No spec file found matching issue number in {spec_path_dir}."
+          on_fail: "Spec validation failed. Fix frontmatter issues before approval."
         hints:
+          - bash: "kata validate-spec planning/specs/{spec-file}.md"
           - read: "{spec_path}"
         instruction: |
-          Run validation before marking approved. Block on any failures.
+          Run the spec validator. This is REQUIRED — do not skip.
 
-          **Frontmatter checks:**
-          - [ ] `github_issue` is an integer (not null, not a string)
-          - [ ] `initiative` is kebab-case with prefix (`feat-`, `fix-`, `refactor-`)
-          - [ ] `phases:` array has at least one entry with `id`, `name`, `tasks`
-          - [ ] `status: draft` (will be changed to `approved` in next step)
+          ```bash
+          kata validate-spec planning/specs/{spec-file}.md
+          ```
 
-          **Content checks:**
+          The validator checks:
+          - YAML frontmatter exists and parses correctly
+          - `github_issue` is an integer
+          - `phases:` array has entries with `id`, `name`, `tasks`
+          - At least one task is defined across all phases
+
+          **If validation fails (exit code != 0):** Fix the reported errors and re-run
+          until it passes. Do NOT proceed to approval with a failing spec.
+
+          **Additional content checks (manual):**
           - [ ] No placeholder text (TODO, TBD, `{placeholder}`, `[placeholder]`)
           - [ ] Every behavior has: ID, Trigger, Expected, Verify
           - [ ] Verification Plan has literal commands (not abstract descriptions)
-          - [ ] File paths in spec reference real files — spot-check with Glob/Grep
-
-          If the project has a spec validator (e.g., `pnpm run validate-spec`), run it now.
-
-          Fix all failures before proceeding. Do not approve a spec that fails validation.
 
           Then: Mark this task completed via TaskUpdate
 
