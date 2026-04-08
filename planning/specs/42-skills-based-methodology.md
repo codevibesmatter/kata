@@ -205,7 +205,7 @@ commit-push:
 **Core:**
 - **ID:** ref-resolution
 - **Trigger:** `buildPhaseTasks()` encounters a phase step with a `$ref` field (e.g., `$ref: env-check`)
-- **Expected:** The step library is loaded via `loadStepLibrary()`. The referenced step definition is looked up by ID. Fields from the step definition (`title`, `instruction`, `gate`) are merged into the phase step, with the phase step's own fields taking precedence (local overrides). If the step also declares `vars: { key: value }`, all `{key}` placeholders in the merged instruction are replaced with the corresponding values. After merge, if any `{placeholder}` patterns remain that are not resolvable from session/config/extra context, `kata enter` fails with an error listing the unresolved placeholders.
+- **Expected:** The step library is loaded via `loadStepLibrary()`. The referenced step definition is looked up by ID. Fields from the step definition (`title`, `instruction`, `gate`) are merged into the phase step, with the phase step's own fields taking precedence (local overrides). If the step also declares `vars: { key: value }`, all `{key}` placeholders in the merged instruction are replaced with the corresponding values. After var substitution, if any placeholders corresponding to keys declared in `vars` remain unresolved (empty or undefined value), `kata enter` fails with an error listing those placeholders. Config placeholders like `{test_command}` are NOT checked here — they are resolved later by the existing `resolvePlaceholders()` pipeline.
 - **Verify:** Unit test: create a step with `$ref: env-check` and `vars: { branch: main }`. Confirm the resolved instruction contains the var-substituted content. Unit test: create a step with `$ref: env-check` and a missing var. Confirm it throws with the unresolved placeholder name.
 - **Source:** New file `src/commands/enter/step-library.ts` (resolveStepRef function); modified `src/commands/enter/task-factory.ts:247-270` (buildPhaseTasks step loop)
 
@@ -282,7 +282,7 @@ New file `.kata/steps.yaml` in project runtime data layout. `BatteriesResult` in
 **Core:**
 - **ID:** atomic-skills
 - **Trigger:** Developer runs `kata batteries --update` or `kata setup`, which copies skill files from `batteries/skills/` to `.claude/skills/`
-- **Expected:** 8 skill directories exist under `batteries/skills/`, each with a `SKILL.md` containing valid YAML frontmatter (`name`, `description`). The 8 skills are: `code-impl`, `test-protocol`, `interview`, `code-review`, `spec-review`, `debug-methodology`, `spec-writing`, `vp-execution`. Three agent skills (`code-review`, `spec-review`, `spec-writing`) declare `context: fork` in frontmatter. The 7 old mode-mirroring skills (`planning`, `implementation`, `task`, `debugging`, `research`, `freeform`, `verification`) and the `tdd` skill are deleted from `batteries/skills/`. Existing sub-prompt files (e.g., `implementer-prompt.md`, `tracer-prompt.md`) are moved into the appropriate new skill directories.
+- **Expected:** 8 skill directories exist under `batteries/skills/`, each with a `SKILL.md` containing valid YAML frontmatter (`name`, `description`). The 8 skills are: `code-impl`, `test-protocol`, `interview`, `code-review`, `spec-review`, `debug-methodology`, `spec-writing`, `vp-execution`. Three agent skills (`code-review`, `spec-review`, `spec-writing`) declare `context: fork` in frontmatter. The 7 old mode-mirroring skills (`planning`, `implementation`, `task`, `debugging`, `research`, `freeform`, `verification`) and the `tdd` skill are deleted from `batteries/skills/`. Existing sub-prompt files (e.g., `implementer-prompt.md`, `tracer-prompt.md`) are moved into the appropriate new skill directories. Note: `code-review` and `interview` already exist — these are updated in place (not created from scratch), retaining their sub-prompt files.
 - **Verify:** `ls batteries/skills/*/SKILL.md | wc -l` returns 8. `grep "context: fork" batteries/skills/code-review/SKILL.md` returns a match. `test ! -d batteries/skills/planning` succeeds.
 - **Source:** `batteries/skills/` directory (delete old, create new)
 
@@ -449,7 +449,7 @@ Explicitly out of scope for this feature:
 - **Hook-backed gate enforcement** -- gates remain agent-trust-based. Hook enforcement of gates (PreToolUse intercepting TaskUpdate) is a separate concern.
 - **New mode definitions** -- no new modes are added. Only existing modes are converted.
 - **Changes to modes.yaml or intent detection** -- `modes.yaml`, `suggest.ts`, and `prime.ts` are untouched.
-- **Skill validation at entry** -- `kata enter` does not validate that skill: references resolve to existing `.claude/skills/` files. This is a future enhancement.
+- **Skill validation at entry** -- `kata enter` does not validate that skill: references resolve to existing `.claude/skills/` files. A typo (e.g., `skill: cod-impl`) would produce a broken `Invoke /cod-impl` instruction. A future enhancement could validate skill names against `batteries/skills/` at build time.
 - **Conditional skills** -- no mechanism for conditionally activating skills based on project state.
 - **Skill-scoped hooks** -- skills do not ship with their own hook definitions.
 - **Changes to verify-run sub-agent** -- verify-run continues to work as-is.
@@ -464,7 +464,7 @@ See YAML frontmatter `phases:` above. Each phase should be 1-4 hours of focused 
 
 ### Phase 1: Step Library Infrastructure (3-4 hours)
 
-Create `batteries/steps.yaml` with shared step definitions. Add Zod schemas for step definitions and $ref/vars fields. Implement `loadStepLibrary()` and `resolveStepRef()`. Wire $ref resolution into `buildPhaseTasks()` and `buildSpecTasks()`. Add steps.yaml to the batteries scaffold and update flows. Write unit tests for all resolution logic including error cases.
+Create `batteries/steps.yaml` with shared step definitions. Add Zod schemas for step definitions and $ref/vars fields. Implement `loadStepLibrary()` and `resolveStepRef()`. Wire $ref resolution into `buildPhaseTasks()` only (subphase patterns in `buildSpecTasks()` do NOT use $ref). Add steps.yaml to the batteries scaffold and update flows. Write unit tests for all resolution logic including error cases.
 
 ### Phase 2: Create Atomic Skills (2-3 hours)
 
@@ -617,12 +617,13 @@ export function resolveStepRef(
     }
   }
 
-  // Check for unresolved vars (only vars-pattern placeholders, not config placeholders)
+  // Check for unresolved vars declared in vars (not config placeholders like {test_command})
   if (instruction && step.vars) {
-    const unresolved = [...instruction.matchAll(/\{(\w+)\}/g)]
-      .map(m => m[1])
-      .filter(k => step.vars![k] === undefined)
-    // Only fail on vars that were expected to be provided (not config placeholders like {test_command})
+    const declaredKeys = Object.keys(step.vars)
+    const unresolved = declaredKeys.filter(k => instruction!.includes(`{${k}}`))
+    if (unresolved.length > 0) {
+      throw new Error(`Step "${stepId}" references $ref "${step.$ref}" with unresolved variables: ${unresolved.map(k => `{${k}}`).join(', ')}`)
+    }
   }
 
   return { instruction, title, gate }
@@ -637,7 +638,7 @@ const library = loadStepLibrary(projectRoot)
 
 // In the step loop, before building finalInstruction:
 const resolved = resolveStepRef(step, library, `${phase.id}:${step.id}`)
-let finalInstruction = resolved.instruction ?? step.instruction
+let finalInstruction = resolved.instruction
 // Use resolved.gate if step.gate is not set
 const effectiveGate = step.gate ?? resolved.gate
 ```
@@ -665,7 +666,7 @@ export const phaseStepSchema = z.object({
 - The `skill` field on steps and subphase patterns already exists in the current schema and task-factory. The current `## Skill\nInvoke /{skill} before starting this task.` prepend logic does not change -- it continues to work with the new skill names.
 - The existing `skillHintSchema` (hints: [{ skill: "name" }]) is a separate concept from the top-level `skill:` field. Both can coexist. The top-level field is for the primary methodology; hint skills are for secondary references.
 - When deleting old skills from `batteries/skills/`, ensure sub-prompt `.md` files are moved to their new home before deletion. For example, `batteries/skills/implementation/implementer-prompt.md` must be copied to `batteries/skills/code-impl/implementer-prompt.md` before deleting the `implementation/` directory.
-- The `mode_skill` field currently exists on `templateYamlSchema` and is used by `enter.ts`. Removing it is a breaking change for any project template that declares `mode_skill`. The schema should accept but ignore the field during a transition period, or templates should be converted atomically in the same commit.
+- The `mode_skill` field currently exists on `templateYamlSchema` and is used by `enter.ts`. Removing it is a breaking change for any project template that declares `mode_skill`. Since this is a big-bang migration, remove the field from the schema and convert all templates atomically in the same commit. No transition period needed.
 
 ### Reference Docs
 
