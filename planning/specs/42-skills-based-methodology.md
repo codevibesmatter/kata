@@ -20,8 +20,8 @@ phases:
       - "Update buildPhaseTasks() in task-factory.ts to call resolveStepRef() before building task instruction"
       - "Confirm buildSpecTasks() does NOT use $ref (subphase patterns stay as-is)"
       - "Fail kata enter with clear error when $ref references unresolved vars or missing step IDs"
-      - "Update scaffold-batteries.ts to copy steps.yaml to .kata/steps.yaml"
-      - "Update update.ts to refresh .kata/steps.yaml from batteries/steps.yaml"
+      - "Update setup.ts to copy steps.yaml to .kata/steps.yaml (unified setup handles init + update)"
+      - "Merge update.ts logic into setup.ts, remove update.ts and batteries command"
     test_cases:
       - id: "steps-yaml-schema"
         description: "stepLibrarySchema validates a steps.yaml with instruction, title, and gate fields"
@@ -39,8 +39,11 @@ phases:
         description: "buildPhaseTasks() with a step containing $ref produces correct native task instruction"
         type: integration
       - id: "steps-yaml-scaffolded"
-        description: "kata batteries --update copies steps.yaml to .kata/steps.yaml"
+        description: "kata setup copies steps.yaml to .kata/steps.yaml"
         type: smoke
+      - id: "unified-setup"
+        description: "kata setup handles both init and update (no separate batteries command)"
+        type: integration
   - id: p2
     name: "Create Atomic Skills"
     tasks:
@@ -248,18 +251,18 @@ Note: `subphasePatternSchema` does NOT get `$ref`/`vars` fields. Subphase patter
 
 ---
 
-### B3: Steps.yaml Scaffolded by Batteries
+### B3: Steps.yaml Scaffolded by Setup
 
 **Core:**
 - **ID:** steps-yaml-scaffolded
-- **Trigger:** User runs `kata batteries --update` or `kata setup --batteries`
-- **Expected:** `batteries/steps.yaml` is copied to `.kata/steps.yaml` in the project. On first run, the file is created. On subsequent runs, the file is updated if the project copy differs from batteries (same skip-if-customized logic as templates). The `update.ts` module handles version comparison and copy.
-- **Verify:** Run `kata batteries --update --cwd=/tmp/test-project`. Confirm `.kata/steps.yaml` exists and matches `batteries/steps.yaml`. Run again after editing `.kata/steps.yaml` and confirm it reports "customized -- update manually".
-- **Source:** `src/commands/scaffold-batteries.ts:130-142` (add steps.yaml handling), `src/commands/update.ts:42-68` (add steps.yaml to update loop)
+- **Trigger:** User runs `kata setup` (first run or subsequent)
+- **Expected:** `batteries/steps.yaml` is copied to `.kata/steps.yaml` in the project. On first run, the file is created. On subsequent runs, the file is updated if the project copy matches the previously installed version (same skip-if-customized logic as templates). If the project copy has been customized, setup reports "customized -- update manually" and skips.
+- **Verify:** Run `kata setup --cwd=/tmp/test-project`. Confirm `.kata/steps.yaml` exists and matches `batteries/steps.yaml`. Run again after editing `.kata/steps.yaml` and confirm it reports "customized -- update manually".
+- **Source:** `src/commands/setup.ts` (unified setup handles init + update for templates, skills, steps.yaml)
 
 #### UI Layer
 
-`kata batteries --update` output includes:
+`kata setup` output includes:
 ```
   + steps.yaml (new)
 ```
@@ -274,7 +277,16 @@ N/A.
 
 #### Data Layer
 
-New file `.kata/steps.yaml` in project runtime data layout. `BatteriesResult` interface in `scaffold-batteries.ts` gains a `stepsFile: boolean` field.
+New file `.kata/steps.yaml` in project runtime data layout.
+
+### B3a: Unified Setup Command
+
+**Core:**
+- **ID:** unified-setup
+- **Trigger:** User runs `kata setup` in a project (whether fresh or already configured)
+- **Expected:** `kata setup` is the single command for both initial configuration and updates. On first run, it creates `.kata/kata.yaml`, scaffolds templates to `.kata/templates/`, skills to `.claude/skills/`, and `steps.yaml` to `.kata/steps.yaml`. On subsequent runs, it detects already-configured state and updates any files that differ from the batteries version (skipping customized files). The separate `kata batteries --update` command is removed. The `update.ts` module is merged into `setup.ts`. The `--batteries` flag is removed (batteries are always included).
+- **Verify:** `kata setup --cwd=/tmp/fresh-project` creates all files. `kata setup --cwd=/tmp/existing-project` updates changed files and reports skipped customized files. `kata batteries` returns "unknown command".
+- **Source:** `src/commands/setup.ts` (gains update logic from `update.ts`), `src/commands/update.ts` (deleted), `src/index.ts` (remove batteries/update command registration)
 
 ---
 
@@ -282,7 +294,7 @@ New file `.kata/steps.yaml` in project runtime data layout. `BatteriesResult` in
 
 **Core:**
 - **ID:** atomic-skills
-- **Trigger:** Developer runs `kata batteries --update` or `kata setup`, which copies skill files from `batteries/skills/` to `.claude/skills/`
+- **Trigger:** Developer runs `kata setup`, which copies skill files from `batteries/skills/` to `.claude/skills/`
 - **Expected:** 8 skill directories exist under `batteries/skills/`, each with a `SKILL.md` containing valid YAML frontmatter (`name`, `description`). The 8 skills are: `code-impl`, `test-protocol`, `interview`, `code-review`, `spec-review`, `debug-methodology`, `spec-writing`, `vp-execution`. Three agent skills (`code-review`, `spec-review`, `spec-writing`) declare `context: fork` in frontmatter. The 7 old mode-mirroring skills (`planning`, `implementation`, `task`, `debugging`, `research`, `freeform`, `verification`) and the `tdd` skill are deleted from `batteries/skills/`. Existing sub-prompt files (e.g., `implementer-prompt.md`, `tracer-prompt.md`) are moved into the appropriate new skill directories. Note: `code-review` and `interview` already exist — these are updated in place (not created from scratch), retaining their sub-prompt files.
 - **Verify:** `ls batteries/skills/*/SKILL.md | wc -l` returns 8. `grep "context: fork" batteries/skills/code-review/SKILL.md` returns a match. `test ! -d batteries/skills/planning` succeeds.
 - **Source:** `batteries/skills/` directory (delete old, create new)
@@ -359,7 +371,7 @@ The JSON output from `kata enter` no longer includes `mode_skill` field.
 
 **Core:**
 - **ID:** templates-thinned
-- **Trigger:** `kata batteries --update` copies updated templates to `.kata/templates/`
+- **Trigger:** `kata setup` copies updated templates to `.kata/templates/`
 - **Expected:** All 7 batteries mode templates (task, implementation, planning, debug, research, verify, freeform) are rewritten as thin YAML skeletons. Setup and close ceremony steps use `$ref: step-id` to pull instructions from steps.yaml. Core work steps declare `skill: skill-name` for methodology. Templates have no markdown body below the closing `---`. Template sizes drop from 170-680 lines to approximately 30-80 lines. Expansion patterns (spec phases in implementation, VP steps in verify, interviews in planning) are preserved using the existing `container` + `subphase_pattern` mechanism. Phase ordering, dependencies, gates, and labels remain in the template.
 - **Verify:** For each template, confirm: (1) `mode_skill` is absent, (2) at least one step has `$ref`, (3) at least one step has `skill`, (4) content after the closing `---` is empty, (5) template parses against `templateYamlSchema`.
 - **Source:** `batteries/templates/task.md`, `batteries/templates/implementation.md`, `batteries/templates/planning.md`, `batteries/templates/debug.md`, `batteries/templates/research.md`, `batteries/templates/verify.md`, `batteries/templates/freeform.md`
@@ -457,7 +469,7 @@ Explicitly out of scope for this feature:
 - **System template conversion** -- `templates/onboard.md` and `templates/SESSION-TEMPLATE.template.md` are not converted.
 - **Subphase patterns using $ref** -- subphase patterns are already parameterized via title_template/todo_template/instruction; they do not use $ref for the outer pattern structure (only for individual steps within them if applicable).
 - **Skill version tracking** -- no separate version tracking for skills vs templates.
-- **Deprecating kata batteries** -- `kata batteries --update` remains the update command; it gains steps.yaml handling.
+- **Separate batteries/update commands** -- `kata batteries --update` and `kata update` are removed. `kata setup` is the unified command for both init and update.
 
 ## Implementation Phases
 
@@ -465,7 +477,7 @@ See YAML frontmatter `phases:` above. Each phase should be 1-4 hours of focused 
 
 ### Phase 1: Step Library Infrastructure (3-4 hours)
 
-Create `batteries/steps.yaml` with shared step definitions. Add Zod schemas for step definitions and $ref/vars fields. Implement `loadStepLibrary()` and `resolveStepRef()`. Wire $ref resolution into `buildPhaseTasks()` only (subphase patterns in `buildSpecTasks()` do NOT use $ref). Add steps.yaml to the batteries scaffold and update flows. Write unit tests for all resolution logic including error cases.
+Create `batteries/steps.yaml` with shared step definitions. Add Zod schemas for step definitions and $ref/vars fields. Implement `loadStepLibrary()` and `resolveStepRef()`. Wire $ref resolution into `buildPhaseTasks()` only (subphase patterns in `buildSpecTasks()` do NOT use $ref). Add steps.yaml to setup (unified init+update). Write unit tests for all resolution logic including error cases.
 
 ### Phase 2: Create Atomic Skills (2-3 hours)
 
@@ -568,8 +580,7 @@ No new npm dependencies. Steps.yaml is parsed with js-yaml (already a dependency
 | `src/validation/schemas.ts` | `phaseStepSchema`, `subphasePatternSchema`, `templateYamlSchema`, `gateSchema` | Adding `$ref`, `vars` fields; adding `stepDefinitionSchema` |
 | `src/commands/enter/step-library.ts` | `loadStepLibrary`, `resolveStepRef` | New module for step library loading and $ref resolution |
 | `src/commands/enter/task-factory.ts` | `buildPhaseTasks`, `buildSpecTasks` | Wiring $ref resolution before task instruction assembly |
-| `src/commands/scaffold-batteries.ts` | `scaffoldBatteries` | Adding steps.yaml to scaffold flow |
-| `src/commands/update.ts` | `update` | Adding steps.yaml to update flow |
+| `src/commands/setup.ts` | `setup` | Unified init+update: templates, skills, steps.yaml |
 | `src/session/lookup.ts` | `getPackageRoot`, `findProjectDir` | Resolving batteries/steps.yaml source and .kata/steps.yaml dest |
 | `js-yaml` | `load` | Parsing steps.yaml |
 
