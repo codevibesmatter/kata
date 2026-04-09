@@ -4,7 +4,7 @@ type: project
 issue_type: feature
 status: approved
 priority: high
-github_issue: 42
+github_issue: 45
 created: 2026-04-06
 updated: 2026-04-08
 approved: 2026-04-08
@@ -125,7 +125,7 @@ phases:
 
 # Skills-Based Methodology Injection in Mode Templates
 
-> GitHub Issue: [#42](https://github.com/codevibesmatter/kata-wm/issues/42)
+> GitHub Issue: [#45](https://github.com/codevibesmatter/kata/issues/45)
 
 ## Overview
 
