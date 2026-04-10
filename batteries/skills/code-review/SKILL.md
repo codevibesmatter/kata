@@ -1,6 +1,6 @@
 ---
-name: code-review
-description: "Use when reviewing code changes. Check diff against spec, verify correctness, and report issues with file:line references."
+description: "Code review methodology — check diff against spec, verify correctness, report issues with file:line references."
+context: fork
 ---
 
 # Code Review Methodology

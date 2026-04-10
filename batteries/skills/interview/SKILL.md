@@ -1,6 +1,6 @@
 ---
-name: interview
-description: "Use when gathering requirements from the user. Structured interview methodology for feature planning."
+description: "Structured interview methodology — ask one question at a time, listen for implicit requirements, confirm understanding."
+context: inline
 ---
 
 # Interview Methodology
