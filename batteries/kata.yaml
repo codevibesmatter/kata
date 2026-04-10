@@ -17,8 +17,8 @@ session_retention_days: 7
 #   code_reviewer: null
 
 # Global rules — injected into every mode's context
-# global_rules:
-#   - "Your project-wide rule here"
+global_rules:
+  - "When a task instruction says 'Invoke /skill-name', use the Skill tool to invoke that skill before starting work on the task."
 
 # Task system rules — injected when mode has phases (tasks)
 # Override to customize; remove to disable

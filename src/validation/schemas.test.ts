@@ -214,26 +214,14 @@ describe('skill fields (issue #42)', () => {
     }
   })
 
-  it('templateYamlSchema accepts optional mode_skill field', () => {
+  it('templateYamlSchema does not include mode_skill field', () => {
     const result = templateYamlSchema.safeParse({
       id: 'task',
       mode: 'task',
-      mode_skill: 'task',
     })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.mode_skill).toBe('task')
-    }
-  })
-
-  it('templateYamlSchema parses without mode_skill (backwards compat)', () => {
-    const result = templateYamlSchema.safeParse({
-      id: 'freeform',
-      mode: 'freeform',
-    })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.mode_skill).toBeUndefined()
+      expect('mode_skill' in result.data).toBe(false)
     }
   })
 })

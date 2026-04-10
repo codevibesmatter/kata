@@ -1,13 +1,10 @@
 ---
 id: freeform
 name: Freeform Mode
-description: Quick questions and discussion without heavy structure
+description: Quick questions and discussion — no phases
 mode: freeform
-mode_skill: freeform
 
-# Zero phases - free exploration
 phases: []
 
-# No stop hook enforcement during exploration
-stop_hook: false
+workflow_id_format: "FF-{session_last_4}-{MMDD}"
 ---

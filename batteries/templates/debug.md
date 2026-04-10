@@ -1,286 +1,57 @@
 ---
 id: debug
 name: Debug Mode
-description: Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix
+description: Systematic hypothesis-driven debugging
 mode: debug
-mode_skill: debugging
-aliases: [investigate]
 
 phases:
   - id: p0
     name: Reproduce & Map
+    stage: setup
     task_config:
-      title: "P0: Reproduce - capture evidence, map affected system"
-      labels: [phase, phase-0, reproduce]
+      title: "P0: Setup - reproduce and map the bug"
+      labels: [phase, setup]
     steps:
-      - id: reproduce-bug
-        title: "Reproduce the bug and find related issue"
-        skill: debugging
-        hints:
-          - bash: "gh issue list --search \"{bug_keywords}\" --state open --limit 5"
-          - bash: "git log --oneline --since=\"2 weeks ago\""
+      - id: env-check
+        $ref: env-check
+        title: "Verify environment"
+      - id: reproduce
+        title: "Reproduce the bug"
+        skill: debug-methodology
         instruction: |
-          **First, identify related GitHub issue and recent work:**
-
-          Extract keywords from the bug description, then search:
-          ```bash
-          # Search for related open issues
-          gh issue list --search "{bug keywords}" --state open --limit 5
-
-          # Search recently closed issues (regressions from recent work)
-          gh issue list --search "{bug keywords}" --state closed --limit 5
-
-          # Check recent commits in the affected area
-          git log --oneline --since="2 weeks ago" -- {affected paths if known}
-          ```
-
-          If an issue is found, note the issue number for use throughout this session.
-          If no issue exists and the bug warrants tracking, create one:
-          ```bash
-          gh issue create --title "bug: {short description}" --label "bug"
-          ```
-
-          **Then capture evidence BEFORE reading code:**
-
-          1. **Exact reproduction steps** (user, environment, actions)
-          2. **Error messages** — copy verbatim
-          3. **Stack traces** — copy in full
-          4. **Unexpected vs expected** — write both explicitly
-
-          Check logs if available:
-          ```bash
-          # Check application logs
-          # Check browser console
-          # Check network requests
-          ```
-
-          If it can't be reproduced: document the conditions and investigate
-          the code path anyway using the reported error as the starting point.
-
-          If issue found/created, claim it:
-          ```bash
-          gh issue edit {N} --remove-label "status:todo" --add-label "status:in-progress"
-          gh issue comment {N} --body "Reproduced: {steps}
-          Error: {error message}"
-          ```
-
-          Then: Mark this task completed via TaskUpdate
-
-      - id: map-system
-        title: "Map affected system BEFORE reading code"
-        instruction: |
-          **STOP. Do NOT read code yet.**
-
-          Draw the system map for this bug:
-
-          1. **Which layers are involved?**
-             - Data layer (database, schema)
-             - API layer (endpoints, services)
-             - Frontend layer (components, state)
-             - Infrastructure (background jobs, queues)
-
-          2. **What's the data flow?**
-             ```
-             [Trigger] → [Component/Handler] → [Service] → [Data Store]
-             ```
-             Fill in specifics for THIS bug.
-
-          3. **Where could the failure originate?**
-             - Data layer (wrong/missing data)
-             - API layer (wrong response, unhandled error)
-             - Frontend layer (wrong rendering, stale state)
-
-          Write your system map before proceeding.
-          Then: Mark this task completed via TaskUpdate
-
-      - id: classify-bug
-        title: "Classify bug type"
-        instruction: |
-          Determine the bug type:
-
-          | Type | Symptoms |
-          |------|----------|
-          | Data bug | Wrong values, missing data, stale data |
-          | Logic bug | Wrong calculation, wrong condition, off-by-one |
-          | State bug | Works once but not twice, stale UI |
-          | Async bug | Race condition, timing-dependent |
-          | Config bug | Wrong env var, missing setting |
-          | Integration bug | External API, schema mismatch |
-
-          Your classification: **{type}**
-          Reason: {why}
-
-          Then: Mark this task completed via TaskUpdate
+          Get clear reproduction steps. Confirm the bug exists.
+          Document: trigger, actual behavior, expected behavior.
 
   - id: p1
     name: Investigate
+    stage: work
     task_config:
-      title: "P1: Investigate - form hypotheses, trace code path"
-      labels: [phase, phase-1, investigate]
+      title: "P1: Work - investigate and fix"
       depends_on: [p0]
     steps:
-      - id: form-hypotheses
-        title: "Form 3 hypotheses (not just 1)"
-        skill: debugging
-        instruction: |
-          List 3 possible root causes (ranked by likelihood):
-
-          1. **Most likely:** {hypothesis} — because {reason}
-          2. **Plausible:** {hypothesis} — because {reason}
-          3. **Unlikely but worth checking:** {hypothesis}
-
-          Start investigating hypothesis #1 first.
-          Then: Mark this task completed via TaskUpdate
-
-      - id: trace-code-path
-        title: "Trace the code path"
-        skill: debugging
-        hints:
-          - search: "error handling"
-            glob: "src/**/*.ts"
-          - read: "{entry_point}"
-        instruction: |
-          Spawn a debug-focused agent to trace the execution:
-
-          Task(subagent_type="Explore", prompt="
-            Trace the code path for this bug:
-            Symptom: {exact error or behavior}
-            Hypothesis: {your #1 hypothesis}
-
-            Start from: {entry point — API route, UI event, job trigger}
-            Follow the path through all layers.
-            Find: where actual behavior diverges from expected.
-            Read all relevant files IN FULL.
-            Document: file:line of the likely cause.
-          ")
-
-          TaskOutput(task_id=..., block=true)
-
-          Review agent findings. Does it confirm hypothesis #1?
-          If no, investigate hypothesis #2.
-          Then: Mark this task completed via TaskUpdate
-
-      - id: confirm-root-cause
-        title: "Confirm root cause"
-        instruction: |
-          Once the cause is identified:
-
-          **Root cause:** {file:line} — {description}
-
-          **Why it causes the bug:**
-          {explanation of the causal chain}
-
-          **Scope check:**
-          - Could this affect other code paths? {yes/no, where}
-          - Is there a related bug nearby? {yes/no}
-
-          Update GitHub issue with root cause finding:
-          ```bash
-          gh issue comment {N} --body "Root cause found: {file}:{line}
-          {explanation}"
-          ```
-
-          Then: Mark this task completed via TaskUpdate
-
-  - id: p2
-    name: Fix
-    task_config:
-      title: "P2: Fix - minimal targeted fix, no scope creep"
-      labels: [phase, phase-2, fix]
-      depends_on: [p1]
-    steps:
-      - id: implement-fix
+      - id: hypothesize
+        title: "Form and test hypotheses"
+        skill: debug-methodology
+      - id: fix
         title: "Implement minimal fix"
-        instruction: |
-          Fix the root cause with the minimum change needed:
-          - Fix the specific bug
-          - Don't refactor surrounding code
-          - Don't add unrelated improvements
-          - If the fix is > 50 lines, question if it's really minimal
-
-          After making the fix:
-          ```bash
-          git diff  # Review the change
-          ```
-
-          Then: Mark this task completed via TaskUpdate
-
-      - id: add-regression-guard
-        title: "Add test or assertion to prevent regression"
-        instruction: |
-          If your project has tests:
-          - Add a test case that reproduces the bug
-          - Verify the test FAILS without the fix
-          - Verify the test PASSES with the fix
-
-          If no test infrastructure, add a code comment explaining the invariant.
-
-          Then: Mark this task completed via TaskUpdate
-
-  - id: p3
-    name: Verify
-    task_config:
-      title: "P3: Verify - confirm fix, check regressions, commit"
-      labels: [phase, phase-3, verify]
-      depends_on: [p2]
-    steps:
+        skill: code-impl
       - id: verify-fix
-        title: "Verify fix resolves the original bug"
+        title: "Verify fix"
+        skill: test-protocol
         gate:
           bash: "{test_command}"
           expect_exit: 0
-          on_fail: "Tests failing after fix. Address before proceeding."
-        instruction: |
-          Reproduce the original issue using your P0 steps.
-          Confirm it no longer occurs.
 
-          Run the test suite:
-          ```bash
-          # Run your project's tests
-          # Run typecheck
-          # Run lint
-          ```
+  - id: p2
+    name: Close
+    stage: close
+    task_config:
+      title: "P2: Close - commit and push"
+      depends_on: [p1]
+    steps:
+      - id: commit-push
+        $ref: commit-push
+        title: "Commit and push"
 
-          Document: confirmed fixed ✓
-          Then: Mark this task completed via TaskUpdate
-
-      - id: regression-check
-        title: "Check for regressions"
-        instruction: |
-          Review the diff one more time:
-          ```bash
-          git diff HEAD
-          ```
-
-          Check: does the fix affect any other code paths?
-          If yes, test those paths manually.
-
-          Then: Mark this task completed via TaskUpdate
-
-      - id: commit-and-close
-        title: "Commit fix and close issue"
-        instruction: |
-          Commit:
-          ```bash
-          git add {changed files}
-          git commit -m "fix({scope}): {description}
-
-          Root cause: {file}:{line} — {explanation}
-          {If issue: Fixes #N}"
-          git push
-          ```
-
-          Close GitHub issue:
-          ```bash
-          gh issue edit {N} --remove-label "status:in-progress" --add-label "status:done"
-          gh issue close {N} --comment "Fixed in {commit-sha}.
-          Root cause: {explanation}
-          Fix: {what changed}"
-          ```
-
-          Then: Mark this task completed via TaskUpdate
-
-global_conditions:
-  - changes_committed
-  - changes_pushed
+workflow_id_format: "DB-{session_last_4}-{MMDD}"
 ---
