@@ -28,6 +28,7 @@ export const KataModeConfigSchema = z.object({
   workflow_prefix: z.string().optional(),
   name: z.string().optional(),
   description: z.string().optional(),
+  rules: z.array(z.string()).optional(),
   deprecated: z.boolean().optional(),
   redirect_to: z.string().optional(),
 })

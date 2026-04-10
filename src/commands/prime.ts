@@ -153,6 +153,16 @@ async function buildContextBlock(sessionId: string): Promise<string> {
           const kataConfig = loadKataConfig()
 
           const ruleParts: string[] = []
+
+          // Mode-specific rules (orchestration context)
+          const modeConfig = state.currentMode ? kataConfig.modes[state.currentMode] : undefined
+          if (modeConfig?.rules?.length) {
+            ruleParts.push('## Mode Rules')
+            for (const rule of modeConfig.rules) {
+              ruleParts.push(`- ${rule}`)
+            }
+          }
+
           if (kataConfig.global_rules.length > 0) {
             ruleParts.push('## Global Rules')
             for (const rule of kataConfig.global_rules) {
