@@ -158,8 +158,8 @@ Mode templates currently have ad-hoc phase structures — task has 3 phases, imp
 **Core:**
 - **ID:** stage-field
 - **Trigger:** Template YAML is parsed and validated by `parseAndValidateTemplatePhases()`
-- **Expected:** Every phase in a template must declare `stage: "setup" | "work" | "close"`. The field is required on `phaseSchema`. Phases are grouped by stage but retain their own IDs and names (e.g., `p0: "Reproduce & Map"` with `stage: setup`, `p1: "Investigate"` with `stage: work`). Stages must appear in order: all setup phases before work phases, all work phases before close phases. Validation fails if phases are out of stage order. Not every stage is required — a template may have only `work` + `close`, or only `work`. Templates with `phases: []` (e.g., freeform) skip stage ordering validation entirely. Skills (the `skill:` field on steps) are allowed in any stage — setup phases may reference methodology skills (e.g., debug-methodology for "reproduce bug" in setup).
-- **Verify:** Unit test: parse a template with stages in correct order — passes. Parse one with `close` before `work` — fails with ordering error. Parse one with `phases: []` — passes (no validation needed).
+- **Expected:** Every phase in a template must declare `stage: "setup" | "work" | "close"`. The field is required on `phaseSchema`. Phases are grouped by stage but retain their own IDs and names (e.g., `p0: "Reproduce & Map"` with `stage: setup`, `p1: "Investigate"` with `stage: work`). Stages must appear in order: all setup phases before work phases, all work phases before close phases. Validation fails if phases are out of stage order. Not every stage is required — a template may have only `work` + `close`, or only `work`. Templates with `phases: []` (e.g., freeform) skip stage ordering validation entirely. **Work phases must have at least one step with a `skill:` field** — this is the "work = methodology" invariant. Skills live exclusively on steps (not on phases, subphase_patterns, or agent_protocol). The `skill:` field on steps produces `Invoke /skill-name` in the task instruction regardless of whether the task was created from a template step, spec expansion, or agent TaskCreate. Setup and close phases may have steps with skills too (not enforced, not prohibited), but work phases MUST.
+- **Verify:** Unit test: parse a template with stages in correct order — passes. Parse one with `close` before `work` — fails with ordering error. Parse one with `phases: []` — passes (no validation needed). Parse a work phase with no skill on any step — fails validation.
 - **Source:** `src/validation/schemas.ts` (phaseSchema), `src/commands/enter/template.ts` (validation)
 
 #### UI Layer
@@ -302,7 +302,7 @@ Native task instruction for an agent-expanded phase includes:
 ## Agent Expansion Protocol
 You own this phase. Create child tasks using TaskCreate for each unit of work.
 Constraints: max 10 tasks, labels: [vp-step].
-Default skill: /vp-execution
+Each task you create must invoke /vp-execution before starting work.
 ```
 
 #### API Layer
@@ -315,9 +315,10 @@ N/A.
 export const agentProtocolSchema = z.object({
   max_tasks: z.number().int().positive().default(10),
   require_labels: z.array(z.string()).optional(),
-  skill: z.string().optional(),
 })
 ```
+
+Note: `skill` is NOT on the agent_protocol. Skills live on steps — the agent expansion instruction tells the agent which skill to invoke on each created task, but the skill reference comes from the step that triggers expansion (e.g., the `expand-vp` step has `skill: vp-execution`).
 
 ---
 
@@ -484,17 +485,18 @@ Example agent-expanded template (verify.md work phase):
     agent_protocol:
       max_tasks: 20
       require_labels: [vp-step]
-      skill: vp-execution
     task_config:
       title: "P1: Work - execute verification plan"
       depends_on: [p0]
     steps:
       - id: expand-vp
         title: "Create tasks for each VP step"
+        skill: vp-execution
         instruction: |
           Read the verification plan from the spec.
           Use TaskCreate to create one task per VP step.
           Each task must have labels: [vp-step].
+          Invoke /vp-execution before executing each VP step.
 
   - id: p2
     name: Fix Loop
@@ -503,16 +505,16 @@ Example agent-expanded template (verify.md work phase):
     agent_protocol:
       max_tasks: 10
       require_labels: [fix]
-      skill: code-impl
     task_config:
       title: "P2: Work - fix failing VP steps"
       depends_on: [p1]
     steps:
       - id: fix-failures
         title: "Fix and re-verify failing steps"
+        skill: code-impl
         instruction: |
           For each failed VP step, create a fix task.
-          Re-run the VP step after fixing. Iterate until pass.
+          Invoke /code-impl for fixes. Re-run the VP step after fixing.
 ```
 
 ---
