@@ -669,7 +669,7 @@ function findGateForTask(
     // Try subphase pattern gate (e.g., p2.1:test -> id_suffix "test")
     for (const phase of template.phases) {
       if (
-        (phase as Record<string, unknown>).container &&
+        (phase as Record<string, unknown>).expansion === 'spec' &&
         (phase as Record<string, unknown>).subphase_pattern &&
         Array.isArray((phase as Record<string, unknown>).subphase_pattern)
       ) {

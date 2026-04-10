@@ -71,6 +71,14 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
     return null
   }
 
+  // Validate work phases have a skill (phase-level or on at least one step)
+  const skillError = validateWorkPhaseSkills(mapped as PhaseDefinition[])
+  if (skillError) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(skillError)
+    return null
+  }
+
   return mapped as PhaseDefinition[]
 }
 
@@ -88,6 +96,21 @@ function validateStageOrdering(phases: PhaseDefinition[]): string | null {
       return `Phase "${phase.id}" has stage "${phase.stage}" but follows a later stage. Stages must be in order: setup → work → close.`
     }
     maxSeen = Math.max(maxSeen, order)
+  }
+  return null
+}
+
+/**
+ * Validate that every work-stage phase has a skill — either at the phase level
+ * or on at least one step. This is the "work = methodology" invariant.
+ * Returns an error string if validation fails, null if valid.
+ */
+function validateWorkPhaseSkills(phases: PhaseDefinition[]): string | null {
+  for (const phase of phases) {
+    if (phase.stage !== 'work') continue
+    if (phase.skill) continue // Phase-level skill
+    if (phase.steps?.some(s => s.skill)) continue // Step-level skill
+    return `Work phase "${phase.id}" has no skill. Every work phase must have a skill either at the phase level or on at least one step.`
   }
   return null
 }
