@@ -235,6 +235,25 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     backupRoot ? join(backupRoot, 'interviews') : undefined,
   )
 
+  // steps.yaml → .kata/steps.yaml (shared step definitions for $ref)
+  const stepsYamlSrc = join(batteryRoot, 'steps.yaml')
+  const stepsYamlDest = join(projectRoot, '.kata', 'steps.yaml')
+  if (existsSync(stepsYamlSrc)) {
+    if (existsSync(stepsYamlDest)) {
+      if (update) {
+        if (backupRoot) backupFile(stepsYamlDest, backupRoot, 'steps.yaml')
+        copyFileSync(stepsYamlSrc, stepsYamlDest)
+        result.updated.push('steps.yaml')
+      } else {
+        result.skipped.push('steps.yaml')
+      }
+    } else {
+      mkdirSync(join(stepsYamlDest, '..'), { recursive: true })
+      copyFileSync(stepsYamlSrc, stepsYamlDest)
+      result.kataConfig.push('steps.yaml')
+    }
+  }
+
   // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')
   const vtDest = getProjectVerificationToolsPath(projectRoot)

@@ -373,6 +373,13 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     }
   }
 
+  // Copy steps.yaml from batteries (shared step definitions for $ref)
+  const stepsYamlSrc = join(getPackageRoot(), 'batteries', 'steps.yaml')
+  const stepsYamlDest = join(projectRoot, '.kata', 'steps.yaml')
+  if (existsSync(stepsYamlSrc) && !existsSync(stepsYamlDest)) {
+    copyFileSync(stepsYamlSrc, stepsYamlDest)
+  }
+
   // Copy skills from batteries (two-level: skills/<name>/SKILL.md)
   const skillsSrc = join(getPackageRoot(), 'batteries', 'skills')
   if (existsSync(skillsSrc)) {

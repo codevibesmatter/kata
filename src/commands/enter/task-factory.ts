@@ -6,6 +6,7 @@ import { resolveTemplatePath } from '../../session/lookup.js'
 import type { AgentProtocol, Hint, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
 import { resolvePlaceholders } from './placeholder.js'
+import { loadStepLibrary, resolveStepRef } from './step-library.js'
 import { parseTemplateYaml } from './template.js'
 
 export interface Task {
@@ -241,6 +242,8 @@ export function buildPhaseTasks(
     return []
   }
 
+  const stepLibrary = loadStepLibrary()
+
   const tasks: Task[] = []
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -265,10 +268,19 @@ export function buildPhaseTasks(
 
       for (let i = 0; i < phase.steps.length; i++) {
         const step = phase.steps[i]
-        const taskId = `${phase.id}:${step.id}`
+
+        // Resolve $ref step references against the step library
+        let resolvedStep = step
+        if (step['$ref']) {
+          const resolved = resolveStepRef(step['$ref'], step, stepLibrary)
+          resolvedStep = { ...step, ...resolved }
+        }
+
+        const taskId = `${phase.id}:${resolvedStep.id}`
+        const stepTitle = resolvedStep.title ?? resolvedStep.id
         const resolvedStepTitle = reviewers
-          ? step.title.replace(/{reviewers}/g, reviewers)
-          : step.title
+          ? stepTitle.replace(/{reviewers}/g, reviewers)
+          : stepTitle
         const title = issueNum
           ? `GH#${issueNum}: ${phase.id.toUpperCase()}: ${resolvedStepTitle}`
           : `${workflowId}: ${phase.name}: ${resolvedStepTitle}`
@@ -283,18 +295,18 @@ export function buildPhaseTasks(
         }
 
         let finalInstruction: string | undefined =
-          reviewers && step.instruction
-            ? step.instruction.replace(/{reviewers}/g, reviewers)
-            : step.instruction
+          reviewers && resolvedStep.instruction
+            ? resolvedStep.instruction.replace(/{reviewers}/g, reviewers)
+            : resolvedStep.instruction
 
         // Skill activation section (prepended before instruction)
-        if (step.skill) {
-          const skillSection = `## Skill\nInvoke /${step.skill} before starting this task.\n`
+        if (resolvedStep.skill) {
+          const skillSection = `## Skill\nInvoke /${resolvedStep.skill} before starting this task.\n`
           finalInstruction = skillSection + '\n' + (finalInstruction ?? '')
         }
 
-        if (step.hints?.length) {
-          const hintsBlock = renderHints(step.hints)
+        if (resolvedStep.hints?.length) {
+          const hintsBlock = renderHints(resolvedStep.hints)
           finalInstruction = (finalInstruction ?? '') + '\n\n' + hintsBlock
         }
 

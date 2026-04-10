@@ -103,9 +103,11 @@ export const hintSchema = z.union([
  */
 export const phaseStepSchema = z.object({
   id: z.string().min(1, 'Step ID cannot be empty'),
-  title: z.string().min(1, 'Step title cannot be empty'),
+  title: z.string().optional(),
   instruction: z.string().optional(),
   skill: z.string().optional(),
+  '$ref': z.string().optional(),
+  vars: z.record(z.string(), z.string()).optional(),
   agent: agentStepConfigSchema.optional(),
   gate: gateSchema.optional(),
   hints: z.array(hintSchema).optional(),
@@ -190,7 +192,25 @@ export const evidenceTypeSchema = z.object({
  */
 export const evidenceTypesSchema = z.record(z.string(), evidenceTypeSchema)
 
+/**
+ * Schema for a step definition in steps.yaml (shared step library)
+ */
+export const stepDefinitionSchema = z.object({
+  title: z.string().min(1),
+  instruction: z.string().optional(),
+  skill: z.string().optional(),
+  gate: gateSchema.optional(),
+  hints: z.array(hintSchema).optional(),
+})
+
+/**
+ * Schema for the step library (steps.yaml): a map of step ID → definition
+ */
+export const stepLibrarySchema = z.record(z.string(), stepDefinitionSchema)
+
 // Type exports
+export type StepDefinition = z.infer<typeof stepDefinitionSchema>
+export type StepLibrary = z.infer<typeof stepLibrarySchema>
 export type AgentStepConfig = z.infer<typeof agentStepConfigSchema>
 export type AgentProtocol = z.infer<typeof agentProtocolSchema>
 export type PhaseTaskConfig = z.infer<typeof phaseTaskConfigSchema>
