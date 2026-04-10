@@ -42,26 +42,26 @@ export function buildWorkflowGuidance(
 ): WorkflowGuidance {
   const requiredTodos: RequiredTodo[] = []
 
-  // Compute container phase early to drive behavior from template structure
-  const containerPhase = templatePhases?.find((p) => p.expansion === 'spec')
-  const hasContainerPhase = containerPhase !== undefined
+  // Compute spec expansion phase early to drive behavior from template structure
+  const specExpansionPhase = templatePhases?.find((p) => p.expansion === 'spec')
+  const hasSpecExpansion = specExpansionPhase !== undefined
 
-  if (hasContainerPhase && specPhases?.length) {
-    // Container phase mode: orchestration tasks + spec tasks with P2.X numbering
+  if (hasSpecExpansion && specPhases?.length) {
+    // Spec expansion mode: orchestration tasks + spec tasks with P2.X numbering
     // Reads orchestration phase titles and subphase pattern from template
-    const containerPhaseNum = containerPhase
-      ? Number.parseInt(containerPhase.id.replace('p', ''), 10)
+    const specExpansionPhaseNum = specExpansionPhase
+      ? Number.parseInt(specExpansionPhase.id.replace('p', ''), 10)
       : 2 // Default to p2 for backwards compatibility
-    const subphasePattern = resolvedSubphasePattern ?? (Array.isArray(containerPhase?.subphase_pattern) ? containerPhase.subphase_pattern : [])
+    const subphasePattern = resolvedSubphasePattern ?? (Array.isArray(specExpansionPhase?.subphase_pattern) ? specExpansionPhase.subphase_pattern : [])
 
-    // Add orchestration phases BEFORE container (e.g., P0: Baseline, P1: Claim)
-    const beforeContainer =
+    // Add orchestration phases BEFORE expansion (e.g., P0: Baseline, P1: Claim)
+    const beforeExpansion =
       templatePhases?.filter((p) => {
         const phaseNum = Number.parseInt(p.id.replace('p', ''), 10)
-        return phaseNum < containerPhaseNum && p.task_config?.title
+        return phaseNum < specExpansionPhaseNum && p.task_config?.title
       }) ?? []
 
-    for (const phase of beforeContainer) {
+    for (const phase of beforeExpansion) {
       requiredTodos.push({
         content: phase.task_config!.title,
         status: 'pending',
@@ -74,7 +74,7 @@ export function buildWorkflowGuidance(
     for (let i = 0; i < specPhases.length; i++) {
       const phase = specPhases[i]
       const phaseNum = i + 1
-      const phaseLabel = `P${containerPhaseNum}.${phaseNum}`
+      const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
       const phaseName = phase.name || phase.id.toUpperCase()
       const taskSummary =
         phase.tasks?.length === 1
@@ -100,14 +100,14 @@ export function buildWorkflowGuidance(
       }
     }
 
-    // Add orchestration phases AFTER container (e.g., P3: Codex Gate, P4: Gemini Gate, P5: Close)
-    const afterContainer =
+    // Add orchestration phases AFTER expansion (e.g., P3: Codex Gate, P4: Gemini Gate, P5: Close)
+    const afterExpansion =
       templatePhases?.filter((p) => {
         const phaseNum = Number.parseInt(p.id.replace('p', ''), 10)
-        return phaseNum > containerPhaseNum && p.task_config?.title
+        return phaseNum > specExpansionPhaseNum && p.task_config?.title
       }) ?? []
 
-    for (const phase of afterContainer) {
+    for (const phase of afterExpansion) {
       requiredTodos.push({
         content: phase.task_config!.title,
         status: 'pending',
@@ -117,8 +117,8 @@ export function buildWorkflowGuidance(
     }
   } else if (specPhases?.length && templatePhases) {
     // Non-implementation mode with spec phases - use subphase pattern if available
-    const containerPhase = templatePhases.find((p) => p.expansion === 'spec')
-    const subphasePattern = resolvedSubphasePattern ?? (Array.isArray(containerPhase?.subphase_pattern) ? containerPhase.subphase_pattern : [])
+    const expansionPhase = templatePhases.find((p) => p.expansion === 'spec')
+    const subphasePattern = resolvedSubphasePattern ?? (Array.isArray(expansionPhase?.subphase_pattern) ? expansionPhase.subphase_pattern : [])
 
     for (const phase of specPhases) {
       const phaseLabel = phase.id.toUpperCase()

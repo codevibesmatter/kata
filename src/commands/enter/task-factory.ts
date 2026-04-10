@@ -89,7 +89,7 @@ export function parseVpSteps(vpContent: string): VpStep[] {
 
 /**
  * Build tasks from spec phases using subphase pattern (pure function, no I/O)
- * Spec phases become P2.1, P2.2, etc. (nested under container phase)
+ * Spec phases become P2.1, P2.2, etc. (nested under spec expansion phase)
  * Pattern defines what tasks to create per phase (e.g., impl → codex → gemini)
  *
  * @param specContent - Raw markdown content of the spec file. When provided,
@@ -100,7 +100,7 @@ export function buildSpecTasks(
   specPhases: SpecPhase[],
   issueNum: number,
   subphasePattern: SubphasePattern[],
-  containerPhaseNum: number = 2,
+  specExpansionPhaseNum: number = 2,
   specContent?: string,
   reviewers?: string,
   phaseSkill?: string,
@@ -114,7 +114,7 @@ export function buildSpecTasks(
     const phase = specPhases[i]
     const phaseNum = i + 1
     const phaseName = phase.name || phase.id.toUpperCase()
-    const phaseLabel = `P${containerPhaseNum}.${phaseNum}`
+    const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
 
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.error(`  ${phaseLabel}: ${phaseName}`)
@@ -132,7 +132,7 @@ export function buildSpecTasks(
           extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'Invoke /code-review' },
         })
         const fullTitle = `GH#${issueNum}: ${phaseLabel}: ${titleContent}`
-        const taskId = `p${containerPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
+        const taskId = `p${specExpansionPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
 
         const dependsOn: string[] = []
 
@@ -142,7 +142,7 @@ export function buildSpecTasks(
 
         if (phaseNum > 1 && subphasePattern.length > 0 && dependsOn.length === 0) {
           const lastPatternItem = subphasePattern[subphasePattern.length - 1]
-          const prevPhaseLastTaskId = `p${containerPhaseNum}.${phaseNum - 1}:${lastPatternItem.id_suffix}`
+          const prevPhaseLastTaskId = `p${specExpansionPhaseNum}.${phaseNum - 1}:${lastPatternItem.id_suffix}`
           dependsOn.push(prevPhaseLastTaskId)
         }
 

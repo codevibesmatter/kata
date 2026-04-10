@@ -18,7 +18,7 @@ describe('isOldFormat detection', () => {
   it('detects string subphase_pattern as old format', () => {
     const yaml = {
       phases: [
-        { id: 'p2', name: 'Implement', container: true, subphase_pattern: 'impl-test-review' },
+        { id: 'p2', name: 'Implement', stage: 'work', expansion: 'spec', subphase_pattern: 'impl-test-review' },
       ],
     }
     expect(isOldFormat(yaml)).toBe(true)
@@ -65,7 +65,8 @@ describe('isOldFormat detection', () => {
         {
           id: 'p2',
           name: 'Implement',
-          container: true,
+          stage: 'work',
+          expansion: 'spec',
           subphase_pattern: [
             {
               id_suffix: 'impl',
@@ -90,7 +91,7 @@ describe('convertTemplate', () => {
   it('converts string subphase_pattern to inline array', () => {
     const yaml = {
       phases: [
-        { id: 'p2', name: 'Implement', container: true, subphase_pattern: 'impl-test-review' },
+        { id: 'p2', name: 'Implement', stage: 'work', expansion: 'spec', subphase_pattern: 'impl-test-review' },
       ],
     }
     const result = convertTemplate(yaml)

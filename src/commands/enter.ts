@@ -400,13 +400,13 @@ export async function enter(args: string[]): Promise<void> {
   const templatePhases = modeConfig.template
     ? parseAndValidateTemplatePhases(modeConfig.template)
     : null
-  const containerPhase = templatePhases?.find((p) => p.expansion === 'spec')
-  const hasContainerPhase = containerPhase !== undefined
+  const specExpansionPhase = templatePhases?.find((p) => p.expansion === 'spec')
+  const hasSpecExpansion = specExpansionPhase !== undefined
 
   // Resolve subphase pattern: always an inline array now (string references removed)
   let resolvedSubphasePattern: SubphasePattern[] = []
-  if (hasContainerPhase && containerPhase?.subphase_pattern) {
-    resolvedSubphasePattern = containerPhase.subphase_pattern  // always array now
+  if (hasSpecExpansion && specExpansionPhase?.subphase_pattern) {
+    resolvedSubphasePattern = specExpansionPhase.subphase_pattern  // always array now
   }
 
   // Validate gate placeholders — fail early if config is missing required fields
@@ -461,11 +461,11 @@ export async function enter(args: string[]): Promise<void> {
     state.issueNumber = parsed.issue
   }
 
-  // For modes with container phases (template-driven), try to load phases from spec
-  // Container phase indicates spec phases should be inserted into template
+  // For modes with spec expansion phases (template-driven), try to load phases from spec
+  // Spec expansion phase indicates spec phases should be inserted into template
   let specPhases: SpecPhase[] | null = null
   let specPath: string | null = null
-  if (hasContainerPhase && issueNum) {
+  if (hasSpecExpansion && issueNum) {
     specPath = findSpecFile(issueNum)
     if (specPath) {
       const parseResult = parseYamlFrontmatterWithError<SpecYaml>(specPath)
@@ -499,7 +499,7 @@ export async function enter(args: string[]): Promise<void> {
           problemLines.push('PROBLEM: Spec has no "phases" section in YAML frontmatter.')
         }
         problemLines.push('')
-        problemLines.push('Modes with container phases require specs to define phases like:')
+        problemLines.push('Modes with spec expansion phases require specs to define phases like:')
         problemLines.push('')
         problemLines.push(...specExampleLines(issueNum))
 
@@ -578,9 +578,9 @@ export async function enter(args: string[]): Promise<void> {
   // Build tasks (always, even for dry-run — so subjects can be included in output)
   let allTasks: Task[] = []
 
-  if (hasContainerPhase && specPhases && issueNum) {
-    const containerPhaseNum = containerPhase
-      ? Number.parseInt(containerPhase.id.replace('p', ''), 10)
+  if (hasSpecExpansion && specPhases && issueNum) {
+    const specExpansionPhaseNum = specExpansionPhase
+      ? Number.parseInt(specExpansionPhase.id.replace('p', ''), 10)
       : 2
 
     // Create BOTH orchestration tasks (P0, P1, P3, P4, ...) AND spec subphase tasks (P2.X)
@@ -590,12 +590,12 @@ export async function enter(args: string[]): Promise<void> {
     // Read spec file content for VP extraction (used by {verification_plan} placeholder)
     const specContent = specPath ? readFileSync(specPath, 'utf-8') : undefined
 
-    const specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, containerPhaseNum, specContent, reviewers, containerPhase?.skill)
+    const specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, specExpansionPhaseNum, specContent, reviewers, specExpansionPhase?.skill)
 
       // Wire cross-phase dependencies:
       // - First P2.X:impl depends on last task of P1 (Claim)
       //   P1 may be expanded into steps, so find the last task with id 'p1' or 'p1:*'
-      const firstImplId = `p${containerPhaseNum}.1:${resolvedSubphasePattern[0]?.id_suffix ?? 'impl'}`
+      const firstImplId = `p${specExpansionPhaseNum}.1:${resolvedSubphasePattern[0]?.id_suffix ?? 'impl'}`
       const firstImpl = specTasks.find((t) => t.id === firstImplId)
       const lastP1TaskId = [...orchTasks]
         .filter((t) => t.id === 'p1' || t.id.startsWith('p1:'))
@@ -604,25 +604,25 @@ export async function enter(args: string[]): Promise<void> {
         firstImpl.depends_on.push(lastP1TaskId)
       }
 
-      // - First task after container (P3) depends on last P2.X subphase task
+      // - First task after spec expansion (P3) depends on last P2.X subphase task
       //   P3 may be expanded into steps, so find the first task with id 'p3' or 'p3:*'
       const lastPatternSuffix = resolvedSubphasePattern[resolvedSubphasePattern.length - 1]?.id_suffix ?? 'verify'
-      const lastVerifyId = `p${containerPhaseNum}.${specPhases.length}:${lastPatternSuffix}`
+      const lastVerifyId = `p${specExpansionPhaseNum}.${specPhases.length}:${lastPatternSuffix}`
       const firstP3Task = orchTasks.find((t) => t.id === 'p3' || t.id.startsWith('p3:'))
       if (firstP3Task && specTasks.some((t) => t.id === lastVerifyId)) {
         firstP3Task.depends_on.push(lastVerifyId)
       }
 
-      // Order: before-container (P0, P1), spec tasks (P2.X), after-container (P3, P4)
-      const beforeContainer = orchTasks.filter((t) => {
+      // Order: before-expansion (P0, P1), spec tasks (P2.X), after-expansion (P3, P4)
+      const beforeExpansion = orchTasks.filter((t) => {
         const num = Number.parseInt(t.id.replace('p', ''), 10)
-        return num < containerPhaseNum
+        return num < specExpansionPhaseNum
       })
-      const afterContainer = orchTasks.filter((t) => {
+      const afterExpansion = orchTasks.filter((t) => {
         const num = Number.parseInt(t.id.replace('p', ''), 10)
-        return num >= containerPhaseNum
+        return num >= specExpansionPhaseNum
       })
-      allTasks = [...beforeContainer, ...specTasks, ...afterContainer]
+      allTasks = [...beforeExpansion, ...specTasks, ...afterExpansion]
     } else if (modeConfig.template) {
       allTasks = buildPhaseTasks(modeConfig.template, workflowId, issueNum, reviewers)
     }
@@ -759,7 +759,7 @@ export async function enter(args: string[]): Promise<void> {
           dryRun: true,
           wouldCreateTasks,
           pattern:
-            hasContainerPhase && specPhases
+            hasSpecExpansion && specPhases
               ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
               : `${wouldCreateTasks} tasks`,
         }),

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'bun:test'
 import {
   gateSchema,
   hintSchema,
+  phaseSchema,
   phaseStepSchema,
   subphasePatternSchema,
   agentStepConfigSchema,
@@ -233,5 +234,51 @@ describe('agentStepConfigSchema no longer has gate/threshold', () => {
 
   it('does not have threshold field', () => {
     expect('threshold' in agentStepConfigSchema.shape).toBe(false)
+  })
+})
+
+describe('stage field on phaseSchema', () => {
+  it('requires stage field', () => {
+    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts valid stage values', () => {
+    for (const stage of ['setup', 'work', 'close']) {
+      const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage })
+      expect(result.success).toBe(true)
+    }
+  })
+
+  it('rejects invalid stage value', () => {
+    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage: 'invalid' })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects expansion on non-work phase', () => {
+    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage: 'setup', expansion: 'agent' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts expansion on work phase', () => {
+    const result = phaseSchema.safeParse({ id: 'p1', name: 'Work', stage: 'work', expansion: 'spec', subphase_pattern: [] })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe('phaseStepSchema $ref support', () => {
+  it('accepts step with $ref and no title', () => {
+    const result = phaseStepSchema.safeParse({ id: 'env-check', '$ref': 'env-check' })
+    expect(result.success).toBe(true)
+  })
+
+  it('requires title when $ref absent', () => {
+    const result = phaseStepSchema.safeParse({ id: 'test' })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts vars on $ref step', () => {
+    const result = phaseStepSchema.safeParse({ id: 'cp', '$ref': 'commit-push', vars: { message: 'feat: done' } })
+    expect(result.success).toBe(true)
   })
 })
