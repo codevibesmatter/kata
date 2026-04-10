@@ -3,7 +3,6 @@ id: research
 name: Research Mode
 description: Explore and synthesize findings
 mode: research
-mode_skill: research-mode
 
 phases:
   - id: p0
@@ -20,19 +19,8 @@ phases:
         title: "Frame the research question"
         skill: interview
         instruction: |
-          QUICK FRAMING ONLY — do NOT explore the codebase or launch agents yet. That is P1's job.
-
-          Read the user's message and classify into one of:
-          - Feature research (existing codebase patterns)
-          - Library/tech evaluation (compare options)
-          - Brainstorming (open-ended exploration)
-          - Feasibility study (can we build X?)
-
-          Then clarify: what do we need to learn? What decisions depend on this?
-          If the scope is obvious from the message, state it and move on.
-          If unclear, ask the user to clarify before proceeding.
-
-          Output: research type, scope, and success criteria — then mark complete.
+          Clarify: what do we need to learn? What decisions depend on this?
+          Define scope and success criteria.
 
   - id: p1
     name: Explore

@@ -3,8 +3,6 @@ id: task
 name: Task Mode
 description: Combined planning + implementation for small tasks
 mode: task
-mode_skill: task-mode
-workflow_prefix: "TK"
 
 phases:
   - id: p0
@@ -14,11 +12,12 @@ phases:
       title: "P0: Setup - understand the task"
       labels: [phase, setup]
     steps:
-      - id: understand-task
-        title: "Understand and classify the task"
-        skill: quick-planning
-        hints:
-          - bash: "gh issue list --search \"{task_description}\" --limit 3"
+      - id: env-check
+        $ref: env-check
+        title: "Verify environment"
+      - id: understand
+        title: "Understand the task"
+        skill: interview
         instruction: |
           Clarify the task scope. If linked to an issue, read it.
           Confirm: what to change, where, acceptance criteria.
