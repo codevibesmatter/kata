@@ -68,23 +68,26 @@ export function resolveStepRef(
     }
   }
 
-  // Check for unresolved placeholders
-  const unresolvedPattern = /\{[a-z_]+\}/g
-  const allText = `${title || ''} ${instruction || ''}`
-  const unresolved = allText.match(unresolvedPattern)
-  if (unresolved) {
-    // Filter out known config placeholders that resolvePlaceholders() handles later
-    const configPlaceholders = new Set([
-      'test_command', 'build_command', 'typecheck_command', 'smoke_command',
-      'dev_server_command', 'dev_server_health',
-      // Runtime placeholders resolved elsewhere
-      'issue', 'issue_number', 'issue_keyword', 'branch_name',
-      'changed_files', 'commit_message', 'pr_title', 'pr_summary',
-      'comment_body', 'slug',
-    ])
-    const truly = unresolved.filter(m => !configPlaceholders.has(m.slice(1, -1)))
-    if (truly.length > 0) {
-      throw new Error(`Step "${localStep.id}" has unresolved vars: ${truly.join(', ')}. Provide them in the step's vars field.`)
+  // Check for unresolved placeholders — only when using the definition's instruction
+  // (local instruction overrides are agent-facing prose with their own placeholders)
+  if (!localStep.instruction) {
+    const unresolvedPattern = /\{[a-z_]+\}/g
+    const allText = `${title || ''} ${instruction || ''}`
+    const unresolved = allText.match(unresolvedPattern)
+    if (unresolved) {
+      // Filter out known config placeholders that resolvePlaceholders() handles later
+      const configPlaceholders = new Set([
+        'test_command', 'build_command', 'typecheck_command', 'smoke_command',
+        'dev_server_command', 'dev_server_health',
+        // Runtime placeholders resolved elsewhere
+        'issue', 'issue_number', 'issue_keyword', 'branch_name',
+        'changed_files', 'commit_message', 'pr_title', 'pr_summary',
+        'comment_body', 'slug',
+      ])
+      const truly = unresolved.filter(m => !configPlaceholders.has(m.slice(1, -1)))
+      if (truly.length > 0) {
+        throw new Error(`Step "${localStep.id}" has unresolved vars: ${truly.join(', ')}. Provide them in the step's vars field.`)
+      }
     }
   }
 
