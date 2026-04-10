@@ -111,7 +111,10 @@ export const phaseStepSchema = z.object({
   agent: agentStepConfigSchema.optional(),
   gate: gateSchema.optional(),
   hints: z.array(hintSchema).optional(),
-})
+}).refine(
+  (s) => s['$ref'] || (s.title && s.title.length > 0),
+  { message: 'title is required when $ref is not set' }
+)
 
 /**
  * Schema for subphase pattern (used by expansion: 'spec' phases)
