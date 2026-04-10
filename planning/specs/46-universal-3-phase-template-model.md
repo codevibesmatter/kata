@@ -13,7 +13,7 @@ phases:
     name: "Stage and Expansion Schema"
     tasks:
       - "Add stage field (setup|work|close) to phaseSchema in src/validation/schemas.ts"
-      - "Add expansion field (static|spec|agent) to phaseSchema with .refine() restricting to work stage only"
+      - "Add expansion field (spec|agent) to phaseSchema with .refine() restricting to work stage only"
       - "Add agent_protocol schema (max_tasks, require_labels, skill) to phaseSchema"
       - "Add stage ordering validation to parseAndValidateTemplatePhases()"
       - "Replace container boolean with expansion: spec in enter.ts and task-factory.ts"
@@ -26,7 +26,7 @@ phases:
         description: "phaseSchema requires stage: setup|work|close"
         type: unit
       - id: "expansion-field-validates"
-        description: "phaseSchema accepts expansion: static|spec|agent on work phases only"
+        description: "phaseSchema accepts expansion: spec|agent on work phases only (omitted = static)"
         type: unit
       - id: "expansion-rejected-on-setup"
         description: "phaseSchema rejects expansion on setup/close phases"
@@ -158,8 +158,8 @@ Mode templates currently have ad-hoc phase structures — task has 3 phases, imp
 **Core:**
 - **ID:** stage-field
 - **Trigger:** Template YAML is parsed and validated by `parseAndValidateTemplatePhases()`
-- **Expected:** Every phase in a template must declare `stage: "setup" | "work" | "close"`. The field is required on `phaseSchema`. Phases are grouped by stage but retain their own IDs and names (e.g., `p0: "Reproduce & Map"` with `stage: setup`, `p1: "Investigate"` with `stage: work`). Stages must appear in order: all setup phases before work phases, all work phases before close phases. Validation fails if phases are out of stage order. Not every stage is required — a template may have only `work` + `close`, or only `work`. Templates with `phases: []` (e.g., freeform) skip stage ordering validation entirely. **Work phases must have at least one step with a `skill:` field** — this is the "work = methodology" invariant. Skills live exclusively on steps (not on phases, subphase_patterns, or agent_protocol). The `skill:` field on steps produces `Invoke /skill-name` in the task instruction regardless of whether the task was created from a template step, spec expansion, or agent TaskCreate. Setup and close phases may have steps with skills too (not enforced, not prohibited), but work phases MUST.
-- **Verify:** Unit test: parse a template with stages in correct order — passes. Parse one with `close` before `work` — fails with ordering error. Parse one with `phases: []` — passes (no validation needed). Parse a work phase with no skill on any step — fails validation.
+- **Expected:** Every phase in a template must declare `stage: "setup" | "work" | "close"`. The field is required on `phaseSchema`. Phases are grouped by stage but retain their own IDs and names (e.g., `p0: "Reproduce & Map"` with `stage: setup`, `p1: "Investigate"` with `stage: work`). Stages must appear in order: all setup phases before work phases, all work phases before close phases. Validation fails if phases are out of stage order. Not every stage is required — a template may have only `work` + `close`, or only `work`. Templates with `phases: []` (e.g., freeform) skip stage ordering validation entirely. **Work phases must have a skill** — this is the "work = methodology" invariant. The `skill:` field can live at two levels: (1) on a phase itself (optional `skill` field on `phaseSchema`), or (2) on individual steps. For `expansion: spec` phases, the phase-level `skill` is inherited by all generated subphase tasks — no need to repeat it on each `subphase_pattern` entry (`skill` is removed from `subphasePatternSchema`). For phases without expansion and `expansion: agent` phases, skill lives on individual steps. Validation: every work phase must have a skill either at the phase level or on at least one step. The `skill:` field produces `Invoke /skill-name` in the task instruction regardless of task source. Setup and close phases may have skills too (not enforced, not prohibited), but work phases MUST.
+- **Verify:** Unit test: parse a template with stages in correct order — passes. Parse one with `close` before `work` — fails with ordering error. Parse one with `phases: []` — passes (no validation needed). Parse a work phase with no skill on phase or steps — fails validation. Parse a work phase with phase-level skill and no step skills — passes.
 - **Source:** `src/validation/schemas.ts` (phaseSchema), `src/commands/enter/template.ts` (validation)
 
 #### UI Layer
@@ -229,7 +229,7 @@ stop_conditions:
 **Core:**
 - **ID:** expansion-field
 - **Trigger:** Template phase with `stage: work` is parsed
-- **Expected:** Work-stage phases may declare `expansion: "static" | "spec" | "agent"`. Static means steps are defined inline (default if omitted). Spec means the phase is a container that expands from spec phases via `subphase_pattern` (same as today's `container: true`). Agent means the agent creates child tasks at runtime using TaskCreate. The `expansion` field replaces the `container: true` boolean — `container: true` becomes `expansion: spec`. Setup and close phases cannot have expansion (always static). Validation fails if a non-work phase declares expansion.
+- **Expected:** Work-stage phases may declare `expansion: "spec" | "agent"`. Phases without `expansion` are static (steps defined inline — the default). Spec means the phase expands from spec phases via `subphase_pattern` (replaces today's `container: true`). Agent means the agent creates child tasks at runtime using TaskCreate. The `expansion` field replaces the `container: true` boolean — `container: true` becomes `expansion: spec`. Only work-stage phases may declare expansion. Validation fails if a non-work phase declares expansion.
 - **Verify:** Unit test: phase with `stage: work, expansion: spec, subphase_pattern: [...]` validates. Phase with `stage: setup, expansion: agent` fails validation.
 - **Source:** `src/validation/schemas.ts` (phaseSchema), `src/commands/enter.ts` (expansion handling)
 
@@ -249,8 +249,9 @@ New fields on `phaseSchema`:
 export const phaseSchema = z.object({
   // ... existing fields
   stage: z.enum(['setup', 'work', 'close']),
-  expansion: z.enum(['static', 'spec', 'agent']).optional(),
+  expansion: z.enum(['spec', 'agent']).optional(), // omit for static phases (steps defined inline)
   agent_protocol: agentProtocolSchema.optional(),
+  skill: z.string().optional(), // phase-level skill — inherited by all generated tasks (esp. expansion: spec)
 }).refine(
   (p) => !p.expansion || p.stage === 'work',
   { message: 'expansion is only allowed on work-stage phases' }
@@ -399,7 +400,7 @@ N/A.
 **Core:**
 - **ID:** templates-staged
 - **Trigger:** `kata setup` scaffolds updated templates
-- **Expected:** All 7 mode templates are rewritten. Every phase has `stage: setup|work|close`. Setup phases use `$ref` for shared ceremony (env-check, read-spec, claim-issue). Work phases use `skill:` for methodology and `expansion:` where applicable. Close phases use `$ref` for commit-push, update-issue. Templates have no markdown body. Implementation uses `expansion: spec`. Verify uses `expansion: agent` with `agent_protocol`. Debug and research use `expansion: static` (steps inline). Freeform stays phase-less.
+- **Expected:** All 7 mode templates are rewritten. Every phase has `stage: setup|work|close`. Setup phases use `$ref` for shared ceremony (env-check, read-spec, claim-issue). Work phases use `skill:` for methodology and `expansion:` where applicable. Close phases use `$ref` for commit-push, update-issue. Templates have no markdown body. Implementation uses `expansion: spec` with phase-level `skill: code-impl`. Verify uses `expansion: agent` with `agent_protocol`. Debug and research have inline steps (no expansion field). Freeform stays phase-less.
 - **Verify:** For each template with phases (excludes freeform): (1) every phase has `stage`, (2) stages are in order, (3) at least one `$ref` step, (4) at least one `skill:` step, (5) no markdown body, (6) parses against schema. For freeform: (1) `phases: []`, (2) no markdown body, (3) parses against schema.
 - **Source:** `batteries/templates/*.md`
 
