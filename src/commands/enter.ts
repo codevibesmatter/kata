@@ -680,28 +680,34 @@ export async function enter(args: string[]): Promise<void> {
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.log(
-    JSON.stringify({
-      success: true,
-      mode: canonical,
-      workflowId,
-      action,
-      sessionType: canonical,
-      template: modeConfig.template,
-      phases: effectivePhases,
-      workflowDir,
-      ...(parsed.dryRun && {
-        dryRun: true,
-        wouldCreateTasks,
-        pattern:
-          hasSpecExpansion && specPhases
-            ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
-            : `${wouldCreateTasks} tasks`,
-      }),
-      enteredAt: finalState.updatedAt,
-      ...(specPath && { specPath }),
-      ...(issueNum && { issueNumber: issueNum }),
-      tasks: resolvedSubjects,
-    }),
+    JSON.stringify(
+      {
+        success: true,
+        mode: canonical,
+        workflowId,
+        action,
+        sessionType: canonical,
+        template: modeConfig.template,
+        phases: effectivePhases,
+        workflowDir,
+        ...(parsed.dryRun && {
+          dryRun: true,
+          wouldCreateTasks,
+          pattern:
+            hasSpecExpansion && specPhases
+              ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
+              : `${wouldCreateTasks} tasks`,
+        }),
+        enteredAt: finalState.updatedAt,
+        ...(specPath && { specPath, phasesFromSpec: true }),
+        ...(issueNum && { issueNumber: issueNum }),
+        tasks: allTasks.map((t) => t.title),
+        // guidance contains requiredTodos, workflow steps, and commands
+        guidance,
+      },
+      null,
+      2,
+    ),
   )
 }
 

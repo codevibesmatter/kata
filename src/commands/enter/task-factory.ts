@@ -113,6 +113,9 @@ export function buildSpecTasks(
     const phaseName = phase.name || phase.id.toUpperCase()
     const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
 
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(`  ${phaseLabel}: ${phaseName}`)
+
     if (phase.tasks?.length) {
       const taskSummary =
         phase.tasks.length === 1
