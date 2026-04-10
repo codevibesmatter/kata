@@ -2,7 +2,7 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getStateFilePath, findProjectDir, getSessionsDir, resolveTemplatePath } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
@@ -457,6 +457,59 @@ function logStopHook(
   }
 }
 
+/**
+ * Check if there are active background agents by scanning the session transcript.
+ * An Agent tool_use without a matching tool_result means the agent is still running.
+ * Returns true if at least one background agent is active.
+ */
+export function hasActiveBackgroundAgents(transcriptPath: string | undefined): boolean {
+  if (!transcriptPath) return false
+  try {
+    const content = readFileSync(transcriptPath, 'utf-8')
+    const lines = content.split('\n').filter((l) => l.trim())
+
+    // Track Agent tool_use IDs and match against tool_result IDs
+    const agentToolUseIds = new Set<string>()
+
+    for (const line of lines) {
+      try {
+        const msg = JSON.parse(line) as Record<string, unknown>
+
+        if (msg.type === 'assistant') {
+          const message = (msg.message as Record<string, unknown>) ?? msg
+          const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
+          for (const block of contentBlocks) {
+            if (
+              block.type === 'tool_use' &&
+              block.name === 'Agent' &&
+              typeof block.id === 'string'
+            ) {
+              agentToolUseIds.add(block.id)
+            }
+          }
+        }
+
+        if (msg.type === 'user') {
+          const message = (msg.message as Record<string, unknown>) ?? msg
+          const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
+          for (const block of contentBlocks) {
+            if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+              agentToolUseIds.delete(block.tool_use_id)
+            }
+          }
+        }
+      } catch {
+        // Skip unparseable lines
+      }
+    }
+
+    return agentToolUseIds.size > 0
+  } catch {
+    // Transcript unreadable — assume no active agents
+    return false
+  }
+}
+
 // ── Handler: stop-conditions ──
 // Calls canExit to check if session can be stopped
 export async function handleStopConditions(input: Record<string, unknown>): Promise<void> {
@@ -496,6 +549,15 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
       guidance?: { nextStepMessage?: string; escapeHatch?: string }
     }
     if (!result.canExit) {
+      // If background agents are active, allow exit — trust agent completion notifications.
+      // The transcript records every tool_use/tool_result; unmatched Agent calls = active agents.
+      const transcriptPath = input.transcript_path as string | undefined
+      if (hasActiveBackgroundAgents(transcriptPath)) {
+        logHook(sessionId, { hook: 'stop-conditions', decision: 'allow', note: 'background agents active — deferring to agent notifications' })
+        logStopHook(sessionId, 'allow', result.reasons, 'background agents active')
+        return
+      }
+
       const parts: string[] = ['Session has incomplete work:']
       for (const reason of result.reasons) {
         parts.push(`- ${reason}`)

@@ -364,15 +364,10 @@ function buildStopGuidance(
     const { allInProgress, inProgressCount } = areAllOpenTasksInProgress(sessionId)
 
     if (allInProgress) {
-      // All open tasks are in_progress — agents are working, don't tell CC to "do next task"
-      nextStepMessage = `\n**⏳ ${inProgressCount} task(s) in progress — background agents are working.**
-Do NOT try to do this work yourself. Do NOT attempt to stop or exit.
-Wait for agent completion notifications by running:
-\`\`\`bash
-sleep 30  # Keep session alive while agents work
-\`\`\`
-Then check results with \`TaskOutput\`. Repeat sleep + check until agents complete.
-The stop hook will allow exit once all tasks are done.`
+      // All open tasks are in_progress — agents are working.
+      // The stop hook now detects active agents via transcript scanning and allows exit,
+      // so this message is only shown when can-exit is called directly (not via stop hook).
+      nextStepMessage = `\n**⏳ ${inProgressCount} task(s) in progress — background agents are working.**\nThe stop hook will allow exit while agents are active. You'll be notified when they complete.`
     } else {
       const firstTask = getFirstPendingNativeTask(sessionId)
       if (firstTask) {

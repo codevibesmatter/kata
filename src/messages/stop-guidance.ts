@@ -17,16 +17,7 @@ export interface StopGuidance {
  * Get the escape hatch message (always the same)
  */
 export function getEscapeHatchMessage(): string {
-  return `**⏳ IF WAITING FOR BACKGROUND AGENTS:**
-If you have background agents running (via Agent tool with run_in_background), run a longer
-bash timer to prevent the stop hook from firing while you wait:
-\`\`\`bash
-sleep 30  # Keep session alive while agents work — use longer values for complex tasks
-\`\`\`
-Then check agent output with TaskOutput. Repeat sleep + check until all agents complete.
-Do NOT attempt to do the agents' work yourself — just wait.
-
-**🚨 ONLY IF GENUINELY BLOCKED:**
+  return `**🚨 ONLY IF GENUINELY BLOCKED:**
 If you have a legitimate question that prevents progress (e.g., unclear requirements,
 ambiguous spec, need user decision), use \`AskUserQuestion\` to get clarification.
 The conversation will pause until user responds, then you can continue.

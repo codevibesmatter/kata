@@ -436,3 +436,91 @@ describe('logHook', () => {
     expect(log.map((e) => e.hook)).toEqual(['hook-1', 'hook-2', 'hook-3'])
   })
 })
+
+describe('hasActiveBackgroundAgents', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir()
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function writeTranscript(lines: Array<Record<string, unknown>>): string {
+    const path = join(tmpDir, 'transcript.jsonl')
+    writeFileSync(path, lines.map((l) => JSON.stringify(l)).join('\n'))
+    return path
+  }
+
+  it('returns false for undefined transcript path', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    expect(hasActiveBackgroundAgents(undefined)).toBe(false)
+  })
+
+  it('returns false for nonexistent transcript', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    expect(hasActiveBackgroundAgents('/nonexistent/path.jsonl')).toBe(false)
+  })
+
+  it('returns false when all Agent calls have matching results', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'agent-1' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-2' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'agent-2' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('returns true when Agent call has no matching result', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'agent-1' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-2' }] } },
+      // No tool_result for agent-2 — still active
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  it('returns false when no Agent calls exist (other tools matched)', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', id: 'bash-1' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'bash-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('ignores non-Agent unmatched tool calls', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', id: 'bash-1' }] } },
+      // No result for bash-1, but it's not an Agent call
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('handles multiple active agents', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [
+        { type: 'tool_use', name: 'Agent', id: 'agent-1' },
+        { type: 'tool_use', name: 'Agent', id: 'agent-2' },
+        { type: 'tool_use', name: 'Agent', id: 'agent-3' },
+      ] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'agent-1' }] } },
+      // agent-2 and agent-3 still active
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  it('returns false for empty transcript', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+})
