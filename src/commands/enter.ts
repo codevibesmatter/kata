@@ -79,21 +79,6 @@ function outputFullTemplateContent(
   }
 }
 
-/**
- * Output mode_skill activation instruction to stderr
- */
-function outputModeSkillActivation(skillName: string): void {
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error('')
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error('═══════════════════════════════════════════════════════════════════════════════')
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`  MODE SKILL: Invoke /${skillName} to understand your role and workflow.`)
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error('═══════════════════════════════════════════════════════════════════════════════')
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error('')
-}
 import { findSpecFile } from './enter/spec.js'
 import {
   type Task,
@@ -297,13 +282,9 @@ async function enterWithCustomTemplate(
 
   const action = parsed.dryRun ? 'dry-run' : isTemporary ? 'started-temporary' : 'started'
 
-  // Output full template content or mode_skill activation instruction
+  // Output full template content
   if (!parsed.dryRun) {
-    if (template.mode_skill) {
-      outputModeSkillActivation(template.mode_skill)
-    } else {
-      outputFullTemplateContent(templatePath, modeName, workflowId, issueNum, effectivePhases[0])
-    }
+    outputFullTemplateContent(templatePath, modeName, workflowId, issueNum, effectivePhases[0])
   }
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -312,7 +293,6 @@ async function enterWithCustomTemplate(
       {
         success: true,
         mode: modeName,
-        ...(template.mode_skill && { mode_skill: template.mode_skill }),
         customTemplate: templatePath,
         workflowId,
         action,
@@ -420,7 +400,7 @@ export async function enter(args: string[]): Promise<void> {
   const templatePhases = modeConfig.template
     ? parseAndValidateTemplatePhases(modeConfig.template)
     : null
-  const containerPhase = templatePhases?.find((p) => p.container === true)
+  const containerPhase = templatePhases?.find((p) => p.expansion === 'spec')
   const hasContainerPhase = containerPhase !== undefined
 
   // Resolve subphase pattern: always an inline array now (string references removed)
@@ -610,7 +590,7 @@ export async function enter(args: string[]): Promise<void> {
     // Read spec file content for VP extraction (used by {verification_plan} placeholder)
     const specContent = specPath ? readFileSync(specPath, 'utf-8') : undefined
 
-    const specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, containerPhaseNum, specContent, reviewers)
+    const specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, containerPhaseNum, specContent, reviewers, containerPhase?.skill)
 
       // Wire cross-phase dependencies:
       // - First P2.X:impl depends on last task of P1 (Claim)
@@ -670,6 +650,21 @@ export async function enter(args: string[]): Promise<void> {
   // Get phase titles from template for guidance context
   const phaseTitles = modeConfig.template ? getPhaseTitlesFromTemplate(modeConfig.template) : []
 
+  // Compute effective task_rules — agent-expanded phases allow TaskCreate
+  const hasAgentExpansion = templatePhases?.some(p => p.expansion === 'agent') ?? false
+  let effectiveTaskRules = config.task_rules
+  if (hasAgentExpansion) {
+    effectiveTaskRules = effectiveTaskRules.map(rule => {
+      if (rule.includes('Do NOT create new tasks with TaskCreate')) {
+        return 'Tasks are pre-created by kata enter. TaskCreate is allowed ONLY for phases marked as agent-expanded.'
+      }
+      if (rule.includes('Never use TaskCreate')) {
+        return 'Use TaskUpdate to mark tasks in_progress/completed. Use TaskCreate only for agent-expanded phases.'
+      }
+      return rule
+    })
+  }
+
   // Build comprehensive workflow guidance with suggested todos
   // Now passes templatePhases for dynamic reading instead of hardcoding
   // task_system rules from global_behavior flow into stdout JSON for agent consumption
@@ -679,7 +674,7 @@ export async function enter(args: string[]): Promise<void> {
     specPhases,
     phaseTitles,
     templatePhases ?? undefined,
-    undefined,
+    effectiveTaskRules,
     resolvedSubphasePattern.length > 0 ? resolvedSubphasePattern : undefined,
   )
 
@@ -737,22 +732,15 @@ export async function enter(args: string[]): Promise<void> {
     console.error('')
   }
 
-  // Parse template for mode_skill (used for both stderr output and JSON)
-  const parsedTemplate = modeConfig.template ? parseTemplateYaml(resolveTemplatePath(modeConfig.template)) : null
-
-  // Output full template content or mode_skill activation instruction
+  // Output full template content
   if (!parsed.dryRun && modeConfig.template) {
-    if (parsedTemplate?.mode_skill) {
-      outputModeSkillActivation(parsedTemplate.mode_skill)
-    } else {
-      outputFullTemplateContent(
-        modeConfig.template,
-        canonical,
-        workflowId,
-        issueNum,
-        effectivePhases[0],
-      )
-    }
+    outputFullTemplateContent(
+      modeConfig.template,
+      canonical,
+      workflowId,
+      issueNum,
+      effectivePhases[0],
+    )
   }
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
@@ -761,7 +749,6 @@ export async function enter(args: string[]): Promise<void> {
       {
         success: true,
         mode: canonical,
-        ...(parsedTemplate?.mode_skill && { mode_skill: parsedTemplate.mode_skill }),
         workflowId,
         action,
         sessionType: canonical,
@@ -773,7 +760,7 @@ export async function enter(args: string[]): Promise<void> {
           wouldCreateTasks,
           pattern:
             hasContainerPhase && specPhases
-              ? `${templatePhases?.filter((p) => !p.container && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
+              ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
               : `${wouldCreateTasks} tasks`,
         }),
         enteredAt: finalState.updatedAt,

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveTemplatePath } from '../../session/lookup.js'
-import type { Hint, SubphasePattern } from '../../validation/index.js'
+import type { AgentProtocol, Hint, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
 import { resolvePlaceholders } from './placeholder.js'
 import { parseTemplateYaml } from './template.js'
@@ -102,6 +102,7 @@ export function buildSpecTasks(
   containerPhaseNum: number = 2,
   specContent?: string,
   reviewers?: string,
+  phaseSkill?: string,
 ): Task[] {
   const tasks: Task[] = []
 
@@ -161,8 +162,8 @@ export function buildSpecTasks(
             `\n\`\`\``
           instruction = (instruction ?? '') + agentLine
         }
-        if (patternItem.skill) {
-          const skillSection = `## Skill\nInvoke /${patternItem.skill} before starting this task.\n`
+        if (phaseSkill) {
+          const skillSection = `## Skill\nInvoke /${phaseSkill} before starting this task.\n`
           instruction = skillSection + '\n' + (instruction ?? '')
         }
         if (patternItem.hints?.length) {
@@ -199,12 +200,30 @@ export function buildSpecTasks(
 }
 
 /**
+ * Build agent expansion protocol instruction block for agent-expanded phases.
+ */
+function buildAgentExpansionInstruction(protocol: { max_tasks: number; require_labels?: string[] }, skill?: string): string {
+  const lines = [
+    '## Agent Expansion Protocol',
+    'You own this phase. Create child tasks using TaskCreate for each unit of work.',
+    `Constraints: max ${protocol.max_tasks} tasks.`,
+  ]
+  if (protocol.require_labels?.length) {
+    lines.push(`Required labels: [${protocol.require_labels.join(', ')}]`)
+  }
+  if (skill) {
+    lines.push(`Each task you create must invoke /${skill} before starting work.`)
+  }
+  return lines.join('\n')
+}
+
+/**
  * Build phase tasks from a template path (resolves template, returns Task[])
  *
  * Task creation logic:
  * 1. Phase with steps → creates ONE task per step (detailed trackable units with instructions)
  * 2. Phase with task_config only (no steps) → creates ONE phase-level task
- * 3. Container phases (no task_config, no steps) → skipped here, handled by buildSpecTasks
+ * 3. Expansion phases (no task_config, no steps) → skipped here, handled by buildSpecTasks
  *
  * Step tasks: first step inherits phase deps, subsequent steps depend on previous step.
  * phaseLastTaskId tracks the last task of each phase for cross-phase dependency wiring.
@@ -279,6 +298,12 @@ export function buildPhaseTasks(
           finalInstruction = (finalInstruction ?? '') + '\n\n' + hintsBlock
         }
 
+        // Agent expansion protocol — prepend to first step in agent-expanded phases
+        if (i === 0 && phase.expansion === 'agent' && phase.agent_protocol) {
+          const protocolBlock = buildAgentExpansionInstruction(phase.agent_protocol, phase.skill)
+          finalInstruction = protocolBlock + '\n\n' + (finalInstruction ?? '')
+        }
+
         tasks.push({
           id: taskId,
           title,
@@ -327,7 +352,7 @@ export function buildPhaseTasks(
         console.error(`    Depends on: ${phaseDependsOn.join(', ')}`)
       }
     }
-    // Container phases (no task_config, no steps) are skipped — handled by buildSpecTasks
+    // Expansion phases (no task_config, no steps) are skipped — handled by buildSpecTasks
   }
 
   return tasks

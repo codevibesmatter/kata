@@ -12,7 +12,15 @@ import { findProjectDir } from '../session/lookup.js'
  */
 export const KataModeConfigSchema = z.object({
   template: z.string(),
-  stop_conditions: z.array(z.enum(STOP_CONDITION_TYPES)).default([]),
+  stop_conditions: z.array(
+    z.union([
+      z.enum(STOP_CONDITION_TYPES),
+      z.object({
+        condition: z.enum(STOP_CONDITION_TYPES),
+        stage: z.enum(['setup', 'work', 'close']).optional(),
+      }),
+    ])
+  ).default([]),
   issue_handling: z.enum(['required', 'none']).optional(),
   issue_label: z.string().optional(),
   intent_keywords: z.array(z.string()).optional(),

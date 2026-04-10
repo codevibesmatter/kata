@@ -15,6 +15,7 @@ import {
   areAllOpenTasksInProgress,
   getNativeTasksDir,
   getPendingNativeTaskTitles,
+  readNativeTaskFiles,
 } from './enter/task-factory.js'
 import { loadKataConfig } from '../config/kata-config.js'
 import { findSpecFile, validateSpec } from './validate-spec.js'
@@ -233,14 +234,44 @@ function checkSpecValid(issueNumber: number): { passed: boolean; reason?: string
 }
 
 /**
+ * Parse a stop condition (handles both string and object forms).
+ */
+function parseStopCondition(cond: string | { condition: string; stage?: string }): { condition: string; stage?: string } {
+  if (typeof cond === 'string') return { condition: cond }
+  return cond
+}
+
+/**
+ * Check if all phases in a given stage are complete (all their tasks are completed).
+ */
+function isStageComplete(stage: string, sessionId: string, phasesByStage: Map<string, string[]>): boolean {
+  const phaseIds = phasesByStage.get(stage)
+  if (!phaseIds?.length) return true // No phases in this stage = complete
+
+  const tasks = readNativeTaskFiles(sessionId)
+  // Check if all tasks belonging to this stage's phases are completed
+  for (const task of tasks) {
+    const originalId = (task.metadata?.originalId as string) || ''
+    // Task belongs to a phase if its originalId matches the phase ID or starts with it
+    const belongsToStage = phaseIds.some(pid => originalId === pid || originalId.startsWith(`${pid}:`) || originalId.startsWith(`${pid}.`))
+    if (belongsToStage && task.status !== 'completed') {
+      return false
+    }
+  }
+  return true
+}
+
+/**
  * Check if exit conditions are met based on the mode's stop_conditions from modes.yaml.
  * Each mode declares which checks to run — no hardcoded mode names.
+ * Stop conditions can be strings or objects with optional stage scoping.
  */
 function validateCanExit(
   _workflowId: string,
   sessionId: string,
-  stopConditions: string[],
+  stopConditions: Array<string | { condition: string; stage?: string }>,
   issueNumber?: number,
+  phasesByStage?: Map<string, string[]>,
 ): {
   canExit: boolean
   reasons: string[]
@@ -254,7 +285,17 @@ function validateCanExit(
     return { canExit: true, reasons: [], hasOpenTasks: false, usingTasks: false }
   }
 
-  const checks = new Set(stopConditions)
+  // Build effective checks set (filter stage-scoped conditions whose stage isn't complete)
+  const checks = new Set<string>()
+  for (const rawCond of stopConditions) {
+    const parsed = parseStopCondition(rawCond)
+    if (parsed.stage && phasesByStage) {
+      if (!isStageComplete(parsed.stage, sessionId, phasesByStage)) {
+        continue // Skip — stage not complete yet
+      }
+    }
+    checks.add(parsed.condition)
+  }
 
   // If we're on the base branch with no diff, work is already merged — skip git checks only.
   // tasks_complete is still checked so pending tasks block exit even with no diff.
@@ -406,10 +447,11 @@ export async function canExit(args: string[]): Promise<void> {
   // Load mode config to get stop_conditions
   const kataConfig = loadKataConfig()
   const modeConfig = kataConfig.modes[sessionType]
-  const stopConditions = [...(modeConfig?.stop_conditions ?? [])]
+  const stopConditions: Array<string | { condition: string; stage?: string }> = [...(modeConfig?.stop_conditions ?? [])]
 
   // Merge template global_conditions (e.g., changes_committed, changes_pushed)
   // Template conditions use "changes_" prefix; normalize to match check names
+  let phasesByStage: Map<string, string[]> | undefined
   if (state.template) {
     try {
       const { parseTemplateYaml } = await import('./enter/template.js')
@@ -419,9 +461,24 @@ export async function canExit(args: string[]): Promise<void> {
       if (templateYaml?.global_conditions) {
         for (const cond of templateYaml.global_conditions) {
           // Normalize: "changes_committed" → "committed", "changes_pushed" → "pushed"
-          const normalized = cond.replace(/^changes_/, '') as import('../state/schema.js').StopCondition
-          if (!stopConditions.includes(normalized)) {
+          const normalized = cond.replace(/^changes_/, '')
+          const alreadyPresent = stopConditions.some(c => {
+            const parsed = parseStopCondition(c)
+            return parsed.condition === normalized
+          })
+          if (!alreadyPresent) {
             stopConditions.push(normalized)
+          }
+        }
+      }
+      // Compute phasesByStage for stage-scoped stop condition evaluation
+      if (templateYaml?.phases) {
+        phasesByStage = new Map()
+        for (const p of templateYaml.phases) {
+          if (p.stage) {
+            const existing = phasesByStage.get(p.stage) || []
+            existing.push(p.id)
+            phasesByStage.set(p.stage, existing)
           }
         }
       }
@@ -435,7 +492,7 @@ export async function canExit(args: string[]): Promise<void> {
     reasons,
     hasOpenTasks,
     usingTasks,
-  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber)
+  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber, phasesByStage)
 
   // Build guidance for stop hook (only if can't exit)
   const guidance = buildStopGuidance(

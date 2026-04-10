@@ -4,7 +4,6 @@ import {
   validatePhases,
   formatValidationErrors,
   type PhaseDefinition,
-  type SubphasePattern,
 } from '../../validation/index.js'
 import { parseYamlFrontmatter, type TemplateYaml } from '../../yaml/index.js'
 import type { PhaseTitle } from './guidance.js'
@@ -52,17 +51,45 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
     return null
   }
 
-  // Return phases converted to PhaseDefinition type (include steps, container, subphase_pattern)
-  return template.phases.map((p) => ({
+  // Validate stage ordering (setup -> work -> close)
+  const mapped = template.phases.map((p) => ({
     id: p.id,
     name: p.name || '',
+    stage: p.stage,
     task_config: p.task_config,
     steps: p.steps,
-    container: (p as Record<string, unknown>).container as boolean | undefined,
-    subphase_pattern: (p as Record<string, unknown>).subphase_pattern as
-      | SubphasePattern[]
-      | undefined,
+    expansion: p.expansion,
+    skill: p.skill,
+    agent_protocol: p.agent_protocol,
+    subphase_pattern: p.subphase_pattern,
   }))
+
+  const stageError = validateStageOrdering(mapped as PhaseDefinition[])
+  if (stageError) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(stageError)
+    return null
+  }
+
+  return mapped as PhaseDefinition[]
+}
+
+/**
+ * Validate that phases follow the stage ordering: setup -> work -> close.
+ * Returns an error string if ordering is violated, null if valid.
+ */
+function validateStageOrdering(phases: PhaseDefinition[]): string | null {
+  if (phases.length === 0) return null // Empty phases skip validation
+  const stageOrder = { setup: 0, work: 1, close: 2 } as const
+  let maxSeen = -1
+  for (const phase of phases) {
+    const order = stageOrder[phase.stage]
+    if (order < maxSeen) {
+      return `Phase "${phase.id}" has stage "${phase.stage}" but follows a later stage. Stages must be in order: setup → work → close.`
+    }
+    maxSeen = Math.max(maxSeen, order)
+  }
+  return null
 }
 
 /**

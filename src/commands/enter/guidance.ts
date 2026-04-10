@@ -43,7 +43,7 @@ export function buildWorkflowGuidance(
   const requiredTodos: RequiredTodo[] = []
 
   // Compute container phase early to drive behavior from template structure
-  const containerPhase = templatePhases?.find((p) => p.container === true)
+  const containerPhase = templatePhases?.find((p) => p.expansion === 'spec')
   const hasContainerPhase = containerPhase !== undefined
 
   if (hasContainerPhase && specPhases?.length) {
@@ -117,7 +117,7 @@ export function buildWorkflowGuidance(
     }
   } else if (specPhases?.length && templatePhases) {
     // Non-implementation mode with spec phases - use subphase pattern if available
-    const containerPhase = templatePhases.find((p) => p.container === true)
+    const containerPhase = templatePhases.find((p) => p.expansion === 'spec')
     const subphasePattern = resolvedSubphasePattern ?? (Array.isArray(containerPhase?.subphase_pattern) ? containerPhase.subphase_pattern : [])
 
     for (const phase of specPhases) {

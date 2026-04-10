@@ -112,7 +112,7 @@ export const phaseStepSchema = z.object({
 })
 
 /**
- * Schema for subphase pattern (used by container phases)
+ * Schema for subphase pattern (used by expansion: 'spec' phases)
  * Defines what tasks to create for each spec phase
  */
 export const subphasePatternSchema = z.object({
@@ -123,10 +123,16 @@ export const subphasePatternSchema = z.object({
   labels: z.array(z.string()).default([]),
   depends_on_previous: z.boolean().optional(),
   instruction: z.string().optional(),
-  skill: z.string().optional(),
   agent: agentStepConfigSchema.optional(),
   gate: gateSchema.optional(),
   hints: z.array(hintSchema).optional(),
+})
+
+// ── Agent protocol schema (for expansion: 'agent' phases) ──
+
+export const agentProtocolSchema = z.object({
+  max_tasks: z.number().int().positive().default(10),
+  require_labels: z.array(z.string()).optional(),
 })
 
 /**
@@ -136,11 +142,17 @@ export const subphasePatternSchema = z.object({
 export const phaseSchema = z.object({
   id: z.string().regex(/^p\d+(\.\d+|-[a-z][a-z0-9-]*)?$/, 'Phase ID must match pattern: p0, p1, p2, p2.1, or p2-name'),
   name: z.string().min(1, 'Phase name cannot be empty'),
+  stage: z.enum(['setup', 'work', 'close']),
+  expansion: z.enum(['spec', 'agent']).optional(),
+  agent_protocol: agentProtocolSchema.optional(),
+  skill: z.string().optional(), // Phase-level skill (inherited by generated tasks for expansion: spec)
   task_config: phaseTaskConfigSchema.optional(),
   steps: z.array(phaseStepSchema).optional(), // Individual trackable units within phase (e.g., interview rounds)
-  container: z.boolean().optional(), // Marks phase that accepts spec content phases
   subphase_pattern: z.array(subphasePatternSchema).optional(), // Inline array only (string references removed)
-})
+}).refine(
+  (p) => !p.expansion || p.stage === 'work',
+  { message: 'expansion is only allowed on work-stage phases' }
+)
 
 /**
  * Schema for array of phases in template
@@ -155,7 +167,7 @@ export const templateYamlSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
   mode: z.string().optional(),
-  mode_skill: z.string().optional(),
+  reviewer_prompt: z.string().optional(),
   phases: templatePhasesSchema.optional(),
   global_conditions: z.array(z.string()).optional(),
   workflow_id_format: z.string().optional(),
@@ -180,6 +192,7 @@ export const evidenceTypesSchema = z.record(z.string(), evidenceTypeSchema)
 
 // Type exports
 export type AgentStepConfig = z.infer<typeof agentStepConfigSchema>
+export type AgentProtocol = z.infer<typeof agentProtocolSchema>
 export type PhaseTaskConfig = z.infer<typeof phaseTaskConfigSchema>
 export type PhaseStep = z.infer<typeof phaseStepSchema>
 export type SubphasePattern = z.infer<typeof subphasePatternSchema>
