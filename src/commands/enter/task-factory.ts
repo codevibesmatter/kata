@@ -270,7 +270,7 @@ export function buildPhaseTasks(
           : stepTitle
         const title = issueNum
           ? `GH#${issueNum}: ${phase.id.toUpperCase()}: ${resolvedStepTitle}`
-          : `${workflowId}: ${phase.name}: ${resolvedStepTitle}`
+          : `${phase.name}: ${resolvedStepTitle}`
 
         const dependsOn: string[] = []
         if (i === 0) {
@@ -322,7 +322,7 @@ export function buildPhaseTasks(
       // No steps: create a single phase-level task (summary task)
       const fullTitle = issueNum
         ? `GH#${issueNum}: ${phase.task_config.title}`
-        : `${workflowId}: ${phase.task_config.title}`
+        : phase.task_config.title
 
       const taskId = phase.id
 
