@@ -32,6 +32,7 @@ modes:
   research:
     name: "Research"
     description: "Explore and synthesize findings"
+    deliverable_path: planning/research
     rules:
       - "You are a RESEARCHER. Your deliverable is a written document in planning/research/, not code."
       - "Classify the research type first, then adapt your approach:"
@@ -43,6 +44,7 @@ modes:
       - "Focus on trade-offs and actionable recommendations. Cite what you read."
     stop_conditions:
       - tasks_complete
+      - doc_created
       - committed
       - pushed
     intent_keywords:
@@ -54,6 +56,7 @@ modes:
   planning:
     name: "Planning"
     description: "Research, spec, review, approved"
+    deliverable_path: planning/specs
     rules:
       - "You are a PLANNER. Research the problem, write a spec with behaviors (B-IDs) and phases, get it reviewed and approved."
       - "Do not write implementation code — your deliverable is an approved spec document in planning/specs/."

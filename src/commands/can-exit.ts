@@ -234,6 +234,47 @@ function checkSpecValid(issueNumber: number): { passed: boolean; reason?: string
 }
 
 /**
+ * Check that at least one document was created or modified in a given path.
+ * Pluggable: pass a directory path to check. Looks for new/modified files vs diff base.
+ *
+ * Used by stop conditions like:
+ *   - doc_created: planning/research   (research mode)
+ *   - doc_created: planning/specs      (planning mode)
+ *   - doc_created                      (defaults to research_path from config)
+ */
+function checkDocCreated(docPath?: string): { passed: boolean; reason?: string } {
+  try {
+    const cfg = loadKataConfig()
+    const targetPath = docPath ?? cfg.research_path ?? 'planning/research'
+
+    // Check for any files in path (new, modified, or untracked)
+    const gitFiles = execSync(
+      `git ls-files --others --modified -- "${targetPath}" 2>/dev/null || true`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim()
+
+    // Also check for committed files in this branch vs diff base
+    const diffBase = cfg.project?.diff_base ?? 'origin/main'
+    const committedFiles = execSync(
+      `git diff --name-only "${diffBase}" -- "${targetPath}" 2>/dev/null || true`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim()
+
+    if (!gitFiles && !committedFiles) {
+      return {
+        passed: false,
+        reason: `No document found in ${targetPath}/. Write your deliverable before exiting.`,
+      }
+    }
+
+    return { passed: true }
+  } catch {
+    // Don't block exit on error
+    return { passed: true }
+  }
+}
+
+/**
  * Parse a stop condition (handles both string and object forms).
  */
 function parseStopCondition(cond: string | { condition: string; stage?: string }): { condition: string; stage?: string } {
@@ -272,6 +313,7 @@ function validateCanExit(
   stopConditions: Array<string | { condition: string; stage?: string }>,
   issueNumber?: number,
   phasesByStage?: Map<string, string[]>,
+  deliverablePath?: string,
 ): {
   canExit: boolean
   reasons: string[]
@@ -366,6 +408,14 @@ function validateCanExit(
       }
     }
 
+    // ── doc_created ──
+    if (checks.has('doc_created')) {
+      const docCheck = checkDocCreated(deliverablePath)
+      if (!docCheck.passed && docCheck.reason) {
+        reasons.push(docCheck.reason)
+      }
+    }
+
     // ── committed + pushed (check after task/verification checks) ──
     if (reasons.length === 0) {
       if (checks.has('committed') || checks.has('pushed')) {
@@ -448,6 +498,7 @@ export async function canExit(args: string[]): Promise<void> {
   const kataConfig = loadKataConfig()
   const modeConfig = kataConfig.modes[sessionType]
   const stopConditions: Array<string | { condition: string; stage?: string }> = [...(modeConfig?.stop_conditions ?? [])]
+  const deliverablePath = modeConfig?.deliverable_path
 
   // Merge template global_conditions (e.g., changes_committed, changes_pushed)
   // Template conditions use "changes_" prefix; normalize to match check names
@@ -492,7 +543,7 @@ export async function canExit(args: string[]): Promise<void> {
     reasons,
     hasOpenTasks,
     usingTasks,
-  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber, phasesByStage)
+  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber, phasesByStage, deliverablePath)
 
   // Build guidance for stop hook (only if can't exit)
   const guidance = buildStopGuidance(
