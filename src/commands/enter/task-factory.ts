@@ -3,9 +3,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveTemplatePath } from '../../session/lookup.js'
-import type { Hint, SubphasePattern } from '../../validation/index.js'
+import type { AgentProtocol, Hint, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
 import { resolvePlaceholders } from './placeholder.js'
+import { loadStepLibrary, resolveStepRef } from './step-library.js'
 import { parseTemplateYaml } from './template.js'
 
 export interface Task {
@@ -88,7 +89,7 @@ export function parseVpSteps(vpContent: string): VpStep[] {
 
 /**
  * Build tasks from spec phases using subphase pattern (pure function, no I/O)
- * Spec phases become P2.1, P2.2, etc. (nested under container phase)
+ * Spec phases become P2.1, P2.2, etc. (nested under spec expansion phase)
  * Pattern defines what tasks to create per phase (e.g., impl → codex → gemini)
  *
  * @param specContent - Raw markdown content of the spec file. When provided,
@@ -99,20 +100,18 @@ export function buildSpecTasks(
   specPhases: SpecPhase[],
   issueNum: number,
   subphasePattern: SubphasePattern[],
-  containerPhaseNum: number = 2,
+  specExpansionPhaseNum: number = 2,
   specContent?: string,
   reviewers?: string,
+  phaseSkill?: string,
 ): Task[] {
   const tasks: Task[] = []
-
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Building tasks from spec phases for GH#${issueNum}`)
 
   for (let i = 0; i < specPhases.length; i++) {
     const phase = specPhases[i]
     const phaseNum = i + 1
     const phaseName = phase.name || phase.id.toUpperCase()
-    const phaseLabel = `P${containerPhaseNum}.${phaseNum}`
+    const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
 
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
     console.error(`  ${phaseLabel}: ${phaseName}`)
@@ -127,10 +126,10 @@ export function buildSpecTasks(
 
       for (const patternItem of subphasePattern) {
         const titleContent = resolvePlaceholders(patternItem.title_template, {
-          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
+          extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'Invoke /code-review' },
         })
         const fullTitle = `GH#${issueNum}: ${phaseLabel}: ${titleContent}`
-        const taskId = `p${containerPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
+        const taskId = `p${specExpansionPhaseNum}.${phaseNum}:${patternItem.id_suffix}`
 
         const dependsOn: string[] = []
 
@@ -140,7 +139,7 @@ export function buildSpecTasks(
 
         if (phaseNum > 1 && subphasePattern.length > 0 && dependsOn.length === 0) {
           const lastPatternItem = subphasePattern[subphasePattern.length - 1]
-          const prevPhaseLastTaskId = `p${containerPhaseNum}.${phaseNum - 1}:${lastPatternItem.id_suffix}`
+          const prevPhaseLastTaskId = `p${specExpansionPhaseNum}.${phaseNum - 1}:${lastPatternItem.id_suffix}`
           dependsOn.push(prevPhaseLastTaskId)
         }
 
@@ -149,7 +148,7 @@ export function buildSpecTasks(
         if (patternItem.instruction) {
           const vpContent = specContent ? extractVerificationPlan(specContent) : null
           instruction = resolvePlaceholders(patternItem.instruction, {
-            extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'review-agent' },
+            extra: { task_summary: taskSummary, phase_name: phaseName, phase_label: phaseLabel, reviewers: reviewers ?? 'Invoke /code-review' },
           })
             .replace(/{issue}/g, String(issueNum))
             .replace(/{verification_plan}/g, vpContent ?? VP_FALLBACK_TEXT)
@@ -160,6 +159,10 @@ export function buildSpecTasks(
             (patternItem.agent.model ? ` --model=${patternItem.agent.model}` : '') +
             `\n\`\`\``
           instruction = (instruction ?? '') + agentLine
+        }
+        if (phaseSkill) {
+          const skillSection = `## Skill\nInvoke /${phaseSkill} before starting this task.\n`
+          instruction = skillSection + '\n' + (instruction ?? '')
         }
         if (patternItem.hints?.length) {
           const hintsBlock = renderHints(patternItem.hints)
@@ -176,16 +179,6 @@ export function buildSpecTasks(
           instruction,
         })
 
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`    Created: ${taskId}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`      Title: ${fullTitle}`)
-
-        if (dependsOn.length > 0) {
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`    Dependency: ${taskId} depends on ${dependsOn.join(', ')}`)
-        }
-
         prevTaskId = taskId
       }
     }
@@ -195,14 +188,42 @@ export function buildSpecTasks(
 }
 
 /**
+ * Build agent expansion protocol instruction block for agent-expanded phases.
+ */
+/**
+ * Build agent expansion protocol instruction.
+ * Uses {this_task_id} and {blocked_task_ids} placeholders — resolved at native task write time.
+ */
+function buildAgentExpansionInstruction(
+  protocol: { max_tasks: number; require_labels?: string[] },
+): string {
+  const lines = [
+    `Create child tasks with TaskCreate. Max ${protocol.max_tasks} tasks.`,
+    'Chain tasks with addBlockedBy so they run in order.',
+    'Do NOT complete task #{this_task_id} until all child tasks are done.',
+    'Last child task must use addBlocks: [{blocked_task_ids}] to gate the next phase.',
+  ]
+
+  if (protocol.require_labels?.length) {
+    lines.push(`Required labels: [${protocol.require_labels.join(', ')}]`)
+  }
+
+  return lines.join('\n')
+}
+
+/**
  * Build phase tasks from a template path (resolves template, returns Task[])
  *
  * Task creation logic:
- * 1. Phase with steps → creates ONE task per step (detailed trackable units with instructions)
- * 2. Phase with task_config only (no steps) → creates ONE phase-level task
- * 3. Container phases (no task_config, no steps) → skipped here, handled by buildSpecTasks
+ * Each phase produces exactly ONE task. Steps within a phase are combined into
+ * the task instruction — they are sequential guidance, not separate tasks.
  *
- * Step tasks: first step inherits phase deps, subsequent steps depend on previous step.
+ * Phase types:
+ * - Phase with skill → skill invocation as instruction
+ * - Phase with instruction → instruction as-is
+ * - Phase with agent expansion → skill + expansion protocol
+ * - Phase with steps → steps resolved and combined into instruction body
+ *
  * phaseLastTaskId tracks the last task of each phase for cross-phase dependency wiring.
  */
 export function buildPhaseTasks(
@@ -218,15 +239,16 @@ export function buildPhaseTasks(
     return []
   }
 
-  const tasks: Task[] = []
+  const stepLibrary = loadStepLibrary()
 
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Building phase tasks for workflow: ${workflowId}`)
+  const tasks: Task[] = []
 
   // Tracks the last task ID per phase — used to chain cross-phase dependencies
   const phaseLastTaskId = new Map<string, string>()
 
   for (const phase of template.phases) {
+    if (!phase.task_config?.title) continue
+
     // Resolve phase-level dependencies (declared in task_config.depends_on)
     const phaseDependsOn: string[] = []
     if (phase.task_config?.depends_on?.length) {
@@ -236,88 +258,76 @@ export function buildPhaseTasks(
       }
     }
 
-    if (phase.steps?.length) {
-      // Expand steps into individual tasks — each step gets its own native task
-      let prevStepTaskId: string | null = null
+    const fullTitle = issueNum
+      ? `GH#${issueNum}: ${phase.task_config.title}`
+      : phase.task_config.title
 
-      for (let i = 0; i < phase.steps.length; i++) {
-        const step = phase.steps[i]
-        const taskId = `${phase.id}:${step.id}`
-        const resolvedStepTitle = reviewers
-          ? step.title.replace(/{reviewers}/g, reviewers)
-          : step.title
-        const title = issueNum
-          ? `GH#${issueNum}: ${phase.id.toUpperCase()}: ${resolvedStepTitle}`
-          : `${workflowId}: ${phase.name}: ${resolvedStepTitle}`
+    const taskId = phase.id
 
-        const dependsOn: string[] = []
-        if (i === 0) {
-          // First step inherits phase-level dependencies
-          dependsOn.push(...phaseDependsOn)
-        } else if (prevStepTaskId) {
-          // Each subsequent step depends on the previous step
-          dependsOn.push(prevStepTaskId)
-        }
+    // Build instruction from phase config
+    let instruction: string | undefined
 
-        let finalInstruction: string | undefined =
-          reviewers && step.instruction
-            ? step.instruction.replace(/{reviewers}/g, reviewers)
-            : step.instruction
-
-        if (step.hints?.length) {
-          const hintsBlock = renderHints(step.hints)
-          finalInstruction = (finalInstruction ?? '') + '\n\n' + hintsBlock
-        }
-
-        tasks.push({
-          id: taskId,
-          title,
-          done: false,
-          depends_on: dependsOn,
-          completedAt: null,
-          reason: null,
-          instruction: finalInstruction,
-        })
-
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  Created step task: ${taskId}`)
-        if (dependsOn.length > 0) {
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`    Depends on: ${dependsOn.join(', ')}`)
-        }
-
-        prevStepTaskId = taskId
-      }
-
-      // Last step of this phase is the dependency anchor for subsequent phases
-      if (prevStepTaskId) phaseLastTaskId.set(phase.id, prevStepTaskId)
-    } else if (phase.task_config?.title) {
-      // No steps: create a single phase-level task (summary task)
-      const fullTitle = issueNum
-        ? `GH#${issueNum}: ${phase.task_config.title}`
-        : `${workflowId}: ${phase.task_config.title}`
-
-      const taskId = phase.id
-
-      tasks.push({
-        id: taskId,
-        title: fullTitle,
-        done: false,
-        depends_on: phaseDependsOn,
-        completedAt: null,
-        reason: null,
-      })
-
-      phaseLastTaskId.set(phase.id, taskId)
-
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`  Created phase task: ${phase.id} → ${taskId}`)
-      if (phaseDependsOn.length > 0) {
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`    Depends on: ${phaseDependsOn.join(', ')}`)
-      }
+    // Skill invocation (phase-level)
+    if (phase.skill) {
+      instruction = `Invoke /${phase.skill}`
     }
-    // Container phases (no task_config, no steps) are skipped — handled by buildSpecTasks
+
+    // Agent expansion protocol
+    if (phase.expansion === 'agent' && phase.agent_protocol) {
+      const expansion = buildAgentExpansionInstruction(phase.agent_protocol)
+      instruction = instruction ? `${instruction}\n${expansion}` : expansion
+    }
+
+    // Phase-level instruction (from task_config)
+    if (phase.task_config.instruction) {
+      const phaseInstruction = reviewers
+        ? phase.task_config.instruction.replace(/{reviewers}/g, reviewers)
+        : phase.task_config.instruction
+      instruction = instruction ? `${instruction}\n\n${phaseInstruction}` : phaseInstruction
+    }
+
+    // Steps — resolve and combine into instruction body
+    if (phase.steps?.length) {
+      const stepLines: string[] = []
+      for (const step of phase.steps) {
+        let resolvedStep = step
+        if (step['$ref']) {
+          const resolved = resolveStepRef(step['$ref'], step, stepLibrary)
+          resolvedStep = { ...step, ...resolved }
+        }
+        const stepTitle = resolvedStep.title ?? resolvedStep.id
+        const resolvedTitle = reviewers ? stepTitle.replace(/{reviewers}/g, reviewers) : stepTitle
+
+        let stepBlock = `### ${resolvedTitle}`
+        if (resolvedStep.skill) {
+          stepBlock += `\nInvoke /${resolvedStep.skill}`
+        }
+        if (resolvedStep.instruction) {
+          const resolvedInstruction = reviewers
+            ? resolvedStep.instruction.replace(/{reviewers}/g, reviewers)
+            : resolvedStep.instruction
+          stepBlock += `\n${resolvedInstruction.trim()}`
+        }
+        if (resolvedStep.hints?.length) {
+          stepBlock += `\n${renderHints(resolvedStep.hints)}`
+        }
+        stepLines.push(stepBlock)
+      }
+      const stepsBody = stepLines.join('\n\n')
+      instruction = instruction ? `${instruction}\n\n${stepsBody}` : stepsBody
+    }
+
+    tasks.push({
+      id: taskId,
+      title: fullTitle,
+      done: false,
+      depends_on: phaseDependsOn,
+      completedAt: null,
+      reason: null,
+      instruction,
+    })
+
+    phaseLastTaskId.set(phase.id, taskId)
   }
 
   return tasks
@@ -356,21 +366,75 @@ export function clearNativeTaskFiles(sessionId: string): void {
 }
 
 /**
- * Convert workflow tasks to native Claude Code task format and write to ~/.claude/tasks/{session-id}/
- * Native tasks use incrementing integer IDs (1.json, 2.json, etc.)
- * Always clears existing tasks before writing (ensures no stale tasks from previous mode/issue).
+ * Build a single NativeTask from a workflow Task, resolving placeholders and deriving fields.
+ */
+function buildNativeTask(
+  task: Task,
+  nativeId: string,
+  blockedBy: string[],
+  blocks: string[],
+  workflowId: string,
+  issueNum: number | null,
+): NativeTask {
+  const activeForm = deriveActiveForm(task.title)
+
+  // Resolve agent expansion placeholders now that native IDs are known
+  let resolvedInstruction = task.instruction
+  if (resolvedInstruction?.includes('{this_task_id}')) {
+    const blockedIds = blocks.map(id => `"${id}"`).join(', ')
+    resolvedInstruction = resolvedInstruction
+      .replace(/{this_task_id}/g, nativeId)
+      .replace(/{blocked_task_ids}/g, blockedIds)
+  }
+
+  // Append first meaningful line of instruction to subject so TaskList shows guidance
+  let subject = task.title
+  if (resolvedInstruction) {
+    const firstLine = resolvedInstruction
+      .split('\n')
+      .map(l => l.trim())
+      .find(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('```'))
+    if (firstLine) {
+      const snippet = firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine
+      subject = `${task.title} — ${snippet}`
+    }
+  }
+
+  return {
+    id: nativeId,
+    subject,
+    description: resolvedInstruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
+    activeForm,
+    status: task.done ? 'completed' : 'pending',
+    blocks,
+    blockedBy,
+    metadata: {
+      workflowId,
+      issueNumber: issueNum,
+      originalId: task.id,
+    },
+  }
+}
+
+/**
+ * Convert workflow tasks to native Claude Code task format.
+ * When dryRun is false (default), writes JSON files to ~/.claude/tasks/{session-id}/.
+ * When dryRun is true, builds and returns the resolved tasks without writing to disk.
+ * In both cases, prints a dry-run preview table to stderr when dryRun is true.
  */
 export function writeNativeTaskFiles(
   sessionId: string,
   tasks: Task[],
   workflowId: string,
   issueNum: number | null,
-): string {
+  dryRun = false,
+): { tasksDir: string; nativeTasks: NativeTask[] } {
   const tasksDir = getNativeTasksDir(sessionId)
 
-  // Always start fresh - clears stale tasks from previous mode/issue
-  clearNativeTaskFiles(sessionId)
-  mkdirSync(tasksDir, { recursive: true })
+  if (!dryRun) {
+    clearNativeTaskFiles(sessionId)
+    mkdirSync(tasksDir, { recursive: true })
+  }
 
   // Map our task IDs to native integer IDs
   const idMap = new Map<string, string>()
@@ -392,44 +456,45 @@ export function writeNativeTaskFiles(
     }
   }
 
-  // Write each task as a JSON file
+  const nativeTasks: NativeTask[] = []
+
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i]
     const nativeId = String(i + 1)
-
-    // Convert depends_on IDs to native IDs
     const blockedBy = task.depends_on
       .map((dep) => idMap.get(dep))
       .filter((id): id is string => id !== undefined)
-
     const blocks = blocksMap.get(nativeId) || []
 
-    // Derive activeForm from title (present continuous)
-    const activeForm = deriveActiveForm(task.title)
+    const nativeTask = buildNativeTask(task, nativeId, blockedBy, blocks, workflowId, issueNum)
+    nativeTasks.push(nativeTask)
 
-    const nativeTask: NativeTask = {
-      id: nativeId,
-      subject: task.title,
-      description: task.instruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
-      activeForm,
-      status: task.done ? 'completed' : 'pending',
-      blocks,
-      blockedBy,
-      metadata: {
-        workflowId,
-        issueNumber: issueNum,
-        originalId: task.id,
-      },
+    if (!dryRun) {
+      const filePath = join(tasksDir, `${nativeId}.json`)
+      writeFileSync(filePath, `${JSON.stringify(nativeTask, null, 2)}\n`)
     }
-
-    const filePath = join(tasksDir, `${nativeId}.json`)
-    writeFileSync(filePath, `${JSON.stringify(nativeTask, null, 2)}\n`)
   }
 
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Native tasks written: ${tasksDir} (${tasks.length} tasks)`)
+  // Dry-run: print resolved task preview to stderr
+  if (dryRun) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error('')
+    for (const nt of nativeTasks) {
+      const deps = nt.blockedBy.length > 0 ? ` [blocked by #${nt.blockedBy.join(', #')}]` : ''
+      // biome-ignore lint/suspicious/noConsole: intentional CLI output
+      console.error(`  #${nt.id} ${nt.subject}${deps}`)
+      if (nt.description) {
+        for (const line of nt.description.split('\n')) {
+          // biome-ignore lint/suspicious/noConsole: intentional CLI output
+          console.error(`      ${line}`)
+        }
+      }
+    }
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error('')
+  }
 
-  return tasksDir
+  return { tasksDir, nativeTasks }
 }
 
 /**

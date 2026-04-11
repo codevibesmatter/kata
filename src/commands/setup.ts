@@ -15,7 +15,7 @@ type WmConfig = Record<string, unknown> & {
   reviews?: { spec_review?: boolean; code_review?: boolean; code_reviewer?: string | null }
   wm_version?: string
 }
-import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
+import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir, getProjectSkillsDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
 
 /**
@@ -373,6 +373,30 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     }
   }
 
+  // Copy steps.yaml from batteries (shared step definitions for $ref)
+  const stepsYamlSrc = join(getPackageRoot(), 'batteries', 'steps.yaml')
+  const stepsYamlDest = join(projectRoot, '.kata', 'steps.yaml')
+  if (existsSync(stepsYamlSrc) && !existsSync(stepsYamlDest)) {
+    copyFileSync(stepsYamlSrc, stepsYamlDest)
+  }
+
+  // Copy skills from batteries (two-level: skills/<name>/SKILL.md)
+  const skillsSrc = join(getPackageRoot(), 'batteries', 'skills')
+  if (existsSync(skillsSrc)) {
+    const skillsDest = getProjectSkillsDir(projectRoot)
+    for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const skillSrcDir = join(skillsSrc, entry.name)
+      const skillDestDir = join(skillsDest, entry.name)
+      mkdirSync(skillDestDir, { recursive: true })
+      for (const f of readdirSync(skillSrcDir)) {
+        const src = join(skillSrcDir, f)
+        const dest = join(skillDestDir, f)
+        copyFileSync(src, dest)
+      }
+    }
+  }
+
   // Register hooks in settings.json using absolute kata binary path
   // If kata_binary is set in kata.yaml, use it (for A/B testing branches)
   let binaryOverride: string | undefined
@@ -412,7 +436,7 @@ export async function setup(args: string[]): Promise<void> {
     // --yes / --batteries: write everything with auto-detected defaults
     applySetup(parsed.cwd, profile, parsed.explicitCwd)
 
-    // --batteries: scaffold full mode templates, agents, and spec templates
+    // --batteries: scaffold full mode templates, skills, and spec templates
     if (parsed.batteries) {
       const { scaffoldBatteries } = await import('./scaffold-batteries.js')
       const result = scaffoldBatteries(projectRoot)
@@ -428,16 +452,16 @@ export async function setup(args: string[]): Promise<void> {
           process.stdout.write(`    .kata/templates/${t}\n`)
         }
       }
-      if (result.agents.length > 0) {
-        process.stdout.write(`  Agents (${result.agents.length}):\n`)
-        for (const a of result.agents) {
-          process.stdout.write(`    .claude/agents/${a}\n`)
-        }
-      }
       if (result.specTemplates.length > 0) {
         process.stdout.write(`  Spec templates (${result.specTemplates.length}):\n`)
         for (const s of result.specTemplates) {
           process.stdout.write(`    planning/spec-templates/${s}\n`)
+        }
+      }
+      if (result.skills.length > 0) {
+        process.stdout.write(`  Skills (${result.skills.length}):\n`)
+        for (const s of result.skills) {
+          process.stdout.write(`    .claude/skills/${s}\n`)
         }
       }
       if (result.skipped.length > 0) {
@@ -475,7 +499,7 @@ Usage:
 
 Flags:
   --yes         Write config and register hooks using auto-detected defaults
-  --batteries   Scaffold mode templates, agents, spec templates, and GitHub issue templates
+  --batteries   Scaffold mode templates, skills, spec templates, and GitHub issue templates
                 (implies --yes)
   --strict      Also register PreToolUse hooks: task-deps, task-evidence
   --cwd=PATH    Run setup in a different directory

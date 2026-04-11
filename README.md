@@ -507,7 +507,6 @@ Files scaffolded:
 |--------|-------------|----------|
 | `batteries/kata.yaml` | `.kata/kata.yaml` | Project config (project name, commands, spec paths, mode overrides) |
 | `batteries/templates/*.md` | `.kata/templates/*.md` | Mode templates (research, planning, implementation, task, freeform, verify, debug) |
-| `batteries/agents/` | `.claude/agents/` | Agent definitions (review-agent, impl-agent, etc.) |
 | `batteries/spec-templates/` | `planning/spec-templates/` | Spec document stubs |
 | `batteries/interviews.yaml` | `.kata/interviews.yaml` | Onboard interview questions |
 | `batteries/subphase-patterns.yaml` | `.kata/subphase-patterns.yaml` | Phase pattern definitions |
@@ -857,7 +856,7 @@ See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
 | `.kata/verification-evidence/` | Output from verify mode runs |
 | `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned, created by `kata enter`) |
 | `.claude/settings.json` | Hook registration (Claude-owned) |
-| `.claude/agents/` | Agent definitions (review-agent, impl-agent, etc.) |
+| `.claude/skills/` | Skill definitions with prompt templates |
 
 ### Hook registration
 

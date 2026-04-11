@@ -6,7 +6,8 @@ describe('inline subphase parsing', () => {
     const result = phaseSchema.safeParse({
       id: 'p2',
       name: 'Implement',
-      container: true,
+      stage: 'work',
+      expansion: 'spec',
       subphase_pattern: [
         {
           id_suffix: 'impl',
@@ -41,7 +42,8 @@ describe('inline subphase parsing', () => {
     const result = phaseSchema.safeParse({
       id: 'p2',
       name: 'Implement',
-      container: true,
+      stage: 'work',
+      expansion: 'spec',
       subphase_pattern: 'impl-test-review',
     })
     expect(result.success).toBe(false)
@@ -51,6 +53,7 @@ describe('inline subphase parsing', () => {
     const result = phaseSchema.safeParse({
       id: 'p0',
       name: 'Baseline',
+      stage: 'setup',
     })
     expect(result.success).toBe(true)
   })

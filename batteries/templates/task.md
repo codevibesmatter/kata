@@ -1,220 +1,54 @@
 ---
 id: task
 name: Task Mode
-description: Combined planning + implementation for small tasks, chores, and quick fixes
+description: Combined planning + implementation for small tasks
 mode: task
-workflow_prefix: "TK"
 
 phases:
   - id: p0
-    name: Quick Planning
+    name: Orient
+    stage: setup
     task_config:
-      title: "P0: Plan - scope, approach, verify strategy (5-10 min)"
-      labels: [phase, phase-0, planning]
+      title: "P0: Setup - understand the task"
+      labels: [phase, setup]
     steps:
-      - id: understand-task
-        title: "Understand and classify the task"
-        hints:
-          - bash: "gh issue list --search \"{task_description}\" --limit 3"
+      - id: env-check
+        $ref: env-check
+        title: "Verify environment"
+      - id: understand
+        title: "Understand the task"
+        skill: interview
         instruction: |
-          Read the user's request carefully.
-
-          **Classify:**
-          - [ ] Chore — refactoring, cleanup, config change, docs
-          - [ ] Small feature — < 3 files, < 100 lines
-          - [ ] Fix — bug, typo, edge case
-          - [ ] Chore with GitHub issue
-
-          **If larger scope detected:** Tell the user and suggest:
-          `kata enter planning` for full spec
-          `kata enter implementation` if spec exists
-
-          **GitHub issue?**
-          ```bash
-          gh issue list --search "{task description}" --limit 3
-          ```
-          Note issue # if found.
-
-      - id: context-search
-        title: "Quick context search (3-5 min max)"
-        hints:
-          - search: "relevant patterns"
-            glob: "src/**/*.ts"
-        instruction: |
-          SPAWN a fast Explore agent for context gathering:
-
-          Task(subagent_type="Explore", prompt="
-            Find code patterns and context for: {task description}.
-            Search with Glob and Grep for relevant files.
-            Check .claude/rules/ or .kata/rules/ for applicable constraints.
-            Read the most relevant files IN FULL.
-            Document: file paths, function names, patterns to follow.
-            Keep output to 3-5 bullet points with file:line references.
-          ", model="haiku")
-
-          Wait for agent: TaskOutput(task_id=..., block=true)
-          Record key findings — just enough context to plan the change.
-
-          Then: Mark this task completed via TaskUpdate
-
-      - id: scope-and-approach
-        title: "Define scope and approach"
-        instruction: |
-          Write a brief plan (3-5 lines):
-
-          **Files to change:**
-          - {file path}: {what changes}
-
-          **Approach:**
-          - Follow pattern from: {file:line reference}
-          - Order: {step 1}, {step 2}
-
-          **Out of scope:**
-          - {what NOT to do}
-
-          **GitHub:** #{issue-number} or "no issue"
-
-          If GitHub issue found, claim it:
-          ```bash
-          gh issue edit {N} --remove-label "status:todo" --add-label "status:in-progress"
-          ```
-
-          Then: Mark this task completed via TaskUpdate
+          Clarify the task scope. If linked to an issue, read it.
+          Confirm: what to change, where, acceptance criteria.
 
   - id: p1
     name: Implement
+    stage: work
     task_config:
-      title: "P1: Implement - make changes, verify as you go"
-      labels: [phase, phase-1, implementation]
+      title: "P1: Work - implement and test"
       depends_on: [p0]
     steps:
-      - id: make-changes
-        title: "Make the changes"
-        instruction: |
-          Follow your plan from P0. For each file:
-          1. Read the file first
-          2. Make minimal, focused changes
-          3. Run typecheck/lint after significant edits
-
-          **Keep it simple:**
-          - No over-engineering
-          - No features beyond scope
-          - No unrelated refactoring
-
-      - id: verify-as-you-go
-        title: "Verify after each logical change"
-        instruction: |
-          After each change:
-          ```bash
-          # Run your project's typecheck command
-          # Run relevant tests if they exist
-          git diff  # Review what changed
-          ```
-
-          If tests exist for this area, run them:
-          ```bash
-          # Run tests matching the changed area
-          ```
-
-          Then: Mark this task completed via TaskUpdate
+      - id: implement
+        title: "Implement the change"
+        skill: code-impl
+      - id: test
+        title: "Build and test"
+        skill: test-protocol
+        gate:
+          bash: "{build_command}"
+          expect_exit: 0
 
   - id: p2
-    name: Complete
+    name: Close
+    stage: close
     task_config:
-      title: "P2: Complete - final checks, commit, push, close issue"
-      labels: [phase, phase-2, complete]
+      title: "P2: Close - commit and push"
       depends_on: [p1]
     steps:
-      - id: final-verification
-        title: "Final verification"
-        gate:
-          bash: "{test_command}"
-          expect_exit: 0
-          on_fail: "Tests failing. Fix before proceeding."
-        hints:
-          - bash: "git status"
-          - bash: "git diff --staged"
-        instruction: |
-          ```bash
-          # Run typecheck
-          # Run lint
-          git status          # Review all changes
-          git diff --staged   # Confirm staged changes look right
-          ```
-
-      - id: commit-and-push
-        title: "Commit, push, close issue"
-        instruction: |
-          Commit:
-          ```bash
-          git add {changed files}
-          git commit -m "type(scope): description
-
-          {If GitHub issue: Refs #N}"
-          git push
-          ```
-
-          Commit types: `chore:` `fix:` `feat:` `refactor:` `docs:` `test:`
-
-          **If GitHub issue:**
-          ```bash
-          gh issue edit {N} --remove-label "status:in-progress" --add-label "status:done"
-          gh issue comment {N} --body "Done. Commit: {commit-sha}"
-          # Close if fully resolved:
-          gh issue close {N} --comment "Resolved in {commit-sha}"
-          ```
-
-          Then: Mark this task completed via TaskUpdate
-
-global_conditions:
-  - changes_committed
+      - id: commit-push
+        $ref: commit-push
+        title: "Commit and push"
 
 workflow_id_format: "TK-{session_last_4}-{MMDD}"
 ---
-
-# Task Mode
-
-**For small tasks and chores** — combined planning + implementation in one flow.
-
-## When to Use
-
-- Chores (refactoring, cleanup, config, docs)
-- Small features (< 3 files, < ~100 lines)
-- Quick fixes (bugs, typos, edge cases)
-- Work that doesn't need a full spec
-
-## When NOT to Use
-
-- Features needing full design → `kata enter planning`
-- Complex multi-file changes → `kata enter planning`
-- Bugs needing systematic investigation → `kata enter debug`
-- Work spanning multiple sessions → `kata enter planning`
-
-## Flow
-
-```
-P0: Plan (5-10 min)
-    ├── Classify: chore / feature / fix
-    ├── Quick context search (Explore agent)
-    └── 3-5 line scope + approach
-
-P1: Implement
-    ├── Make minimal, focused changes
-    └── Verify as you go (typecheck, tests)
-
-P2: Complete
-    ├── Final checks
-    ├── Commit + push
-    └── Close GitHub issue (if any)
-```
-
-## Standalone Verification
-
-For thorough verification after task completion, run a separate verify session:
-```bash
-kata enter verify
-```
-
-## Key Principle
-
-**Do less, verify more.** Task mode is for focused, bounded work.

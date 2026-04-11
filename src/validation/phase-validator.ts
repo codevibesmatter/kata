@@ -31,7 +31,7 @@ export interface ValidationResult {
  * - Schema validation (required fields, types)
  * - Unique phase IDs
  * - Valid dependencies (all depends_on reference existing phases)
- * - Single container phase (max 1 with container: true)
+ * - Single spec-expansion phase (max 1 with expansion: 'spec')
  */
 export function validatePhases(phases: unknown[], templatePath?: string): ValidationResult {
   const errors: PhaseValidationError[] = []
@@ -90,14 +90,14 @@ export function validatePhases(phases: unknown[], templatePath?: string): Valida
     }
   }
 
-  // 4. Check for single container phase
-  const containerPhases = validPhases.filter((p) => p.container === true)
-  if (containerPhases.length > 1) {
+  // 4. Check for single expansion: 'spec' phase
+  const specExpansionPhases = validPhases.filter((p) => p.expansion === 'spec')
+  if (specExpansionPhases.length > 1) {
     errors.push(
       new PhaseValidationError(
-        `Multiple container phases found: ${containerPhases.map((p) => p.id).join(', ')}. Only one phase can be marked as container.`,
+        `Multiple spec-expansion phases found: ${specExpansionPhases.map((p) => p.id).join(', ')}. Only one phase can have expansion: 'spec'.`,
         undefined,
-        'container',
+        'expansion',
         templatePath,
       ),
     )

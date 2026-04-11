@@ -1,8 +1,31 @@
 // kata prime - Output context injection block
-import { getCurrentSessionId, getStateFilePath, resolveTemplatePath } from '../session/lookup.js'
+import { existsSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import jsYaml from 'js-yaml'
+import { getCurrentSessionId, getStateFilePath, getPackageRoot } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
-import { readFullTemplateContent } from '../yaml/index.js'
 import { loadKataConfig } from '../config/kata-config.js'
+
+/**
+ * Load mode rules with fallback to batteries/kata.yaml when project config is missing them.
+ */
+function getModeRules(modeName: string, projectConfig: ReturnType<typeof loadKataConfig>): string[] {
+  const modeConfig = projectConfig.modes[modeName]
+  if (modeConfig?.rules?.length) return modeConfig.rules
+
+  try {
+    const batteriesPath = join(getPackageRoot(), 'batteries', 'kata.yaml')
+    if (existsSync(batteriesPath)) {
+      const raw = readFileSync(batteriesPath, 'utf-8')
+      const parsed = jsYaml.load(raw, { schema: jsYaml.CORE_SCHEMA }) as Record<string, unknown>
+      const modes = parsed?.modes as Record<string, { rules?: string[] }> | undefined
+      if (modes?.[modeName]?.rules?.length) return modes[modeName].rules!
+    }
+  } catch {
+    // Fallback failed
+  }
+  return []
+}
 
 /**
  * Parse command line arguments for prime command
@@ -97,84 +120,70 @@ async function buildContextBlock(sessionId: string): Promise<string> {
   if (await stateExists(stateFile)) {
     const state = await readState(stateFile)
 
-    // If we have a current mode with a template, output the full template content
-    if (state.currentMode && state.currentMode !== 'default' && state.template) {
-      try {
-        const templatePath = resolveTemplatePath(state.template)
-        const templateContent = readFullTemplateContent(templatePath)
+    // If we have a current mode, output rules (not raw template content)
+    if (state.currentMode && state.currentMode !== 'default') {
+      const kataConfig = loadKataConfig()
+      const modeConfig = kataConfig.modes[state.currentMode]
 
-        if (templateContent) {
-          contextParts.push(`# Active Mode: ${state.currentMode}`)
-          if (state.workflowId) {
-            contextParts.push(`# Workflow: ${state.workflowId}`)
+      contextParts.push(`Currently in **${state.currentMode}** mode. To switch modes: \`kata enter <mode>\` (available: ${Object.keys(kataConfig.modes).filter(m => !kataConfig.modes[m].deprecated).sort().join(', ')}).`)
+
+      const ruleParts: string[] = []
+
+      // Mode-specific rules (orchestration context — falls back to batteries)
+      const modeRules = getModeRules(state.currentMode, kataConfig)
+      for (const rule of modeRules) {
+        ruleParts.push(`- ${rule}`)
+      }
+
+      // Global rules
+      if (kataConfig.global_rules.length > 0) {
+        for (const rule of kataConfig.global_rules) {
+          ruleParts.push(`- ${rule}`)
+        }
+      }
+
+      // Task system rules
+      if (kataConfig.task_rules.length > 0 && state.currentPhase) {
+        for (const rule of kataConfig.task_rules) {
+          ruleParts.push(`- ${rule}`)
+        }
+      }
+
+      if (ruleParts.length > 0) {
+        contextParts.push('')
+        contextParts.push(ruleParts.join('\n'))
+      }
+
+      // Ledger context
+      if (state.ledger) {
+        const ledgerParts: string[] = []
+        if (state.ledger.decisions?.length) {
+          ledgerParts.push('## Decisions')
+          for (const d of state.ledger.decisions) {
+            ledgerParts.push(`- ${d}`)
           }
-          if (state.issueNumber) {
-            contextParts.push(`# Issue: #${state.issueNumber}`)
+        }
+        if (state.ledger.discoveries?.length) {
+          ledgerParts.push('## Discoveries')
+          for (const d of state.ledger.discoveries) {
+            ledgerParts.push(`- ${d}`)
           }
-          if (state.currentPhase) {
-            contextParts.push(`# Current Phase: ${state.currentPhase}`)
+        }
+        if (state.ledger.corrections?.length) {
+          ledgerParts.push('## Corrections')
+          for (const c of state.ledger.corrections) {
+            ledgerParts.push(`- ${c}`)
           }
+        }
+        if (ledgerParts.length > 0) {
           contextParts.push('')
           contextParts.push('---')
-          contextParts.push('')
-          contextParts.push(templateContent)
-
-          // Ledger context
-          if (state.ledger) {
-            const ledgerParts: string[] = []
-            if (state.ledger.decisions?.length) {
-              ledgerParts.push('## Decisions')
-              for (const d of state.ledger.decisions) {
-                ledgerParts.push(`- ${d}`)
-              }
-            }
-            if (state.ledger.discoveries?.length) {
-              ledgerParts.push('## Discoveries')
-              for (const d of state.ledger.discoveries) {
-                ledgerParts.push(`- ${d}`)
-              }
-            }
-            if (state.ledger.corrections?.length) {
-              ledgerParts.push('## Corrections')
-              for (const c of state.ledger.corrections) {
-                ledgerParts.push(`- ${c}`)
-              }
-            }
-            if (ledgerParts.length > 0) {
-              contextParts.push('')
-              contextParts.push('---')
-              contextParts.push('# Session Ledger')
-              contextParts.push(...ledgerParts)
-            }
-          }
-
-          // Inject global and task rules from kata.yaml
-          const { loadKataConfig } = await import('../config/kata-config.js')
-          const kataConfig = loadKataConfig()
-
-          const ruleParts: string[] = []
-          if (kataConfig.global_rules.length > 0) {
-            ruleParts.push('## Global Rules')
-            for (const rule of kataConfig.global_rules) {
-              ruleParts.push(`- ${rule}`)
-            }
-          }
-          if (kataConfig.task_rules.length > 0 && state.currentPhase) {
-            ruleParts.push('## Task System Rules')
-            for (const rule of kataConfig.task_rules) {
-              ruleParts.push(`- ${rule}`)
-            }
-          }
-          if (ruleParts.length > 0) {
-            contextParts.push('')
-            contextParts.push(ruleParts.join('\n'))
-          }
-
-          return contextParts.join('\n')
+          contextParts.push('# Session Ledger')
+          contextParts.push(...ledgerParts)
         }
-      } catch {
-        // Template not found, fall through to mode selection help
       }
+
+      return contextParts.join('\n')
     }
   }
 

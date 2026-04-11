@@ -3,9 +3,8 @@
 # Batch eval runner — run a scenario N times and collect stats.
 #
 # Usage:
-#   ./eval/batch-run.sh skill-activation 5
-#   ./eval/batch-run.sh skill-activation-control 5 --judge
-#   ./eval/batch-run.sh skill-quality 5 --judge
+#   ./eval/batch-run.sh task-mode 5
+#   ./eval/batch-run.sh impl-auth 5 --judge
 #
 
 set -euo pipefail
