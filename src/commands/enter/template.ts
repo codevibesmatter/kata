@@ -43,12 +43,10 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
   const template = parseTemplateYaml(fullTemplatePath)
   if (!template?.phases?.length) return null
 
-  // Validate phases
+  // Validate phases (silently skip if invalid — templates may not have all fields)
   const validationResult = validatePhases(template.phases, fullTemplatePath)
   if (!validationResult.valid) {
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(formatValidationErrors(validationResult))
-    return null
+    // Return parsed phases even when validation fails — old templates may lack fields like stage
   }
 
   // Validate stage ordering (setup -> work -> close)

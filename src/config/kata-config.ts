@@ -104,7 +104,9 @@ export const KataConfigSchema = z.object({
   providers: KataProvidersSchema.optional(),
 
   // Global rules — injected into every mode's context
-  global_rules: z.array(z.string()).default([]),
+  global_rules: z.array(z.string()).default([
+    'When a task instruction says \'Invoke /skill-name\', use the Skill tool to invoke that skill before starting work on the task.',
+  ]),
 
   // Task system rules — injected when mode has phases (tasks)
   task_rules: z.array(z.string()).default([

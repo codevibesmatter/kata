@@ -107,17 +107,11 @@ export function buildSpecTasks(
 ): Task[] {
   const tasks: Task[] = []
 
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Building tasks from spec phases for GH#${issueNum}`)
-
   for (let i = 0; i < specPhases.length; i++) {
     const phase = specPhases[i]
     const phaseNum = i + 1
     const phaseName = phase.name || phase.id.toUpperCase()
     const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
-
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`  ${phaseLabel}: ${phaseName}`)
 
     if (phase.tasks?.length) {
       const taskSummary =
@@ -182,16 +176,6 @@ export function buildSpecTasks(
           instruction,
         })
 
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`    Created: ${taskId}`)
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`      Title: ${fullTitle}`)
-
-        if (dependsOn.length > 0) {
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`    Dependency: ${taskId} depends on ${dependsOn.join(', ')}`)
-        }
-
         prevTaskId = taskId
       }
     }
@@ -245,9 +229,6 @@ export function buildPhaseTasks(
   const stepLibrary = loadStepLibrary()
 
   const tasks: Task[] = []
-
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Building phase tasks for workflow: ${workflowId}`)
 
   // Tracks the last task ID per phase — used to chain cross-phase dependencies
   const phaseLastTaskId = new Map<string, string>()
@@ -326,13 +307,6 @@ export function buildPhaseTasks(
           instruction: finalInstruction,
         })
 
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`  Created step task: ${taskId}`)
-        if (dependsOn.length > 0) {
-          // biome-ignore lint/suspicious/noConsole: intentional CLI output
-          console.error(`    Depends on: ${dependsOn.join(', ')}`)
-        }
-
         prevStepTaskId = taskId
       }
 
@@ -346,6 +320,14 @@ export function buildPhaseTasks(
 
       const taskId = phase.id
 
+      // Build instruction from phase-level skill and agent expansion protocol
+      let instruction: string | undefined
+      if (phase.expansion === 'agent' && phase.agent_protocol) {
+        instruction = buildAgentExpansionInstruction(phase.agent_protocol, phase.skill)
+      } else if (phase.skill) {
+        instruction = `## Skill\nInvoke /${phase.skill} before starting this task.\n`
+      }
+
       tasks.push({
         id: taskId,
         title: fullTitle,
@@ -353,16 +335,10 @@ export function buildPhaseTasks(
         depends_on: phaseDependsOn,
         completedAt: null,
         reason: null,
+        instruction,
       })
 
       phaseLastTaskId.set(phase.id, taskId)
-
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`  Created phase task: ${phase.id} → ${taskId}`)
-      if (phaseDependsOn.length > 0) {
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`    Depends on: ${phaseDependsOn.join(', ')}`)
-      }
     }
     // Expansion phases (no task_config, no steps) are skipped — handled by buildSpecTasks
   }
@@ -472,9 +448,6 @@ export function writeNativeTaskFiles(
     const filePath = join(tasksDir, `${nativeId}.json`)
     writeFileSync(filePath, `${JSON.stringify(nativeTask, null, 2)}\n`)
   }
-
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Native tasks written: ${tasksDir} (${tasks.length} tasks)`)
 
   return tasksDir
 }

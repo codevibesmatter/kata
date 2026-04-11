@@ -1,11 +1,12 @@
 // kata enter - Enter a mode
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
+import jsYaml from 'js-yaml'
 import {
   getCurrentSessionId,
   getStateFilePath,
   findProjectDir,
-  resolveTemplatePath,
+  getPackageRoot,
 } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { writeState } from '../state/writer.js'
@@ -14,7 +15,7 @@ import { generateWorkflowId, generateWorkflowIdForIssue } from '../utils/workflo
 import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import type { SessionState } from '../state/schema.js'
 import { validatePhases, formatValidationErrors } from '../validation/index.js'
-import { readFullTemplateContent, parseYamlFrontmatterWithError, type SpecPhase, type SpecYaml } from '../yaml/index.js'
+import { parseYamlFrontmatterWithError, type SpecPhase, type SpecYaml } from '../yaml/index.js'
 import type { SubphasePattern } from '../validation/schemas.js'
 
 // Import from modular enter command
@@ -28,55 +29,89 @@ import {
 import { validateGatePlaceholders, type PlaceholderContext } from './enter/placeholder.js'
 
 /**
- * Output full template content to stderr for context injection
- * Called after entering a mode to provide full workflow instructions
+ * Load mode rules with fallback to batteries/kata.yaml when project config is missing them.
  */
-function outputFullTemplateContent(
-  templatePath: string,
-  modeName: string,
-  workflowId: string,
-  issueNum?: number,
-  currentPhase?: string,
-): void {
-  try {
-    const fullTemplatePath = templatePath.startsWith('/')
-      ? templatePath
-      : resolveTemplatePath(templatePath)
-    const templateContent = readFullTemplateContent(fullTemplatePath)
+function getModeRules(modeName: string, projectConfig: ReturnType<typeof loadKataConfig>): string[] {
+  const modeConfig = projectConfig.modes[modeName]
+  if (modeConfig?.rules?.length) return modeConfig.rules
 
-    if (templateContent) {
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(
-        '═══════════════════════════════════════════════════════════════════════════════',
-      )
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`📋 FULL MODE INSTRUCTIONS: ${modeName}`)
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(`   Workflow: ${workflowId}`)
-      if (issueNum) {
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`   Issue: #${issueNum}`)
-      }
-      if (currentPhase) {
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`   Current Phase: ${currentPhase}`)
-      }
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(
-        '═══════════════════════════════════════════════════════════════════════════════',
-      )
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error(templateContent)
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
+  // Fallback: load from batteries/kata.yaml
+  try {
+    const batteriesPath = join(getPackageRoot(), 'batteries', 'kata.yaml')
+    if (existsSync(batteriesPath)) {
+      const raw = readFileSync(batteriesPath, 'utf-8')
+      const parsed = jsYaml.load(raw, { schema: jsYaml.CORE_SCHEMA }) as Record<string, unknown>
+      const modes = parsed?.modes as Record<string, { rules?: string[] }> | undefined
+      if (modes?.[modeName]?.rules?.length) return modes[modeName].rules!
     }
   } catch {
-    // Template read error - silently ignore, guidance already output above
+    // Fallback failed, continue without mode rules
   }
+  return []
+}
+
+/**
+ * Output rendered rules to stderr for context injection
+ * Replaces raw template dump with actionable rules from kata.yaml
+ */
+function outputRules(
+  modeName: string,
+  workflowId: string,
+  effectiveTaskRules: string[],
+  issueNum?: number,
+  hasTasks = true,
+): void {
+  const config = loadKataConfig()
+  const lines: string[] = []
+
+  // Mode rules (orchestration context — "You are a RESEARCHER", etc.)
+  const modeRules = getModeRules(modeName, config)
+  for (const rule of modeRules) {
+    lines.push(`- ${rule}`)
+  }
+
+  // Global rules
+  if (config.global_rules.length > 0) {
+    for (const rule of config.global_rules) {
+      lines.push(`- ${rule}`)
+    }
+  }
+
+  // Task system rules — only when mode has tasks
+  if (hasTasks && effectiveTaskRules.length > 0) {
+    for (const rule of effectiveTaskRules) {
+      lines.push(`- ${rule}`)
+    }
+  }
+
+  if (lines.length === 0) return
+
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(
+    '═══════════════════════════════════════════════════════════════════════════════',
+  )
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`📋 RULES: ${modeName}`)
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(`   Workflow: ${workflowId}`)
+  if (issueNum) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(`   Issue: #${issueNum}`)
+  }
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error(
+    '═══════════════════════════════════════════════════════════════════════════════',
+  )
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
+  for (const line of lines) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(line)
+  }
+  // biome-ignore lint/suspicious/noConsole: intentional CLI output
+  console.error('')
 }
 
 import { findSpecFile } from './enter/spec.js'
@@ -135,9 +170,6 @@ async function enterWithCustomTemplate(
   // Derive mode name from template filename or use provided mode arg
   const templateFilename = templatePath.split('/').pop()?.replace(/\.md$/, '') || 'custom'
   const modeName = parsed.mode || templateFilename
-
-  // biome-ignore lint/suspicious/noConsole: intentional CLI output
-  console.error(`Using custom template: ${templatePath}`)
 
   const sessionId = parsed.session || (await getCurrentSessionId())
   const stateFile = await getStateFilePath(sessionId)
@@ -240,82 +272,39 @@ async function enterWithCustomTemplate(
   // Build guidance
   const guidance = buildWorkflowGuidance(workflowId, modeName, null, phaseTitles, undefined)
 
-  // Output human-readable guidance - native tasks mode
-  if (guidance.requiredTodos.length > 0 && !parsed.dryRun) {
-    if (!isNativeTasksEnabled()) {
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('⚠️  WARNING: Native tasks are disabled (CLAUDE_CODE_ENABLE_TASKS=false)')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   kata workflow tracking requires native tasks. TaskList will not work.')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json, then restart Claude Code.')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-    }
+  // Warn if native tasks are disabled
+  if (guidance.requiredTodos.length > 0 && !parsed.dryRun && !isNativeTasksEnabled()) {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`✅ ${guidance.requiredTodos.length} tasks pre-created with dependency chains`)
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('Tasks are already created. DO NOT create additional tasks with TaskCreate.')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(
-      'Follow the dependency chain - blocked tasks cannot start until dependencies complete.',
-    )
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('Your FIRST action: Run TaskList to see all tasks and their dependencies.')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
+    console.error('⚠️  Native tasks disabled (CLAUDE_CODE_ENABLE_TASKS=false). TaskList will not work.')
   }
 
   const action = parsed.dryRun ? 'dry-run' : isTemporary ? 'started-temporary' : 'started'
 
-  // Output full template content
+  // Output rendered rules (replaces raw template dump)
   if (!parsed.dryRun) {
-    outputFullTemplateContent(templatePath, modeName, workflowId, issueNum, effectivePhases[0])
+    const kataConfig = loadKataConfig()
+    outputRules(modeName, workflowId, kataConfig.task_rules, issueNum, phaseTitles.length > 0)
   }
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.log(
-    JSON.stringify(
-      {
-        success: true,
-        mode: modeName,
-        customTemplate: templatePath,
-        workflowId,
-        action,
-        sessionType: modeName,
-        template: templatePath,
-        phases: effectivePhases,
-        workflowDir,
-        ...(parsed.dryRun && {
-          dryRun: true,
-          wouldCreateTasks: phaseTitles.length,
-          pattern: `${phaseTitles.length} tasks from custom template`,
-        }),
-        ...(isTemporary && {
-          temporary: true,
-          note: 'One-off session with custom tracking. Template not registered in modes.yaml.',
-        }),
-        enteredAt: finalState.updatedAt,
-        ...(issueNum && { issueNumber: issueNum }),
-        guidance,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({
+      success: true,
+      mode: modeName,
+      workflowId,
+      action,
+      sessionType: modeName,
+      template: templatePath,
+      phases: effectivePhases,
+      workflowDir,
+      ...(parsed.dryRun && {
+        dryRun: true,
+        wouldCreateTasks: phaseTitles.length,
+        pattern: `${phaseTitles.length} tasks from custom template`,
+      }),
+      enteredAt: finalState.updatedAt,
+      ...(issueNum && { issueNumber: issueNum }),
+    }),
   )
 }
 
@@ -472,8 +461,6 @@ export async function enter(args: string[]): Promise<void> {
 
       if (parseResult.ok && parseResult.data?.phases?.length) {
         specPhases = parseResult.data.phases
-        // biome-ignore lint/suspicious/noConsole: intentional CLI output
-        console.error(`Found spec with ${specPhases.length} phases: ${specPath}`)
 
         // ENFORCEMENT: Check that at least one phase has tasks
         const totalTasks = specPhases.reduce((sum, p) => sum + (p.tasks?.length ?? 0), 0)
@@ -678,101 +665,41 @@ export async function enter(args: string[]): Promise<void> {
     resolvedSubphasePattern.length > 0 ? resolvedSubphasePattern : undefined,
   )
 
-  // Output human-readable guidance to stderr - native tasks mode
-  if (guidance.requiredTodos.length > 0 && !isAlreadyInMode && !parsed.dryRun) {
-    // Warn if native tasks are disabled — kata's workflow tracking won't work
-    if (!isNativeTasksEnabled()) {
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('⚠️  WARNING: Native tasks are disabled (CLAUDE_CODE_ENABLE_TASKS=false)')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   kata workflow tracking requires native tasks. TaskList will not work.')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('   To enable: set CLAUDE_CODE_ENABLE_TASKS=true in ~/.claude/settings.json, then restart Claude Code.')
-      // biome-ignore lint/suspicious/noConsole: intentional CLI output
-      console.error('')
-    }
-    // Native tasks mode: tasks already created with dependencies - direct agent to use TaskList
+  // Warn if native tasks are disabled
+  if (guidance.requiredTodos.length > 0 && !isAlreadyInMode && !parsed.dryRun && !isNativeTasksEnabled()) {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`✅ ${guidance.requiredTodos.length} tasks pre-created with dependency chains`)
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('Tasks are already created. DO NOT create additional tasks with TaskCreate.')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(
-      'Follow the dependency chain - blocked tasks cannot start until dependencies complete.',
-    )
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('Your FIRST action: Run TaskList to see all tasks and their dependencies.')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('🔧 COMMANDS:')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('───────────────────────────────────────────────────────────────────────────────')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`  Status:         ${guidance.commands.listTasks}`)
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`  Can exit:       ${guidance.commands.pendingTasks}`)
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(`  Complete task:  ${guidance.commands.completeWithEvidence}`)
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('═══════════════════════════════════════════════════════════════════════════════')
-    // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error('')
+    console.error('⚠️  Native tasks disabled (CLAUDE_CODE_ENABLE_TASKS=false). TaskList will not work.')
   }
 
-  // Output full template content
-  if (!parsed.dryRun && modeConfig.template) {
-    outputFullTemplateContent(
-      modeConfig.template,
-      canonical,
-      workflowId,
-      issueNum,
-      effectivePhases[0],
-    )
+  // Output rendered rules (replaces raw template dump)
+  if (!parsed.dryRun) {
+    outputRules(canonical, workflowId, effectiveTaskRules, issueNum, allTasks.length > 0)
   }
 
   // biome-ignore lint/suspicious/noConsole: intentional CLI output
   console.log(
-    JSON.stringify(
-      {
-        success: true,
-        mode: canonical,
-        workflowId,
-        action,
-        sessionType: canonical,
-        template: modeConfig.template,
-        phases: effectivePhases,
-        workflowDir,
-        ...(parsed.dryRun && {
-          dryRun: true,
-          wouldCreateTasks,
-          pattern:
-            hasSpecExpansion && specPhases
-              ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
-              : `${wouldCreateTasks} tasks`,
-        }),
-        enteredAt: finalState.updatedAt,
-        ...(specPath && { specPath, phasesFromSpec: true }),
-        ...(issueNum && { issueNumber: issueNum }),
-        tasks: allTasks.map((t) => t.title),
-        // guidance contains requiredTodos, workflow steps, and commands
-        guidance,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({
+      success: true,
+      mode: canonical,
+      workflowId,
+      action,
+      sessionType: canonical,
+      template: modeConfig.template,
+      phases: effectivePhases,
+      workflowDir,
+      ...(parsed.dryRun && {
+        dryRun: true,
+        wouldCreateTasks,
+        pattern:
+          hasSpecExpansion && specPhases
+            ? `${templatePhases?.filter((p) => !p.expansion && p.task_config?.title).length ?? 0} orchestration + ${specPhases.length} phases × ${resolvedSubphasePattern.length || 1} subphases = ${wouldCreateTasks} tasks`
+            : `${wouldCreateTasks} tasks`,
+      }),
+      enteredAt: finalState.updatedAt,
+      ...(specPath && { specPath }),
+      ...(issueNum && { issueNumber: issueNum }),
+      tasks: allTasks.map((t) => t.title),
+    }),
   )
 }
 

@@ -1,5 +1,4 @@
 // Workflow guidance generation for enter command
-import { loadKataConfig } from '../../config/kata-config.js'
 import type { PhaseDefinition, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
 import { resolvePlaceholders } from './placeholder.js'
@@ -157,45 +156,9 @@ export function buildWorkflowGuidance(
     }
   }
 
-  // Build workflow instructions based on mode
-  // Note: Detailed workflow comes from template/spec, not hardcoded here
-  // Tasks are managed via Claude Code's native task system (TaskUpdate/TaskList)
-  const workflow: string[] = []
-  if (mode === 'implementation') {
-    const specPath = loadKataConfig().spec_path
-    workflow.push(
-      'Follow the tasks closely - they define your workflow.',
-      `Reference the spec for detailed requirements: ${specPath}/<issue>-*.md`,
-      '',
-      'Commands:',
-      '  kata status                           # Check current mode and phase',
-      '  kata can-exit                         # Check if exit conditions met',
-    )
-  } else if (mode === 'planning') {
-    workflow.push(
-      'Follow the tasks closely - they define your workflow.',
-      'Reference template: packages/workflow-management/templates/planning-feature.md',
-      '',
-      'Commands:',
-      '  kata status                           # Check current mode and phase',
-      '  kata can-exit                         # Check if exit conditions met',
-    )
-  } else {
-    workflow.push(
-      'Follow the tasks closely - they define your workflow.',
-      `Reference template: packages/workflow-management/templates/${mode}.md`,
-      '',
-      'Commands:',
-      '  kata status                           # Check current mode and phase',
-      '  kata can-exit                         # Check if exit conditions met',
-    )
-  }
-
-  const commands = {
+  return { requiredTodos, workflow: [] as string[], taskSystem: taskSystemRules ?? [], commands: {
     listTasks: 'kata status',
     pendingTasks: 'kata can-exit',
     completeWithEvidence: 'TaskUpdate(taskId="X", status="completed")',
-  }
-
-  return { requiredTodos, workflow, taskSystem: taskSystemRules ?? [], commands }
+  } }
 }
