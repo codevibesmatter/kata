@@ -222,16 +222,13 @@ async function enterWithCustomTemplate(
   // Create workflow directory for state tracking
   const workflowDir = join(dirname(stateFile), 'workflow')
 
-  // Create native tasks from template (skip only in dry-run mode)
+  // Create native tasks from template phases (dry-run previews without persisting)
   if (!parsed.dryRun) {
-    // Ensure workflow directory exists
     mkdirSync(workflowDir, { recursive: true })
-
-    // Create native tasks from template phases
-    const tasks = buildPhaseTasks(templatePath, workflowId, issueNum)
-    if (tasks.length > 0) {
-      writeNativeTaskFiles(sessionId, tasks, workflowId, issueNum ?? null)
-    }
+  }
+  const tasks = buildPhaseTasks(templatePath, workflowId, issueNum)
+  if (tasks.length > 0) {
+    writeNativeTaskFiles(sessionId, tasks, workflowId, issueNum ?? null, parsed.dryRun)
   }
 
   const finalState: SessionState = {
@@ -614,9 +611,9 @@ export async function enter(args: string[]): Promise<void> {
       allTasks = buildPhaseTasks(modeConfig.template, workflowId, issueNum, reviewers)
     }
 
-  // Write native task files only on real enter (not dry-run)
-  if (!parsed.dryRun && allTasks.length > 0) {
-    writeNativeTaskFiles(sessionId, allTasks, workflowId, issueNum ?? null)
+  // Write native task files (dry-run previews without persisting)
+  if (allTasks.length > 0) {
+    writeNativeTaskFiles(sessionId, allTasks, workflowId, issueNum ?? null, parsed.dryRun)
   }
 
   const finalState: SessionState = {

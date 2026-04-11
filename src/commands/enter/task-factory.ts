@@ -390,21 +390,75 @@ export function clearNativeTaskFiles(sessionId: string): void {
 }
 
 /**
- * Convert workflow tasks to native Claude Code task format and write to ~/.claude/tasks/{session-id}/
- * Native tasks use incrementing integer IDs (1.json, 2.json, etc.)
- * Always clears existing tasks before writing (ensures no stale tasks from previous mode/issue).
+ * Build a single NativeTask from a workflow Task, resolving placeholders and deriving fields.
+ */
+function buildNativeTask(
+  task: Task,
+  nativeId: string,
+  blockedBy: string[],
+  blocks: string[],
+  workflowId: string,
+  issueNum: number | null,
+): NativeTask {
+  const activeForm = deriveActiveForm(task.title)
+
+  // Resolve agent expansion placeholders now that native IDs are known
+  let resolvedInstruction = task.instruction
+  if (resolvedInstruction?.includes('{this_task_id}')) {
+    const blockedIds = blocks.map(id => `"${id}"`).join(', ')
+    resolvedInstruction = resolvedInstruction
+      .replace(/{this_task_id}/g, nativeId)
+      .replace(/{blocked_task_ids}/g, blockedIds)
+  }
+
+  // Append first meaningful line of instruction to subject so TaskList shows guidance
+  let subject = task.title
+  if (resolvedInstruction) {
+    const firstLine = resolvedInstruction
+      .split('\n')
+      .map(l => l.trim())
+      .find(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('```'))
+    if (firstLine) {
+      const snippet = firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine
+      subject = `${task.title} — ${snippet}`
+    }
+  }
+
+  return {
+    id: nativeId,
+    subject,
+    description: resolvedInstruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
+    activeForm,
+    status: task.done ? 'completed' : 'pending',
+    blocks,
+    blockedBy,
+    metadata: {
+      workflowId,
+      issueNumber: issueNum,
+      originalId: task.id,
+    },
+  }
+}
+
+/**
+ * Convert workflow tasks to native Claude Code task format.
+ * When dryRun is false (default), writes JSON files to ~/.claude/tasks/{session-id}/.
+ * When dryRun is true, builds and returns the resolved tasks without writing to disk.
+ * In both cases, prints a dry-run preview table to stderr when dryRun is true.
  */
 export function writeNativeTaskFiles(
   sessionId: string,
   tasks: Task[],
   workflowId: string,
   issueNum: number | null,
+  dryRun = false,
 ): string {
   const tasksDir = getNativeTasksDir(sessionId)
 
-  // Always start fresh - clears stale tasks from previous mode/issue
-  clearNativeTaskFiles(sessionId)
-  mkdirSync(tasksDir, { recursive: true })
+  if (!dryRun) {
+    clearNativeTaskFiles(sessionId)
+    mkdirSync(tasksDir, { recursive: true })
+  }
 
   // Map our task IDs to native integer IDs
   const idMap = new Map<string, string>()
@@ -426,60 +480,42 @@ export function writeNativeTaskFiles(
     }
   }
 
-  // Write each task as a JSON file
+  const nativeTasks: NativeTask[] = []
+
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i]
     const nativeId = String(i + 1)
-
-    // Convert depends_on IDs to native IDs
     const blockedBy = task.depends_on
       .map((dep) => idMap.get(dep))
       .filter((id): id is string => id !== undefined)
-
     const blocks = blocksMap.get(nativeId) || []
 
-    // Derive activeForm from title (present continuous)
-    const activeForm = deriveActiveForm(task.title)
+    const nativeTask = buildNativeTask(task, nativeId, blockedBy, blocks, workflowId, issueNum)
+    nativeTasks.push(nativeTask)
 
-    // Resolve agent expansion placeholders now that native IDs are known
-    let resolvedInstruction = task.instruction
-    if (resolvedInstruction?.includes('{this_task_id}')) {
-      const blockedIds = blocks.map(id => `"${id}"`).join(', ')
-      resolvedInstruction = resolvedInstruction
-        .replace(/{this_task_id}/g, nativeId)
-        .replace(/{blocked_task_ids}/g, blockedIds)
+    if (!dryRun) {
+      const filePath = join(tasksDir, `${nativeId}.json`)
+      writeFileSync(filePath, `${JSON.stringify(nativeTask, null, 2)}\n`)
     }
+  }
 
-    // Append first meaningful line of instruction to subject so TaskList shows guidance
-    let subject = task.title
-    if (resolvedInstruction) {
-      const firstLine = resolvedInstruction
-        .split('\n')
-        .map(l => l.trim())
-        .find(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('```'))
-      if (firstLine) {
-        const snippet = firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine
-        subject = `${task.title} — ${snippet}`
+  // Dry-run: print resolved task preview to stderr
+  if (dryRun) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error('')
+    for (const nt of nativeTasks) {
+      const deps = nt.blockedBy.length > 0 ? ` [blocked by #${nt.blockedBy.join(', #')}]` : ''
+      // biome-ignore lint/suspicious/noConsole: intentional CLI output
+      console.error(`  #${nt.id} ${nt.subject}${deps}`)
+      if (nt.description) {
+        for (const line of nt.description.split('\n')) {
+          // biome-ignore lint/suspicious/noConsole: intentional CLI output
+          console.error(`      ${line}`)
+        }
       }
     }
-
-    const nativeTask: NativeTask = {
-      id: nativeId,
-      subject,
-      description: resolvedInstruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
-      activeForm,
-      status: task.done ? 'completed' : 'pending',
-      blocks,
-      blockedBy,
-      metadata: {
-        workflowId,
-        issueNumber: issueNum,
-        originalId: task.id,
-      },
-    }
-
-    const filePath = join(tasksDir, `${nativeId}.json`)
-    writeFileSync(filePath, `${JSON.stringify(nativeTask, null, 2)}\n`)
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error('')
   }
 
   return tasksDir
