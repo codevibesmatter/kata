@@ -187,19 +187,24 @@ export function buildSpecTasks(
 /**
  * Build agent expansion protocol instruction block for agent-expanded phases.
  */
-function buildAgentExpansionInstruction(protocol: { max_tasks: number; require_labels?: string[] }, skill?: string): string {
+/**
+ * Build agent expansion protocol instruction.
+ * Uses {this_task_id} and {blocked_task_ids} placeholders — resolved at native task write time.
+ */
+function buildAgentExpansionInstruction(
+  protocol: { max_tasks: number; require_labels?: string[] },
+  skill?: string,
+): string {
   const lines: string[] = []
 
-  // Skill goes first — it's the most important instruction for the agent
   if (skill) {
-    lines.push(`SKILL REQUIRED: Every child task MUST invoke /${skill} before starting work. Include "Invoke /${skill}" in each task description.`)
+    lines.push(`SKILL REQUIRED: Include "Invoke /${skill}" in every child task description.`)
   }
 
-  lines.push(
-    'You own this phase. Break it into child tasks using TaskCreate.',
-    `Constraints: max ${protocol.max_tasks} tasks.`,
-    'Wire dependencies: use addBlockedBy so tasks run in the correct order (e.g., synthesis blocked by exploration).',
-  )
+  lines.push(`Create child tasks with TaskCreate. Max ${protocol.max_tasks} tasks.`)
+  lines.push('Chain child tasks with addBlockedBy so they run in order.')
+  lines.push('Do NOT complete task #{this_task_id} until all child tasks are done.')
+  lines.push('Last child task must use addBlocks: [{blocked_task_ids}] to gate the next phase.')
 
   if (protocol.require_labels?.length) {
     lines.push(`Required labels: [${protocol.require_labels.join(', ')}]`)
@@ -436,10 +441,19 @@ export function writeNativeTaskFiles(
     // Derive activeForm from title (present continuous)
     const activeForm = deriveActiveForm(task.title)
 
+    // Resolve agent expansion placeholders now that native IDs are known
+    let resolvedInstruction = task.instruction
+    if (resolvedInstruction?.includes('{this_task_id}')) {
+      const blockedIds = blocks.map(id => `"${id}"`).join(', ')
+      resolvedInstruction = resolvedInstruction
+        .replace(/{this_task_id}/g, nativeId)
+        .replace(/{blocked_task_ids}/g, blockedIds)
+    }
+
     // Append first meaningful line of instruction to subject so TaskList shows guidance
     let subject = task.title
-    if (task.instruction) {
-      const firstLine = task.instruction
+    if (resolvedInstruction) {
+      const firstLine = resolvedInstruction
         .split('\n')
         .map(l => l.trim())
         .find(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('```'))
@@ -452,7 +466,7 @@ export function writeNativeTaskFiles(
     const nativeTask: NativeTask = {
       id: nativeId,
       subject,
-      description: task.instruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
+      description: resolvedInstruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
       activeForm,
       status: task.done ? 'completed' : 'pending',
       blocks,
