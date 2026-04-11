@@ -193,18 +193,13 @@ export function buildSpecTasks(
  */
 function buildAgentExpansionInstruction(
   protocol: { max_tasks: number; require_labels?: string[] },
-  skill?: string,
 ): string {
-  const lines: string[] = []
-
-  if (skill) {
-    lines.push(`SKILL REQUIRED: Include "Invoke /${skill}" in every child task description.`)
-  }
-
-  lines.push(`Create child tasks with TaskCreate. Max ${protocol.max_tasks} tasks.`)
-  lines.push('Chain child tasks with addBlockedBy so they run in order.')
-  lines.push('Do NOT complete task #{this_task_id} until all child tasks are done.')
-  lines.push('Last child task must use addBlocks: [{blocked_task_ids}] to gate the next phase.')
+  const lines = [
+    `Create child tasks with TaskCreate. Max ${protocol.max_tasks} tasks.`,
+    'Chain tasks with addBlockedBy so they run in order.',
+    'Do NOT complete task #{this_task_id} until all child tasks are done.',
+    'Last child task must use addBlocks: [{blocked_task_ids}] to gate the next phase.',
+  ]
 
   if (protocol.require_labels?.length) {
     lines.push(`Required labels: [${protocol.require_labels.join(', ')}]`)
@@ -304,7 +299,7 @@ export function buildPhaseTasks(
 
         // Agent expansion protocol — prepend to first step in agent-expanded phases
         if (i === 0 && phase.expansion === 'agent' && phase.agent_protocol) {
-          const protocolBlock = buildAgentExpansionInstruction(phase.agent_protocol, phase.skill)
+          const protocolBlock = buildAgentExpansionInstruction(phase.agent_protocol)
           finalInstruction = protocolBlock + '\n\n' + (finalInstruction ?? '')
         }
 
@@ -331,12 +326,14 @@ export function buildPhaseTasks(
 
       const taskId = phase.id
 
-      // Build instruction from phase-level skill and agent expansion protocol
+      // Build instruction: skill invocation first, then expansion protocol if applicable
       let instruction: string | undefined
+      if (phase.skill) {
+        instruction = `Invoke /${phase.skill}`
+      }
       if (phase.expansion === 'agent' && phase.agent_protocol) {
-        instruction = buildAgentExpansionInstruction(phase.agent_protocol, phase.skill)
-      } else if (phase.skill) {
-        instruction = `## Skill\nInvoke /${phase.skill} before starting this task.\n`
+        const expansion = buildAgentExpansionInstruction(phase.agent_protocol)
+        instruction = instruction ? `${instruction}\n${expansion}` : expansion
       }
 
       tasks.push({
