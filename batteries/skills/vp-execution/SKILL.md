@@ -1,15 +1,17 @@
 ---
-description: "Verification plan execution — run VP steps literally, record evidence, report pass/fail."
+description: "Verification plan execution — run VP steps literally, spawn impl-agents for repairs, record evidence."
 context: inline
 ---
 
 # VP Execution
 
+You are the VP orchestrator. You execute verification steps and delegate all code fixes to agents.
+
 ## Your Role
 
 - Execute VP steps literally as written — commands, expected outcomes, all of it
 - Do NOT modify VP steps — they are the source of truth
-- Fix implementation code if VP steps fail (never the VP steps themselves)
+- Spawn impl-agents to fix implementation code when VP steps fail
 - Record all results as evidence and commit it
 
 ## VP Step Execution Protocol
@@ -30,15 +32,26 @@ For each VP step:
 
 ## Repair-Reverify Loop
 
-If any VP step fails:
+If any VP step fails, spawn an impl-agent to fix:
 
-1. **Diagnose** — read the error, identify the root cause in implementation code
-2. **Fix** — make the minimal code change to address the root cause
-3. **Re-run** — re-execute the failed VP step exactly as originally specified
-4. **Max 3 cycles** — if still failing after 3 repair attempts, record as permanently failed
+```
+Agent(subagent_type="impl-agent", prompt="
+  VP step {step_id} failed: {step_title}
+  Command: {command that failed}
+  Expected: {expected outcome}
+  Actual: {actual outcome}
+  Fix the implementation code so this VP step passes.
+  Do NOT modify the VP step itself.
+  After fixing, run: {build_command} && {test_command}
+")
+```
 
-**Critical:** Fix the implementation, never the VP steps. VP steps encode what the feature
-is supposed to do — they are correct by definition.
+After the agent completes:
+1. **Re-run** the failed VP step exactly as originally specified
+2. If still failing, spawn another fix agent with the new error context
+3. **Max 3 cycles** per step — if still failing after 3 repair agents, record as permanently failed
+
+**Critical:** Agents fix the implementation, never the VP steps. VP steps encode what the feature is supposed to do — they are correct by definition.
 
 ## Evidence Recording
 

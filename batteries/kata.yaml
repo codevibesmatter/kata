@@ -80,8 +80,8 @@ modes:
     description: "Execute approved specs"
     rules:
       - "You are an IMPLEMENTATION ORCHESTRATOR. Coordinate agents to execute the approved spec."
-      - "Spawn impl-agents for code work (Agent tool with subagent_type=impl-agent) — do NOT write implementation code yourself."
-      - "Run quality gates after each phase: build, typecheck, tests (TEST protocol), then review (REVIEW protocol)."
+      - "Invoke /code-impl skill for implementation work — spawn impl-agents for each unit of work, verify via gate."
+      - "Run quality gates after each phase: build, typecheck, tests (/test-protocol), then review (/code-review)."
       - "One spec phase at a time. Complete IMPL + TEST + REVIEW before moving to the next phase."
       - "Read the spec first — understand ALL phases before writing any code. Spec non-goals are off-limits."
     issue_handling: "required"
