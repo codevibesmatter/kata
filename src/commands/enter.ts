@@ -227,8 +227,10 @@ async function enterWithCustomTemplate(
     mkdirSync(workflowDir, { recursive: true })
   }
   const tasks = buildPhaseTasks(templatePath, workflowId, issueNum)
+  let resolvedSubjects: string[] = []
   if (tasks.length > 0) {
-    writeNativeTaskFiles(sessionId, tasks, workflowId, issueNum ?? null, parsed.dryRun)
+    const { nativeTasks } = writeNativeTaskFiles(sessionId, tasks, workflowId, issueNum ?? null, parsed.dryRun)
+    resolvedSubjects = nativeTasks.map((t) => t.subject)
   }
 
   const finalState: SessionState = {
@@ -301,6 +303,7 @@ async function enterWithCustomTemplate(
       }),
       enteredAt: finalState.updatedAt,
       ...(issueNum && { issueNumber: issueNum }),
+      tasks: resolvedSubjects,
     }),
   )
 }
@@ -612,8 +615,10 @@ export async function enter(args: string[]): Promise<void> {
     }
 
   // Write native task files (dry-run previews without persisting)
+  let resolvedSubjects: string[] = []
   if (allTasks.length > 0) {
-    writeNativeTaskFiles(sessionId, allTasks, workflowId, issueNum ?? null, parsed.dryRun)
+    const { nativeTasks } = writeNativeTaskFiles(sessionId, allTasks, workflowId, issueNum ?? null, parsed.dryRun)
+    resolvedSubjects = nativeTasks.map((t) => t.subject)
   }
 
   const finalState: SessionState = {
@@ -695,7 +700,7 @@ export async function enter(args: string[]): Promise<void> {
       enteredAt: finalState.updatedAt,
       ...(specPath && { specPath }),
       ...(issueNum && { issueNumber: issueNum }),
-      tasks: allTasks.map((t) => t.title),
+      tasks: resolvedSubjects,
     }),
   )
 }

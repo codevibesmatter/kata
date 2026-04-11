@@ -452,7 +452,7 @@ export function writeNativeTaskFiles(
   workflowId: string,
   issueNum: number | null,
   dryRun = false,
-): string {
+): { tasksDir: string; nativeTasks: NativeTask[] } {
   const tasksDir = getNativeTasksDir(sessionId)
 
   if (!dryRun) {
@@ -518,7 +518,7 @@ export function writeNativeTaskFiles(
     console.error('')
   }
 
-  return tasksDir
+  return { tasksDir, nativeTasks }
 }
 
 /**
