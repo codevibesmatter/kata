@@ -54,7 +54,14 @@ function checkGlobalConditions(checks: Set<string>): { passed: boolean; reasons:
       }).trim()
 
       if (gitStatus) {
-        const changedFiles = gitStatus.split('\n').filter((line) => !line.startsWith('??'))
+        const changedFiles = gitStatus.split('\n').filter((line) => {
+          if (line.startsWith('??')) return false
+          // Exclude kata session logs — the stop hook writes these on every invocation,
+          // creating a recursive loop if we count them as uncommitted changes
+          const file = line.slice(3)
+          if (file.startsWith('.kata/sessions/')) return false
+          return true
+        })
         if (changedFiles.length > 0) {
           reasons.push('Uncommitted changes in tracked files')
         }
