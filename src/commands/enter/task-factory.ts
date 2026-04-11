@@ -188,17 +188,23 @@ export function buildSpecTasks(
  * Build agent expansion protocol instruction block for agent-expanded phases.
  */
 function buildAgentExpansionInstruction(protocol: { max_tasks: number; require_labels?: string[] }, skill?: string): string {
-  const lines = [
-    '## Agent Expansion Protocol',
-    'You own this phase. Create child tasks using TaskCreate for each unit of work.',
+  const lines: string[] = []
+
+  // Skill goes first — it's the most important instruction for the agent
+  if (skill) {
+    lines.push(`SKILL REQUIRED: Every child task MUST invoke /${skill} before starting work. Include "Invoke /${skill}" in each task description.`)
+  }
+
+  lines.push(
+    'You own this phase. Break it into child tasks using TaskCreate.',
     `Constraints: max ${protocol.max_tasks} tasks.`,
-  ]
+    'Wire dependencies: use addBlockedBy so tasks run in the correct order (e.g., synthesis blocked by exploration).',
+  )
+
   if (protocol.require_labels?.length) {
     lines.push(`Required labels: [${protocol.require_labels.join(', ')}]`)
   }
-  if (skill) {
-    lines.push(`Each task you create must invoke /${skill} before starting work.`)
-  }
+
   return lines.join('\n')
 }
 
