@@ -212,11 +212,15 @@ function buildAgentExpansionInstruction(
  * Build phase tasks from a template path (resolves template, returns Task[])
  *
  * Task creation logic:
- * 1. Phase with steps → creates ONE task per step (detailed trackable units with instructions)
- * 2. Phase with task_config only (no steps) → creates ONE phase-level task
- * 3. Expansion phases (no task_config, no steps) → skipped here, handled by buildSpecTasks
+ * Each phase produces exactly ONE task. Steps within a phase are combined into
+ * the task instruction — they are sequential guidance, not separate tasks.
  *
- * Step tasks: first step inherits phase deps, subsequent steps depend on previous step.
+ * Phase types:
+ * - Phase with skill → skill invocation as instruction
+ * - Phase with instruction → instruction as-is
+ * - Phase with agent expansion → skill + expansion protocol
+ * - Phase with steps → steps resolved and combined into instruction body
+ *
  * phaseLastTaskId tracks the last task of each phase for cross-phase dependency wiring.
  */
 export function buildPhaseTasks(
@@ -240,6 +244,8 @@ export function buildPhaseTasks(
   const phaseLastTaskId = new Map<string, string>()
 
   for (const phase of template.phases) {
+    if (!phase.task_config?.title) continue
+
     // Resolve phase-level dependencies (declared in task_config.depends_on)
     const phaseDependsOn: string[] = []
     if (phase.task_config?.depends_on?.length) {
@@ -249,106 +255,76 @@ export function buildPhaseTasks(
       }
     }
 
+    const fullTitle = issueNum
+      ? `GH#${issueNum}: ${phase.task_config.title}`
+      : phase.task_config.title
+
+    const taskId = phase.id
+
+    // Build instruction from phase config
+    let instruction: string | undefined
+
+    // Skill invocation (phase-level)
+    if (phase.skill) {
+      instruction = `Invoke /${phase.skill}`
+    }
+
+    // Agent expansion protocol
+    if (phase.expansion === 'agent' && phase.agent_protocol) {
+      const expansion = buildAgentExpansionInstruction(phase.agent_protocol)
+      instruction = instruction ? `${instruction}\n${expansion}` : expansion
+    }
+
+    // Phase-level instruction (from task_config)
+    if (phase.task_config.instruction) {
+      const phaseInstruction = reviewers
+        ? phase.task_config.instruction.replace(/{reviewers}/g, reviewers)
+        : phase.task_config.instruction
+      instruction = instruction ? `${instruction}\n\n${phaseInstruction}` : phaseInstruction
+    }
+
+    // Steps — resolve and combine into instruction body
     if (phase.steps?.length) {
-      // Expand steps into individual tasks — each step gets its own native task
-      let prevStepTaskId: string | null = null
-
-      for (let i = 0; i < phase.steps.length; i++) {
-        const step = phase.steps[i]
-
-        // Resolve $ref step references against the step library
+      const stepLines: string[] = []
+      for (const step of phase.steps) {
         let resolvedStep = step
         if (step['$ref']) {
           const resolved = resolveStepRef(step['$ref'], step, stepLibrary)
           resolvedStep = { ...step, ...resolved }
         }
-
-        const taskId = `${phase.id}:${resolvedStep.id}`
         const stepTitle = resolvedStep.title ?? resolvedStep.id
-        const resolvedStepTitle = reviewers
-          ? stepTitle.replace(/{reviewers}/g, reviewers)
-          : stepTitle
-        const title = issueNum
-          ? `GH#${issueNum}: ${phase.id.toUpperCase()}: ${resolvedStepTitle}`
-          : `${phase.name}: ${resolvedStepTitle}`
+        const resolvedTitle = reviewers ? stepTitle.replace(/{reviewers}/g, reviewers) : stepTitle
 
-        const dependsOn: string[] = []
-        if (i === 0) {
-          // First step inherits phase-level dependencies
-          dependsOn.push(...phaseDependsOn)
-        } else if (prevStepTaskId) {
-          // Each subsequent step depends on the previous step
-          dependsOn.push(prevStepTaskId)
+        let stepBlock = `### ${resolvedTitle}`
+        if (resolvedStep.skill) {
+          stepBlock += `\nInvoke /${resolvedStep.skill}`
         }
-
-        let finalInstruction: string | undefined =
-          reviewers && resolvedStep.instruction
+        if (resolvedStep.instruction) {
+          const resolvedInstruction = reviewers
             ? resolvedStep.instruction.replace(/{reviewers}/g, reviewers)
             : resolvedStep.instruction
-
-        // Skill activation section (prepended before instruction)
-        if (resolvedStep.skill) {
-          const skillSection = `## Skill\nInvoke /${resolvedStep.skill} before starting this task.\n`
-          finalInstruction = skillSection + '\n' + (finalInstruction ?? '')
+          stepBlock += `\n${resolvedInstruction.trim()}`
         }
-
         if (resolvedStep.hints?.length) {
-          const hintsBlock = renderHints(resolvedStep.hints)
-          finalInstruction = (finalInstruction ?? '') + '\n\n' + hintsBlock
+          stepBlock += `\n${renderHints(resolvedStep.hints)}`
         }
-
-        // Agent expansion protocol — prepend to first step in agent-expanded phases
-        if (i === 0 && phase.expansion === 'agent' && phase.agent_protocol) {
-          const protocolBlock = buildAgentExpansionInstruction(phase.agent_protocol)
-          finalInstruction = protocolBlock + '\n\n' + (finalInstruction ?? '')
-        }
-
-        tasks.push({
-          id: taskId,
-          title,
-          done: false,
-          depends_on: dependsOn,
-          completedAt: null,
-          reason: null,
-          instruction: finalInstruction,
-        })
-
-        prevStepTaskId = taskId
+        stepLines.push(stepBlock)
       }
-
-      // Last step of this phase is the dependency anchor for subsequent phases
-      if (prevStepTaskId) phaseLastTaskId.set(phase.id, prevStepTaskId)
-    } else if (phase.task_config?.title) {
-      // No steps: create a single phase-level task (summary task)
-      const fullTitle = issueNum
-        ? `GH#${issueNum}: ${phase.task_config.title}`
-        : phase.task_config.title
-
-      const taskId = phase.id
-
-      // Build instruction: skill invocation first, then expansion protocol if applicable
-      let instruction: string | undefined
-      if (phase.skill) {
-        instruction = `Invoke /${phase.skill}`
-      }
-      if (phase.expansion === 'agent' && phase.agent_protocol) {
-        const expansion = buildAgentExpansionInstruction(phase.agent_protocol)
-        instruction = instruction ? `${instruction}\n${expansion}` : expansion
-      }
-
-      tasks.push({
-        id: taskId,
-        title: fullTitle,
-        done: false,
-        depends_on: phaseDependsOn,
-        completedAt: null,
-        reason: null,
-        instruction,
-      })
-
-      phaseLastTaskId.set(phase.id, taskId)
+      const stepsBody = stepLines.join('\n\n')
+      instruction = instruction ? `${instruction}\n\n${stepsBody}` : stepsBody
     }
-    // Expansion phases (no task_config, no steps) are skipped — handled by buildSpecTasks
+
+    tasks.push({
+      id: taskId,
+      title: fullTitle,
+      done: false,
+      depends_on: phaseDependsOn,
+      completedAt: null,
+      reason: null,
+      instruction,
+    })
+
+    phaseLastTaskId.set(phase.id, taskId)
   }
 
   return tasks

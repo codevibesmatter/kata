@@ -1,72 +1,78 @@
 ---
-description: "Spec review methodology — check completeness, behaviors have acceptance criteria, non-goals section, phases with tasks."
-context: fork
+description: "Spec review with external review agent, fix loop, and re-review until passing score."
+context: inline
 ---
 
 # Spec Review
 
-## Review Checklist
+You are running a review-fix loop on the spec written in P2. The goal is a spec that scores 90+ and passes all checklist items.
 
-- [ ] All behaviors have ID, Trigger, Expected, Verify
-- [ ] No placeholder text (TODO, TBD, {unfilled})
-- [ ] File paths reference real files
-- [ ] Phases are right-sized (1-4 hours each)
-- [ ] Non-goals explicitly stated
-- [ ] Behaviors are testable (Verify is concrete)
-- [ ] API changes include request + response shapes
+## Protocol
 
-## What to Check
+### 1. Run the external review agent
+
+Spawn the review agent via Bash:
+
+```bash
+kata review --prompt=spec-review
+```
+
+This runs an independent agent that reads the spec and produces a scored assessment (0-100) with categorized issues.
+
+### 2. Read the review output
+
+The review agent outputs:
+- **SPEC_SCORE:** N/100
+- **Status:** PASS or GAPS_FOUND
+- **Issues:** categorized as Critical, Important, Minor
+- **Strengths:** what's done well
+
+### 3. Fix loop
+
+If GAPS_FOUND or score < 90:
+
+1. Create a child task for each **Critical** issue (these block approval)
+2. Create a child task for each **Important** issue (should fix before approval)
+3. **Minor** issues — fix inline if trivial, skip if cosmetic
+4. Fix each issue directly in the spec file
+5. After all fixes, re-run `kata review --prompt=spec-review`
+6. Repeat until score >= 90 and status is PASS
+
+### 4. Max iterations
+
+Cap at 3 review-fix cycles. If the spec still doesn't pass after 3 rounds:
+- Document remaining issues
+- Ask the user whether to approve with known gaps or continue fixing
+
+## What the review checks
 
 ### Completeness
-- Does every behavior have all Core fields filled?
-- Are there implicit behaviors not captured?
-- Do non-goals cover the obvious "but what about..." questions?
+- All behaviors have ID, Trigger, Expected, Verify
+- No placeholder text (TODO, TBD, unfilled variables)
+- Non-goals section present and specific
+- Implementation phases cover all behaviors
 
 ### Clarity
-- Can an implementer read each phase and know exactly what to build?
-- Are behavior triggers unambiguous?
-- Are expected outcomes specific enough to test?
+- Behaviors are unambiguous — a developer could implement from spec alone
+- API contracts are concrete (types, endpoints, error codes)
+- Phase boundaries are clear
 
 ### Feasibility
-- Are phases right-sized (not too big or too small)?
-- Do phases have a logical dependency order?
-- Are there hidden technical risks not mentioned?
+- Phases are realistic (not too large for a single session)
+- Dependencies between phases make sense
 
-### Consistency
-- Do behavior IDs follow kebab-case convention?
-- Do phases in frontmatter match the prose?
-- Are file paths consistent throughout?
+### Testability
+- Each behavior has a concrete verification method
+- Test cases are specified per phase
+- Acceptance criteria are deterministic
 
-## Output Format
-
-```
-## Spec Review: {spec title}
-
-### Summary
-{1-3 sentence overview of spec quality}
-
-### Issues Found
-
-#### Critical (blocks implementation)
-- {section} — {issue description}
-  {explanation and suggested fix}
-
-#### Important (should fix before approval)
-- {section} — {issue description}
-
-#### Minor (consider)
-- {section} — {suggestion}
-
-### Verdict
-{APPROVE / REQUEST CHANGES / NEEDS DISCUSSION}
-
-Reason: {1-2 sentences}
-```
+### Scope
+- Non-goals prevent scope creep
+- Open questions are resolved (not left as TODOs)
 
 ## Rules
 
-- **Be specific** — reference exact sections and behaviors, never vague criticism
-- **Explain why** — not just "this is incomplete" but "this behavior needs X because Y"
-- **Prioritize** — distinguish critical gaps from nice-to-haves
-- **Be constructive** — suggest the fix, not just the problem
-- **No changes** — document findings only, return to orchestrator
+- **Don't just report — fix.** The review agent reports, you fix.
+- **Be specific in fixes** — reference exact behavior IDs and sections
+- **Don't weaken the spec to pass** — if a behavior is incomplete, complete it; don't remove it
+- **Preserve intent** — fixes should align with interview decisions from P1
