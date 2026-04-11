@@ -12,6 +12,7 @@ phases:
     name: "Merge batteries into setup"
     tasks:
       - "Remove batteries flag from parseArgs in setup.ts, always call scaffoldBatteries after applySetup"
+      - "Remove overlapping copies from applySetup() (interviews, steps.yaml, skills) — let scaffoldBatteries own all content copying"
       - "Unify output message (single summary covering base + batteries content)"
       - "Update help text in setup() no-flag path to remove --batteries references"
     test_cases:
@@ -35,9 +36,13 @@ phases:
     name: "Clean up references"
     tasks:
       - "Remove --no-batteries flag from projects/init.ts, always do full setup"
-      - "Update CLI help text in index.ts showHelp() to remove batteries references"
+      - "Fix error messages in session/lookup.ts:263,293 — change 'kata setup --batteries' to 'kata setup --yes'"
+      - "Fix stale error message in projects/init.ts:50 referencing 'kata batteries --update'"
+      - "Update CLI help text in index.ts showHelp() and setup.ts:416 JSDoc to remove batteries references"
       - "Update setup.test.ts to test unified setup path"
-      - "Add deprecated no-op handling for --batteries flag (one version grace period)"
+      - "Add deprecated no-op handling for --batteries/-b flag (one version grace period)"
+      - "Update eval scenario comments referencing batteries (impl-auth, planning-auth, planning-review-agents, impl-review-agents)"
+      - "Update readme.test.ts assertion for batteries string"
     test_cases:
       - id: "projects-init-full-setup"
         description: "kata projects init always scaffolds full content without --batteries flag"
