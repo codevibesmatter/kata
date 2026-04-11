@@ -1,25 +1,27 @@
 project:
-  name: ''
+  name: kata-wm
+  build_command: npm run build
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
 task_rules:
-  - Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate.
-  - Run TaskList FIRST to discover pre-created tasks and their dependency chains.
-  - Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate.
-  - Follow the dependency chain — blocked tasks cannot start until dependencies complete.
+- Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate.
+- Run TaskList FIRST to discover pre-created tasks and their dependency chains.
+- Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate.
+- "Follow the dependency chain \u2014 blocked tasks cannot start until dependencies\
+  \ complete."
 modes:
   research:
     name: Research
     description: Explore and synthesize findings
     stop_conditions:
-      - tasks_complete
-      - committed
-      - pushed
+    - tasks_complete
+    - committed
+    - pushed
     intent_keywords:
-      - research
-      - explore
-      - learn about
+    - research
+    - explore
+    - learn about
     template: research.md
   planning:
     name: Planning
@@ -27,15 +29,15 @@ modes:
     issue_handling: required
     issue_label: feature
     stop_conditions:
-      - tasks_complete
-      - spec_valid
-      - committed
-      - pushed
+    - tasks_complete
+    - spec_valid
+    - committed
+    - pushed
     intent_keywords:
-      - plan feature
-      - spec
-      - design
-      - write spec
+    - plan feature
+    - spec
+    - design
+    - write spec
     template: planning.md
   implementation:
     name: Implementation
@@ -43,96 +45,97 @@ modes:
     issue_handling: required
     issue_label: feature
     stop_conditions:
-      - tasks_complete
-      - committed
-      - pushed
-      - tests_pass
-      - feature_tests_added
+    - tasks_complete
+    - committed
+    - pushed
+    - tests_pass
+    - feature_tests_added
     intent_keywords:
-      - implement
-      - build
-      - code
-      - develop
-      - execute spec
+    - implement
+    - build
+    - code
+    - develop
+    - execute spec
     template: implementation.md
   task:
     name: Task
     description: Combined planning + implementation for small tasks
     issue_handling: none
     stop_conditions:
-      - tasks_complete
-      - committed
+    - tasks_complete
+    - committed
     intent_keywords:
-      - 'task:'
-      - chore
-      - small task
-      - quick change
-      - cleanup
-      - refactor
+    - 'task:'
+    - chore
+    - small task
+    - quick change
+    - cleanup
+    - refactor
     template: task.md
     workflow_prefix: TK
     aliases:
-      - chore
-      - small
+    - chore
+    - small
   freeform:
     name: Freeform
     description: Quick questions and discussion (no phases)
     stop_conditions: []
     intent_keywords:
-      - question
-      - how does
-      - what is
-      - where is
-      - explain
-      - help me understand
+    - question
+    - how does
+    - what is
+    - where is
+    - explain
+    - help me understand
     template: freeform.md
     workflow_prefix: FF
     aliases:
-      - question
-      - ask
-      - help
-      - qa
+    - question
+    - ask
+    - help
+    - qa
   verify:
     name: Verify
     description: Execute Verification Plan steps
     issue_handling: none
     stop_conditions:
-      - tasks_complete
-      - committed
-      - pushed
+    - tasks_complete
+    - committed
+    - pushed
     intent_keywords:
-      - verify
-      - run verification
-      - execute VP
-      - verification plan
+    - verify
+    - run verification
+    - execute VP
+    - verification plan
     template: verify.md
     workflow_prefix: VF
   debug:
     name: Debug
-    description: Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix
+    description: Systematic hypothesis-driven debugging with reproduction, root cause
+      analysis, and fix
     issue_handling: none
     stop_conditions:
-      - tasks_complete
-      - committed
-      - pushed
+    - tasks_complete
+    - committed
+    - pushed
     intent_keywords:
-      - debug
-      - investigate
-      - bug
-      - why is
-      - broken
+    - debug
+    - investigate
+    - bug
+    - why is
+    - broken
     template: debug.md
     workflow_prefix: DB
     aliases:
-      - investigate
+    - investigate
   onboard:
     name: Onboard
     description: Configure kata for a new project
     stop_conditions: []
     intent_keywords:
-      - onboard
-      - setup kata
-      - configure kata
-      - initialize kata
+    - onboard
+    - setup kata
+    - configure kata
+    - initialize kata
     template: onboard.md
 kata_version: 0.3.0
