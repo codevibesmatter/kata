@@ -15,6 +15,7 @@ import {
   areAllOpenTasksInProgress,
   getNativeTasksDir,
   getPendingNativeTaskTitles,
+  readNativeTaskFiles,
 } from './enter/task-factory.js'
 import { loadKataConfig } from '../config/kata-config.js'
 import { findSpecFile, validateSpec } from './validate-spec.js'
@@ -53,7 +54,14 @@ function checkGlobalConditions(checks: Set<string>): { passed: boolean; reasons:
       }).trim()
 
       if (gitStatus) {
-        const changedFiles = gitStatus.split('\n').filter((line) => !line.startsWith('??'))
+        const changedFiles = gitStatus.split('\n').filter((line) => {
+          if (line.startsWith('??')) return false
+          // Exclude kata session logs — the stop hook writes these on every invocation,
+          // creating a recursive loop if we count them as uncommitted changes
+          const file = line.slice(3)
+          if (file.startsWith('.kata/sessions/')) return false
+          return true
+        })
         if (changedFiles.length > 0) {
           reasons.push('Uncommitted changes in tracked files')
         }
@@ -233,14 +241,86 @@ function checkSpecValid(issueNumber: number): { passed: boolean; reason?: string
 }
 
 /**
+ * Check that at least one document was created or modified in a given path.
+ * Pluggable: pass a directory path to check. Looks for new/modified files vs diff base.
+ *
+ * Used by stop conditions like:
+ *   - doc_created: planning/research   (research mode)
+ *   - doc_created: planning/specs      (planning mode)
+ *   - doc_created                      (defaults to research_path from config)
+ */
+function checkDocCreated(docPath?: string): { passed: boolean; reason?: string } {
+  try {
+    const cfg = loadKataConfig()
+    const targetPath = docPath ?? cfg.research_path ?? 'planning/research'
+
+    // Check for any files in path (new, modified, or untracked)
+    const gitFiles = execSync(
+      `git ls-files --others --modified -- "${targetPath}" 2>/dev/null || true`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim()
+
+    // Also check for committed files in this branch vs diff base
+    const diffBase = cfg.project?.diff_base ?? 'origin/main'
+    const committedFiles = execSync(
+      `git diff --name-only "${diffBase}" -- "${targetPath}" 2>/dev/null || true`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+    ).trim()
+
+    if (!gitFiles && !committedFiles) {
+      return {
+        passed: false,
+        reason: `No document found in ${targetPath}/. Write your deliverable before exiting.`,
+      }
+    }
+
+    return { passed: true }
+  } catch {
+    // Don't block exit on error
+    return { passed: true }
+  }
+}
+
+/**
+ * Parse a stop condition (handles both string and object forms).
+ */
+function parseStopCondition(cond: string | { condition: string; stage?: string }): { condition: string; stage?: string } {
+  if (typeof cond === 'string') return { condition: cond }
+  return cond
+}
+
+/**
+ * Check if all phases in a given stage are complete (all their tasks are completed).
+ */
+function isStageComplete(stage: string, sessionId: string, phasesByStage: Map<string, string[]>): boolean {
+  const phaseIds = phasesByStage.get(stage)
+  if (!phaseIds?.length) return true // No phases in this stage = complete
+
+  const tasks = readNativeTaskFiles(sessionId)
+  // Check if all tasks belonging to this stage's phases are completed
+  for (const task of tasks) {
+    const originalId = (task.metadata?.originalId as string) || ''
+    // Task belongs to a phase if its originalId matches the phase ID or starts with it
+    const belongsToStage = phaseIds.some(pid => originalId === pid || originalId.startsWith(`${pid}:`) || originalId.startsWith(`${pid}.`))
+    if (belongsToStage && task.status !== 'completed') {
+      return false
+    }
+  }
+  return true
+}
+
+/**
  * Check if exit conditions are met based on the mode's stop_conditions from modes.yaml.
  * Each mode declares which checks to run — no hardcoded mode names.
+ * Stop conditions can be strings or objects with optional stage scoping.
  */
 function validateCanExit(
   _workflowId: string,
   sessionId: string,
-  stopConditions: string[],
+  stopConditions: Array<string | { condition: string; stage?: string }>,
   issueNumber?: number,
+  phasesByStage?: Map<string, string[]>,
+  deliverablePath?: string,
 ): {
   canExit: boolean
   reasons: string[]
@@ -254,7 +334,17 @@ function validateCanExit(
     return { canExit: true, reasons: [], hasOpenTasks: false, usingTasks: false }
   }
 
-  const checks = new Set(stopConditions)
+  // Build effective checks set (filter stage-scoped conditions whose stage isn't complete)
+  const checks = new Set<string>()
+  for (const rawCond of stopConditions) {
+    const parsed = parseStopCondition(rawCond)
+    if (parsed.stage && phasesByStage) {
+      if (!isStageComplete(parsed.stage, sessionId, phasesByStage)) {
+        continue // Skip — stage not complete yet
+      }
+    }
+    checks.add(parsed.condition)
+  }
 
   // If we're on the base branch with no diff, work is already merged — skip git checks only.
   // tasks_complete is still checked so pending tasks block exit even with no diff.
@@ -322,6 +412,14 @@ function validateCanExit(
       const specCheck = checkSpecValid(issueNumber)
       if (!specCheck.passed && specCheck.reason) {
         reasons.push(specCheck.reason)
+      }
+    }
+
+    // ── doc_created ──
+    if (checks.has('doc_created')) {
+      const docCheck = checkDocCreated(deliverablePath)
+      if (!docCheck.passed && docCheck.reason) {
+        reasons.push(docCheck.reason)
       }
     }
 
@@ -406,10 +504,12 @@ export async function canExit(args: string[]): Promise<void> {
   // Load mode config to get stop_conditions
   const kataConfig = loadKataConfig()
   const modeConfig = kataConfig.modes[sessionType]
-  const stopConditions = [...(modeConfig?.stop_conditions ?? [])]
+  const stopConditions: Array<string | { condition: string; stage?: string }> = [...(modeConfig?.stop_conditions ?? [])]
+  const deliverablePath = modeConfig?.deliverable_path
 
   // Merge template global_conditions (e.g., changes_committed, changes_pushed)
   // Template conditions use "changes_" prefix; normalize to match check names
+  let phasesByStage: Map<string, string[]> | undefined
   if (state.template) {
     try {
       const { parseTemplateYaml } = await import('./enter/template.js')
@@ -419,9 +519,24 @@ export async function canExit(args: string[]): Promise<void> {
       if (templateYaml?.global_conditions) {
         for (const cond of templateYaml.global_conditions) {
           // Normalize: "changes_committed" → "committed", "changes_pushed" → "pushed"
-          const normalized = cond.replace(/^changes_/, '') as import('../state/schema.js').StopCondition
-          if (!stopConditions.includes(normalized)) {
+          const normalized = cond.replace(/^changes_/, '')
+          const alreadyPresent = stopConditions.some(c => {
+            const parsed = parseStopCondition(c)
+            return parsed.condition === normalized
+          })
+          if (!alreadyPresent) {
             stopConditions.push(normalized)
+          }
+        }
+      }
+      // Compute phasesByStage for stage-scoped stop condition evaluation
+      if (templateYaml?.phases) {
+        phasesByStage = new Map()
+        for (const p of templateYaml.phases) {
+          if (p.stage) {
+            const existing = phasesByStage.get(p.stage) || []
+            existing.push(p.id)
+            phasesByStage.set(p.stage, existing)
           }
         }
       }
@@ -435,7 +550,7 @@ export async function canExit(args: string[]): Promise<void> {
     reasons,
     hasOpenTasks,
     usingTasks,
-  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber)
+  } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber, phasesByStage, deliverablePath)
 
   // Build guidance for stop hook (only if can't exit)
   const guidance = buildStopGuidance(

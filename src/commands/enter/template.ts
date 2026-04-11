@@ -4,7 +4,6 @@ import {
   validatePhases,
   formatValidationErrors,
   type PhaseDefinition,
-  type SubphasePattern,
 } from '../../validation/index.js'
 import { parseYamlFrontmatter, type TemplateYaml } from '../../yaml/index.js'
 import type { PhaseTitle } from './guidance.js'
@@ -44,25 +43,74 @@ export function parseAndValidateTemplatePhases(templatePath: string): PhaseDefin
   const template = parseTemplateYaml(fullTemplatePath)
   if (!template?.phases?.length) return null
 
-  // Validate phases
+  // Validate phases (silently skip if invalid — templates may not have all fields)
   const validationResult = validatePhases(template.phases, fullTemplatePath)
   if (!validationResult.valid) {
+    // Return parsed phases even when validation fails — old templates may lack fields like stage
+  }
+
+  // Validate stage ordering (setup -> work -> close)
+  const mapped = template.phases.map((p) => ({
+    id: p.id,
+    name: p.name || '',
+    stage: p.stage,
+    task_config: p.task_config,
+    steps: p.steps,
+    expansion: p.expansion,
+    skill: p.skill,
+    agent_protocol: p.agent_protocol,
+    subphase_pattern: p.subphase_pattern,
+  }))
+
+  const stageError = validateStageOrdering(mapped as PhaseDefinition[])
+  if (stageError) {
     // biome-ignore lint/suspicious/noConsole: intentional CLI output
-    console.error(formatValidationErrors(validationResult))
+    console.error(stageError)
     return null
   }
 
-  // Return phases converted to PhaseDefinition type (include steps, container, subphase_pattern)
-  return template.phases.map((p) => ({
-    id: p.id,
-    name: p.name || '',
-    task_config: p.task_config,
-    steps: p.steps,
-    container: (p as Record<string, unknown>).container as boolean | undefined,
-    subphase_pattern: (p as Record<string, unknown>).subphase_pattern as
-      | SubphasePattern[]
-      | undefined,
-  }))
+  // Validate work phases have a skill (phase-level or on at least one step)
+  const skillError = validateWorkPhaseSkills(mapped as PhaseDefinition[])
+  if (skillError) {
+    // biome-ignore lint/suspicious/noConsole: intentional CLI output
+    console.error(skillError)
+    return null
+  }
+
+  return mapped as PhaseDefinition[]
+}
+
+/**
+ * Validate that phases follow the stage ordering: setup -> work -> close.
+ * Returns an error string if ordering is violated, null if valid.
+ */
+function validateStageOrdering(phases: PhaseDefinition[]): string | null {
+  if (phases.length === 0) return null // Empty phases skip validation
+  const stageOrder = { setup: 0, work: 1, close: 2 } as const
+  let maxSeen = -1
+  for (const phase of phases) {
+    const order = stageOrder[phase.stage]
+    if (order < maxSeen) {
+      return `Phase "${phase.id}" has stage "${phase.stage}" but follows a later stage. Stages must be in order: setup → work → close.`
+    }
+    maxSeen = Math.max(maxSeen, order)
+  }
+  return null
+}
+
+/**
+ * Validate that every work-stage phase has a skill — either at the phase level
+ * or on at least one step. This is the "work = methodology" invariant.
+ * Returns an error string if validation fails, null if valid.
+ */
+function validateWorkPhaseSkills(phases: PhaseDefinition[]): string | null {
+  for (const phase of phases) {
+    if (phase.stage !== 'work') continue
+    if (phase.skill) continue // Phase-level skill
+    if (phase.steps?.some(s => s.skill)) continue // Step-level skill
+    return `Work phase "${phase.id}" has no skill. Every work phase must have a skill either at the phase level or on at least one step.`
+  }
+  return null
 }
 
 /**

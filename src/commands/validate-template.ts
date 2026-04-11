@@ -8,7 +8,7 @@ interface TemplateValidationResult {
   templatePath: string
   templateName: string
   phases: number
-  hasContainer: boolean
+  hasExpansion: boolean
   errors: string[]
   warnings: string[]
   phaseDetails: Array<{
@@ -76,8 +76,8 @@ function parsePhasesSection(phasesSection: string): unknown[] {
           .slice(5)
           .trim()
           .replace(/^["']|["']$/g, '')
-      } else if (trimmed.startsWith('container:')) {
-        phase.container = trimmed.slice(10).trim() === 'true'
+      } else if (trimmed.startsWith('expansion:')) {
+        phase.expansion = trimmed.slice(10).trim()
       }
     }
 
@@ -98,7 +98,7 @@ function validateTemplate(templatePath: string): TemplateValidationResult {
     templatePath,
     templateName: basename(templatePath, '.md'),
     phases: 0,
-    hasContainer: false,
+    hasExpansion: false,
     errors: [],
     warnings: [],
     phaseDetails: [],
@@ -158,8 +158,8 @@ function validateTemplate(templatePath: string): TemplateValidationResult {
     const steps = phase.steps as unknown[] | undefined
     const hasSteps = Array.isArray(steps) && steps.length > 0
 
-    if (phase.container === true) {
-      result.hasContainer = true
+    if (phase.expansion) {
+      result.hasExpansion = true
     }
 
     result.phaseDetails.push({
@@ -231,7 +231,7 @@ export async function validateTemplateCommand(args: string[]): Promise<void> {
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log(`Phases: ${result.phases}`)
   // biome-ignore lint/suspicious/noConsole: CLI output
-  console.log(`Has container phase: ${result.hasContainer ? 'yes' : 'no'}`)
+  console.log(`Has expansion phase: ${result.hasExpansion ? 'yes' : 'no'}`)
   // biome-ignore lint/suspicious/noConsole: CLI output
   console.log('')
 

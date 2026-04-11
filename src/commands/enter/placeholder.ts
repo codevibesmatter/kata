@@ -77,7 +77,7 @@ const KNOWN_PLACEHOLDERS = new Set([
   // Config
   'test_command', 'test_command_changed', 'build_command', 'typecheck_command', 'smoke_command',
   'spec_path_dir', 'research_path', 'project_name', 'diff_base',
-  // Runtime-only (resolved during container expansion, not at enter time)
+  // Runtime-only (resolved during spec expansion, not at enter time)
   'phase_name', 'phase_label', 'task_summary', 'reviewers',
   // Gate-only (resolved during gate evaluation)
   'exit_code', 'output',
@@ -132,7 +132,7 @@ export function validateGatePlaceholders(
   const missing: string[] = []
 
   for (const key of required) {
-    // Skip runtime-only placeholders (resolved during container expansion, gate eval, or session setup)
+    // Skip runtime-only placeholders (resolved during spec expansion, gate eval, or session setup)
     if (['phase_name', 'phase_label', 'task_summary', 'reviewers', 'exit_code', 'output', 'spec_path', 'issue'].includes(key)) {
       continue
     }

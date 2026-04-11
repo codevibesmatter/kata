@@ -17,8 +17,8 @@ session_retention_days: 7
 #   code_reviewer: null
 
 # Global rules — injected into every mode's context
-# global_rules:
-#   - "Your project-wide rule here"
+global_rules:
+  - "When a task instruction says 'Invoke /skill-name', use the Skill tool to invoke that skill before starting work on the task."
 
 # Task system rules — injected when mode has phases (tasks)
 # Override to customize; remove to disable
@@ -32,8 +32,19 @@ modes:
   research:
     name: "Research"
     description: "Explore and synthesize findings"
+    deliverable_path: planning/research
+    rules:
+      - "You are a RESEARCHER. Your deliverable is a written document in planning/research/, not code."
+      - "Classify the research type first, then adapt your approach:"
+      - "  Feature research → read codebase patterns, map current state, identify gaps"
+      - "  Library/tech evaluation → compare options on criteria (perf, DX, maintenance, fit), produce recommendation matrix"
+      - "  Brainstorming → diverge widely first, then converge on actionable ideas with pros/cons"
+      - "  Feasibility study → identify hard constraints, build proof-of-concept path, flag blockers early"
+      - "  Inspiration cataloging → collect examples/patterns from external sources, annotate what's transferable"
+      - "Focus on trade-offs and actionable recommendations. Cite what you read."
     stop_conditions:
       - tasks_complete
+      - doc_created
       - committed
       - pushed
     intent_keywords:
@@ -45,6 +56,11 @@ modes:
   planning:
     name: "Planning"
     description: "Research, spec, review, approved"
+    deliverable_path: planning/specs
+    rules:
+      - "You are a PLANNER. Research the problem, write a spec with behaviors (B-IDs) and phases, get it reviewed and approved."
+      - "Do not write implementation code — your deliverable is an approved spec document in planning/specs/."
+      - "Every behavior needs acceptance criteria. Every phase needs concrete tasks."
     issue_handling: "required"
     issue_label: "feature"
     stop_conditions:
@@ -62,6 +78,12 @@ modes:
   implementation:
     name: "Implementation"
     description: "Execute approved specs"
+    rules:
+      - "You are an IMPLEMENTATION ORCHESTRATOR. Coordinate agents to execute the approved spec."
+      - "Spawn impl-agents for code work (Agent tool with subagent_type=impl-agent) — do NOT write implementation code yourself."
+      - "Run quality gates after each phase: build, typecheck, tests (TEST protocol), then review (REVIEW protocol)."
+      - "One spec phase at a time. Complete IMPL + TEST + REVIEW before moving to the next phase."
+      - "Read the spec first — understand ALL phases before writing any code. Spec non-goals are off-limits."
     issue_handling: "required"
     issue_label: "feature"
     stop_conditions:
@@ -81,6 +103,9 @@ modes:
   task:
     name: "Task"
     description: "Combined planning + implementation for small tasks"
+    rules:
+      - "You are a TASK EXECUTOR. Understand the task, implement it, test it, commit it."
+      - "Keep changes minimal and focused — this is a small task, not a feature."
     issue_handling: "none"
     stop_conditions:
       - tasks_complete
@@ -101,6 +126,8 @@ modes:
   freeform:
     name: "Freeform"
     description: "Quick questions and discussion (no phases)"
+    rules:
+      - "Answer questions directly. No workflow overhead — just help the user."
     stop_conditions: []
     intent_keywords:
       - "question"
@@ -120,6 +147,10 @@ modes:
   verify:
     name: "Verify"
     description: "Execute Verification Plan steps"
+    rules:
+      - "You are a VERIFICATION EXECUTOR. Run each VP step literally as written — do not improvise or skip."
+      - "Use TaskCreate to create one task per VP step. Record pass/fail evidence for each."
+      - "If a step fails, enter a fix loop: diagnose, fix, re-verify. Do not move on until it passes."
     issue_handling: "none"
     stop_conditions:
       - tasks_complete
@@ -136,6 +167,9 @@ modes:
   debug:
     name: "Debug"
     description: "Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix"
+    rules:
+      - "You are a DEBUGGER. Reproduce first, then hypothesize, then trace systematically."
+      - "Do not guess — form hypotheses and test them. Implement the minimal fix, not a rewrite."
     issue_handling: "none"
     stop_conditions:
       - tasks_complete
@@ -155,6 +189,8 @@ modes:
   onboard:
     name: "Onboard"
     description: "Configure kata for a new project"
+    rules:
+      - "You are an ONBOARDING GUIDE. Walk the user through kata setup with an interview."
     stop_conditions: []
     intent_keywords:
       - "onboard"

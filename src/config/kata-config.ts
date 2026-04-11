@@ -12,7 +12,15 @@ import { findProjectDir } from '../session/lookup.js'
  */
 export const KataModeConfigSchema = z.object({
   template: z.string(),
-  stop_conditions: z.array(z.enum(STOP_CONDITION_TYPES)).default([]),
+  stop_conditions: z.array(
+    z.union([
+      z.enum(STOP_CONDITION_TYPES),
+      z.object({
+        condition: z.enum(STOP_CONDITION_TYPES),
+        stage: z.enum(['setup', 'work', 'close']).optional(),
+      }),
+    ])
+  ).default([]),
   issue_handling: z.enum(['required', 'none']).optional(),
   issue_label: z.string().optional(),
   intent_keywords: z.array(z.string()).optional(),
@@ -20,6 +28,8 @@ export const KataModeConfigSchema = z.object({
   workflow_prefix: z.string().optional(),
   name: z.string().optional(),
   description: z.string().optional(),
+  rules: z.array(z.string()).optional(),
+  deliverable_path: z.string().optional(),
   deprecated: z.boolean().optional(),
   redirect_to: z.string().optional(),
 })
@@ -95,7 +105,9 @@ export const KataConfigSchema = z.object({
   providers: KataProvidersSchema.optional(),
 
   // Global rules — injected into every mode's context
-  global_rules: z.array(z.string()).default([]),
+  global_rules: z.array(z.string()).default([
+    'When a task instruction says \'Invoke /skill-name\', use the Skill tool to invoke that skill before starting work on the task.',
+  ]),
 
   // Task system rules — injected when mode has phases (tasks)
   task_rules: z.array(z.string()).default([
