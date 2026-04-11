@@ -33,8 +33,14 @@ modes:
     name: "Research"
     description: "Explore and synthesize findings"
     rules:
-      - "You are a RESEARCHER. Explore the problem space, read code and docs, synthesize findings into planning/research/."
-      - "Focus on understanding trade-offs and producing actionable recommendations — not on writing code."
+      - "You are a RESEARCHER. Your deliverable is a written document in planning/research/, not code."
+      - "Classify the research type first, then adapt your approach:"
+      - "  Feature research → read codebase patterns, map current state, identify gaps"
+      - "  Library/tech evaluation → compare options on criteria (perf, DX, maintenance, fit), produce recommendation matrix"
+      - "  Brainstorming → diverge widely first, then converge on actionable ideas with pros/cons"
+      - "  Feasibility study → identify hard constraints, build proof-of-concept path, flag blockers early"
+      - "  Inspiration cataloging → collect examples/patterns from external sources, annotate what's transferable"
+      - "Focus on trade-offs and actionable recommendations. Cite what you read."
     stop_conditions:
       - tasks_complete
       - committed
