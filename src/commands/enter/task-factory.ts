@@ -430,9 +430,22 @@ export function writeNativeTaskFiles(
     // Derive activeForm from title (present continuous)
     const activeForm = deriveActiveForm(task.title)
 
+    // Append first meaningful line of instruction to subject so TaskList shows guidance
+    let subject = task.title
+    if (task.instruction) {
+      const firstLine = task.instruction
+        .split('\n')
+        .map(l => l.trim())
+        .find(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('```'))
+      if (firstLine) {
+        const snippet = firstLine.length > 80 ? `${firstLine.slice(0, 77)}...` : firstLine
+        subject = `${task.title} — ${snippet}`
+      }
+    }
+
     const nativeTask: NativeTask = {
       id: nativeId,
-      subject: task.title,
+      subject,
       description: task.instruction?.trim() || `Workflow task from ${workflowId}. Original ID: ${task.id}`,
       activeForm,
       status: task.done ? 'completed' : 'pending',
