@@ -401,9 +401,6 @@ export function assertTemplatesExist(): EvalCheckpoint {
       if (templates.length === 0) {
         return fail('No templates found in .kata/templates/')
       }
-      if (!templates.includes('onboard.md')) {
-        return fail('onboard.md template missing from .kata/templates/')
-      }
       return pass()
     },
   }
@@ -1391,16 +1388,6 @@ export function liveTaskDisciplinePresets(mode: string): EvalCheckpoint[] {
     ...taskDisciplinePresets(),
   ]
 }
-
-/**
- * Onboard presets: git init, settings, wm.yaml, templates.
- */
-export const onboardPresets: EvalCheckpoint[] = [
-  assertGitInitialized(),
-  assertSettingsExist(),
-  assertWmYamlExists(),
-  assertTemplatesExist(),
-]
 
 /**
  * Skill activation presets: both skills read, in correct order.

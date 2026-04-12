@@ -244,23 +244,3 @@ describe('setup --yes', () => {
   })
 })
 
-describe('onboard template', () => {
-  it('onboard template has 6 phases with AskUserQuestion steps', async () => {
-    // Read the onboard template to verify it has the expected structure
-    const { parseYamlFrontmatter } = await import('../yaml/parser.js')
-    const { getPackageRoot } = await import('../session/lookup.js')
-
-    const templatePath = join(getPackageRoot(), 'templates', 'onboard.md')
-    const frontmatter = parseYamlFrontmatter<{
-      phases: Array<{ id: string; tasks: string[] }>
-    }>(templatePath)
-
-    expect(frontmatter).not.toBeNull()
-    expect(frontmatter!.phases).toHaveLength(7)
-
-    // Verify phases have AskUserQuestion steps
-    const allTasks = frontmatter!.phases.flatMap((p) => p.tasks || [])
-    const askQuestionTasks = allTasks.filter((t) => t.includes('AskUserQuestion'))
-    expect(askQuestionTasks.length).toBeGreaterThan(0)
-  })
-})

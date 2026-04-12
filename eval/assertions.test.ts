@@ -48,7 +48,6 @@ import {
   taskDisciplinePresets,
   liveTaskDisciplinePresets,
   stopHookPresets,
-  onboardPresets,
   assertSkillRead,
   assertSkillReadOrder,
   assertSkillNotRead,
@@ -440,16 +439,6 @@ describe('liveWorkflowPresets', () => {
   })
 })
 
-describe('onboardPresets', () => {
-  it('returns 4 checkpoints', () => {
-    expect(onboardPresets).toHaveLength(4)
-    const names = onboardPresets.map((p) => p.name)
-    expect(names).toContain('git repository initialized')
-    expect(names).toContain('.claude/settings.json exists with hooks')
-    expect(names).toContain('wm.yaml exists')
-    expect(names).toContain('mode templates seeded')
-  })
-})
 
 // ─── Task Discipline Assertions ──────────────────────────────────────────────
 

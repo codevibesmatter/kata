@@ -72,7 +72,7 @@ describe('README core commands (VP4: command flag coverage)', () => {
 })
 
 describe('README built-in modes (B1b)', () => {
-  const modes = ['research', 'planning', 'implementation', 'task', 'freeform', 'verify', 'debug', 'onboard']
+  const modes = ['research', 'planning', 'implementation', 'task', 'freeform', 'verify', 'debug']
 
   for (const mode of modes) {
     it(`includes mode: ${mode}`, () => {

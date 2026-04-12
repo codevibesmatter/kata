@@ -75,7 +75,7 @@ Hooks are registered in `.claude/settings.json` and call `kata hook <name>`. Eac
 Mode definitions live in `kata.yaml` under the `modes:` key. Each mode references a template filename with YAML frontmatter defining phases (with stages, skills, gates, `$ref` steps, and expansion types).
 
 **Template sources:**
-- `templates/` — system templates only: `onboard.md` and `SESSION-TEMPLATE.template.md`
+- `templates/` — system templates only: `SESSION-TEMPLATE.template.md`
 - `batteries/templates/` — canonical mode templates (implementation, planning, task, etc.)
 - `batteries/skills/` — methodology skills (code-impl, code-review, research, etc.)
 - `batteries/steps.yaml` — shared step definitions for `$ref`
@@ -117,7 +117,6 @@ All eval assertions live in `eval/assertions.ts`. Scenario files import individu
 - `workflowPresets(mode)` — correct mode, new commit, clean tree, can-exit
 - `workflowPresetsWithPush(mode)` — workflow + changes pushed
 - `planningPresets(mode)` — workflow+push + spec created/approved/has behaviors
-- `onboardPresets` — git init, settings.json, wm.yaml, templates seeded
 
 **Config-driven assertions** read `spec_path` and `research_path` from `wm.yaml` with defaults (`planning/specs`, `planning/research`).
 
@@ -134,7 +133,6 @@ All eval assertions live in `eval/assertions.ts`. Scenario files import individu
 ```bash
 npm run eval -- --scenario=task-mode --verbose          # Single scenario
 npm run eval -- --list                                   # List scenarios
-npm run eval -- --scenario=onboard --project=<dir> --resume=<sid> --answer="Quick"  # Resume paused
 npm run eval -- --judge                                  # Run LLM-as-judge on transcripts
 ```
 
@@ -153,7 +151,7 @@ bun test eval/assertions.test.ts                        # Run assertion unit tes
 | Fixture | Path | Description |
 |---------|------|-------------|
 | `tanstack-start` | `eval-fixtures/tanstack-start/` | TanStack Start app with kata config (settings.json, wm.yaml, planning/). Default fixture. |
-| `tanstack-start-fresh` | `eval-fixtures/tanstack-start-fresh/` | Bare TanStack Start app, no `.claude/` or `planning/`. Used by onboard scenario only. |
+| `tanstack-start-fresh` | `eval-fixtures/tanstack-start-fresh/` | Bare TanStack Start app, no `.claude/` or `planning/`. |
 
 ## Project root resolution
 

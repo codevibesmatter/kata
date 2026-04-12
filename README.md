@@ -72,7 +72,7 @@ Tell Claude:
 
 > Set up kata for this project
 
-Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml`, copies mode templates to `.kata/templates/`, and installs skills to `.claude/skills/` — everything in one command. For a more thorough walkthrough, tell Claude to enter onboard mode — it will interview you about your project and configure everything interactively.
+Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml`, copies mode templates to `.kata/templates/`, and installs skills to `.claude/skills/` — everything in one command. For a guided walkthrough, use the `/kata-setup` skill in Claude Code — it detects your project state and walks you through setup interactively.
 
 **3. Enter a mode**
 
@@ -118,7 +118,6 @@ If `kata can-exit` reports unmet conditions (pending tasks, uncommitted changes,
 | `freeform` | Freeform | Quick questions and discussion (no phases) | No | *(none — can always exit)* |
 | `verify` | Verify | Execute Verification Plan steps | No | tasks_complete, committed, pushed |
 | `debug` | Debug | Systematic hypothesis-driven debugging | No | tasks_complete, committed, pushed |
-| `onboard` | Onboard | Configure kata for a new project | No | *(none — can always exit)* |
 
 **Mode aliases:**
 
@@ -278,7 +277,7 @@ Stop conditions are checked by `kata hook stop-conditions` every time Claude tri
 | `doc_created` | At least one new or modified file exists in the mode's `deliverable_path` | research |
 | `spec_valid` | Spec file has valid YAML frontmatter with phases and tasks | planning |
 
-`freeform` and `onboard` have no stop conditions — they can always exit.
+`freeform` has no stop conditions — it can always exit.
 
 ### How to satisfy each condition
 
@@ -559,7 +558,7 @@ What it creates:
 | `--yes` | Write everything with auto-detected defaults. Required for non-interactive setup. |
 | `--strict` | Also enables strict-mode enforcement in the `PreToolUse` hook (task dependency ordering, git evidence requirements). |
 
-For a guided walkthrough, run `kata enter onboard` instead. This starts an agent-guided session that interviews you about your project and configures kata interactively.
+For a guided walkthrough, use the `/kata-setup` skill in Claude Code. It detects your project state and walks you through setup interactively.
 
 Files scaffolded:
 
@@ -573,7 +572,7 @@ Files scaffolded:
 | `batteries/interviews/` | `.kata/interviews/` | Interview question configs |
 | `batteries/verification-tools.md` | `.kata/verification-tools.md` | Verification tools reference |
 | `batteries/github/ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` | GitHub issue templates |
-| `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by onboard mode) |
+| `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by /kata-setup skill) |
 
 ### Other commands
 
