@@ -28,12 +28,9 @@ export async function update(args: string[]): Promise<void> {
   const config = loadKataConfig(projectRoot)
   const installedVersion = config.kata_version
 
-  if (installedVersion === currentVersion) {
-    process.stdout.write(`Already up to date (v${currentVersion})\n`)
-    return
+  if (installedVersion !== currentVersion) {
+    process.stdout.write(`Updating from v${installedVersion ?? 'unknown'} to v${currentVersion}\n`)
   }
-
-  process.stdout.write(`Updating from v${installedVersion ?? 'unknown'} to v${currentVersion}\n`)
 
   let updated = 0
   let skipped = 0
@@ -76,5 +73,9 @@ export async function update(args: string[]): Promise<void> {
     writeFileSync(kataYamlPath, jsYaml.dump(yaml, { lineWidth: 120, noRefs: true }))
   }
 
-  process.stdout.write(`\nUpdate complete: ${updated} updated, ${skipped} skipped\n`)
+  if (updated === 0 && skipped === 0) {
+    process.stdout.write('All templates up to date\n')
+  } else {
+    process.stdout.write(`\nUpdate complete: ${updated} updated, ${skipped} skipped\n`)
+  }
 }

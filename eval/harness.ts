@@ -184,19 +184,19 @@ export async function runScenario(
     projectDir = join(EVAL_PROJECTS_DIR, `${scenario.id}-${ts}`)
     mkdirSync(projectDir, { recursive: true })
     cpSync(fixturePath, projectDir, { recursive: true })
-    // Bootstrap kata config + seed batteries templates so fixtures never go stale.
-    // --batteries seeds all mode templates so the agent never needs to run setup itself
+    // Bootstrap kata config + seed templates so fixtures never go stale.
+    // --yes seeds all mode templates so the agent never needs to run setup itself
     // (which would overwrite kata.yaml and lose fixtureSetup customizations).
     const setupEnv = { ...process.env, CLAUDE_PROJECT_DIR: projectDir }
     try {
-      execSync(`kata setup --batteries --cwd="${projectDir}"`, {
+      execSync(`kata setup --yes --cwd="${projectDir}"`, {
         cwd: projectDir,
         env: setupEnv,
         stdio: ['pipe', 'pipe', 'pipe'],
       })
     } catch (err) {
       const msg = (err as { stderr?: Buffer }).stderr?.toString() ?? String(err)
-      throw new Error(`kata setup --batteries failed for fixture '${fixtureName}': ${msg}`)
+      throw new Error(`kata setup --yes failed for fixture '${fixtureName}': ${msg}`)
     }
     // Run optional per-scenario fixture setup commands
     if (scenario.fixtureSetup?.length) {

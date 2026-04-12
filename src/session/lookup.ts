@@ -260,7 +260,7 @@ export function resolveTemplatePath(templatePath: string): string {
   throw new Error(
     `Template not found: ${templatePath}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata setup --batteries' to seed project templates.`,
+      `Run 'kata setup --yes' to seed project templates.`,
   )
 }
 
@@ -290,6 +290,6 @@ export function resolveSpecTemplatePath(name: string): string {
   throw new Error(
     `Spec template not found: ${name}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata setup --batteries' to seed spec templates.`,
+      `Run 'kata setup --yes' to seed spec templates.`,
   )
 }

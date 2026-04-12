@@ -2,7 +2,7 @@
 // For the guided setup interview, use: kata enter onboard
 // Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getDefaultProfile, type SetupProfile } from '../config/setup-profile.js'
@@ -15,8 +15,9 @@ type WmConfig = Record<string, unknown> & {
   reviews?: { spec_review?: boolean; code_review?: boolean; code_reviewer?: string | null }
   wm_version?: string
 }
-import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir, getProjectSkillsDir } from '../session/lookup.js'
+import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
+import { scaffoldBatteries } from './scaffold-batteries.js'
 
 /**
  * Resolve the absolute path to the kata binary.
@@ -347,7 +348,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   // Ensure sessions directory exists
   mkdirSync(getSessionsDir(projectRoot), { recursive: true })
 
-  // Seed onboard.md so `kata enter onboard` works without --batteries
+  // Seed onboard.md (lives in system templates/, not batteries/)
   const templatesDir = getProjectTemplatesDir(projectRoot)
   const onboardDest = join(templatesDir, 'onboard.md')
   if (!existsSync(onboardDest)) {
@@ -355,45 +356,6 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
     if (existsSync(onboardSrc)) {
       mkdirSync(templatesDir, { recursive: true })
       copyFileSync(onboardSrc, onboardDest)
-    }
-  }
-
-  // Copy interview configs from batteries
-  const batteriesInterviewsDir = join(getPackageRoot(), 'batteries', 'interviews')
-  const projectInterviewsDir = join(projectRoot, '.kata', 'interviews')
-  if (existsSync(batteriesInterviewsDir)) {
-    mkdirSync(projectInterviewsDir, { recursive: true })
-    for (const f of readdirSync(batteriesInterviewsDir)) {
-      if (f.endsWith('.yaml')) {
-        const dest = join(projectInterviewsDir, f)
-        if (!existsSync(dest)) {
-          copyFileSync(join(batteriesInterviewsDir, f), dest)
-        }
-      }
-    }
-  }
-
-  // Copy steps.yaml from batteries (shared step definitions for $ref)
-  const stepsYamlSrc = join(getPackageRoot(), 'batteries', 'steps.yaml')
-  const stepsYamlDest = join(projectRoot, '.kata', 'steps.yaml')
-  if (existsSync(stepsYamlSrc) && !existsSync(stepsYamlDest)) {
-    copyFileSync(stepsYamlSrc, stepsYamlDest)
-  }
-
-  // Copy skills from batteries (two-level: skills/<name>/SKILL.md)
-  const skillsSrc = join(getPackageRoot(), 'batteries', 'skills')
-  if (existsSync(skillsSrc)) {
-    const skillsDest = getProjectSkillsDir(projectRoot)
-    for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      const skillSrcDir = join(skillsSrc, entry.name)
-      const skillDestDir = join(skillsDest, entry.name)
-      mkdirSync(skillDestDir, { recursive: true })
-      for (const f of readdirSync(skillSrcDir)) {
-        const src = join(skillSrcDir, f)
-        const dest = join(skillDestDir, f)
-        copyFileSync(src, dest)
-      }
     }
   }
 
@@ -413,7 +375,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
 }
 
 /**
- * kata setup [--yes] [--strict] [--batteries] [--cwd=PATH]
+ * kata setup [--yes] [--strict] [--cwd=PATH]
  *
  * Pure configuration — writes kata.yaml, registers hooks, scaffolds content.
  * Always flag-driven; never enters an interactive session.
@@ -433,53 +395,25 @@ export async function setup(args: string[]): Promise<void> {
   profile.strict = parsed.strict
 
   if (parsed.yes) {
-    // --yes / --batteries: write everything with auto-detected defaults
+    // --yes: write everything with auto-detected defaults
     applySetup(parsed.cwd, profile, parsed.explicitCwd)
 
-    // --batteries: scaffold full mode templates, skills, and spec templates
+    // Deprecation notice for --batteries flag
     if (parsed.batteries) {
-      const { scaffoldBatteries } = await import('./scaffold-batteries.js')
-      const result = scaffoldBatteries(projectRoot)
-
-      process.stdout.write('kata setup --batteries complete:\n')
-      process.stdout.write(`  Project: ${profile.project_name}\n`)
-      process.stdout.write(`  Config: .kata/kata.yaml\n`)
-      process.stdout.write(`  Hooks: .claude/settings.json\n`)
-      process.stdout.write('\nBatteries scaffolded:\n')
-      if (result.templates.length > 0) {
-        process.stdout.write(`  Mode templates (${result.templates.length}):\n`)
-        for (const t of result.templates) {
-          process.stdout.write(`    .kata/templates/${t}\n`)
-        }
-      }
-      if (result.specTemplates.length > 0) {
-        process.stdout.write(`  Spec templates (${result.specTemplates.length}):\n`)
-        for (const s of result.specTemplates) {
-          process.stdout.write(`    planning/spec-templates/${s}\n`)
-        }
-      }
-      if (result.skills.length > 0) {
-        process.stdout.write(`  Skills (${result.skills.length}):\n`)
-        for (const s of result.skills) {
-          process.stdout.write(`    .claude/skills/${s}\n`)
-        }
-      }
-      if (result.skipped.length > 0) {
-        process.stdout.write(`  Skipped (already exist): ${result.skipped.join(', ')}\n`)
-      }
-    } else {
-      // Plain --yes summary
-      process.stdout.write('kata setup complete:\n')
-      process.stdout.write(`  Project: ${profile.project_name}\n`)
-      process.stdout.write(`  Test command: ${profile.test_command ?? 'none detected'}\n`)
-      process.stdout.write(`  CI: ${profile.ci ?? 'none detected'}\n`)
-      process.stdout.write(`  Config: .kata/kata.yaml\n`)
-      process.stdout.write(`  Hooks: .claude/settings.json\n`)
-      process.stdout.write(`    - SessionStart\n`)
-      process.stdout.write(`    - UserPromptSubmit\n`)
-      process.stdout.write(`    - Stop\n`)
-      process.stdout.write(`    - PreToolUse (consolidated: mode-gate + task-deps + gates + evidence)\n`)
+      process.stderr.write('Note: --batteries is deprecated. kata setup --yes now includes all content.\n')
     }
+
+    // Always scaffold batteries content (templates, skills, spec templates, etc.)
+    const result = scaffoldBatteries(projectRoot)
+
+    // Unified output summary
+    process.stdout.write('kata setup complete:\n')
+    process.stdout.write(`  Project: ${profile.project_name}\n`)
+    process.stdout.write(`  Config: .kata/kata.yaml\n`)
+    process.stdout.write(`  Hooks: .claude/settings.json\n`)
+    process.stdout.write(`  Templates: ${result.templates.length} mode templates\n`)
+    process.stdout.write(`  Spec templates: ${result.specTemplates.length}\n`)
+    process.stdout.write(`  Skills: ${result.skills.length}\n`)
 
     process.stdout.write('\nOptional: add shorthand to package.json scripts:\n')
     process.stdout.write('  "kata": "kata"\n')
@@ -493,15 +427,11 @@ export async function setup(args: string[]): Promise<void> {
 
 Usage:
   kata setup --yes                Quick setup with auto-detected defaults
-  kata setup --yes --strict       Setup + PreToolUse task enforcement hooks
-  kata setup --batteries          Setup + scaffold batteries-included starter content
-  kata setup --batteries --strict Setup + batteries + strict hooks
+  kata setup --yes --strict       Setup + strict PreToolUse task enforcement hooks
 
 Flags:
-  --yes         Write config and register hooks using auto-detected defaults
-  --batteries   Scaffold mode templates, skills, spec templates, and GitHub issue templates
-                (implies --yes)
-  --strict      Also register PreToolUse hooks: task-deps, task-evidence
+  --yes         Write config, register hooks, scaffold templates and skills
+  --strict      Also register PreToolUse hooks for task enforcement
   --cwd=PATH    Run setup in a different directory
 
 For the guided setup interview, run:

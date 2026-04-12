@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
 import jsYaml from 'js-yaml'
@@ -59,7 +59,7 @@ describe('setup --yes', () => {
     expect(output).toContain('kata setup complete')
 
     // Check kata.yaml was created
-    const kataYamlPath = join(tmpDir, '.claude', 'workflows', 'kata.yaml')
+    const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')
     expect(existsSync(kataYamlPath)).toBe(true)
 
     // Parse and verify kata.yaml content
@@ -70,7 +70,7 @@ describe('setup --yes', () => {
     expect(config.research_path).toBe('planning/research')
 
     // Check sessions directory was created
-    expect(existsSync(join(tmpDir, '.claude', 'sessions'))).toBe(true)
+    expect(existsSync(join(tmpDir, '.kata', 'sessions'))).toBe(true)
   })
 
   it('creates settings.json with 3 default hooks', async () => {
@@ -106,7 +106,7 @@ describe('setup --yes', () => {
     // First setup
     await captureSetup(['--yes'], tmpDir)
 
-    const kataYamlPath = join(tmpDir, '.claude', 'workflows', 'kata.yaml')
+    const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')
     const firstContent = readFileSync(kataYamlPath, 'utf-8')
 
     // Second setup
@@ -185,7 +185,12 @@ describe('setup --yes', () => {
 
     const output = await captureSetup(['--yes'], tmpDir)
     expect(output).toContain('my-detected-project')
-    expect(output).toContain('vitest run')
+
+    // test_command should be saved in kata.yaml config
+    const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')
+    const config = jsYaml.load(readFileSync(kataYamlPath, 'utf-8')) as Record<string, unknown>
+    const project = config.project as Record<string, unknown>
+    expect(project.test_command).toBe('vitest run')
   })
 
   it('auto-detects CI config', async () => {
@@ -193,7 +198,49 @@ describe('setup --yes', () => {
     writeFileSync(join(tmpDir, '.github', 'workflows', 'ci.yml'), 'name: CI')
 
     const output = await captureSetup(['--yes'], tmpDir)
-    expect(output).toContain('github-actions')
+    expect(output).toContain('kata setup complete')
+
+    // CI should be saved in kata.yaml config
+    const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')
+    const config = jsYaml.load(readFileSync(kataYamlPath, 'utf-8')) as Record<string, unknown>
+    const project = config.project as Record<string, unknown>
+    expect(project.ci).toBe('github-actions')
+  })
+
+  it('setup --yes scaffolds mode templates, spec-templates, and github templates', async () => {
+    const output = await captureSetup(['--yes'], tmpDir)
+    expect(output).toContain('kata setup complete')
+
+    // Mode templates should exist in .kata/templates/
+    const templatesDir = join(tmpDir, '.kata', 'templates')
+    expect(existsSync(templatesDir)).toBe(true)
+    const templateFiles = readdirSync(templatesDir) as string[]
+    expect(templateFiles.length).toBeGreaterThan(0)
+
+    // Spec templates should exist in planning/spec-templates/
+    const specTemplatesDir = join(tmpDir, 'planning', 'spec-templates')
+    expect(existsSync(specTemplatesDir)).toBe(true)
+    const specFiles = readdirSync(specTemplatesDir) as string[]
+    expect(specFiles.length).toBeGreaterThan(0)
+
+    // GitHub issue templates should exist in .github/ISSUE_TEMPLATE/
+    const issueTemplateDir = join(tmpDir, '.github', 'ISSUE_TEMPLATE')
+    expect(existsSync(issueTemplateDir)).toBe(true)
+    const issueFiles = readdirSync(issueTemplateDir) as string[]
+    expect(issueFiles.length).toBeGreaterThan(0)
+  })
+
+  it('setup --yes is idempotent with batteries content', async () => {
+    // First setup
+    await captureSetup(['--yes'], tmpDir)
+
+    // Second setup should not error
+    const output = await captureSetup(['--yes'], tmpDir)
+    expect(output).toContain('kata setup complete')
+
+    // Templates should still exist
+    const templatesDir = join(tmpDir, '.kata', 'templates')
+    expect(existsSync(templatesDir)).toBe(true)
   })
 })
 
