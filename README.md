@@ -14,16 +14,17 @@ Structured workflow CLI for [Claude Code](https://claude.ai/claude-code). Wraps 
    - [Planning → Implementation pipeline](#planning--implementation-pipeline)
    - [Hook chain](#hook-chain)
 6. [Stop conditions](#stop-conditions)
-7. [Command reference](#command-reference)
+7. [Skills](#skills)
+8. [Command reference](#command-reference)
    - [Core commands](#core-commands)
    - [Other commands](#other-commands)
-8. [Hooks reference](#hooks-reference)
-9. [Configuration (kata.yaml)](#configuration-katayaml)
-10. [Custom modes](#custom-modes)
-11. [Batteries system](#batteries-system)
-12. [Architecture](#architecture)
-13. [Comparison to similar tools](#comparison-to-similar-tools)
-14. [License](#license)
+9. [Hooks reference](#hooks-reference)
+10. [Configuration (kata.yaml)](#configuration-katayaml)
+11. [Custom modes](#custom-modes)
+12. [Template system](#template-system)
+13. [Architecture](#architecture)
+14. [Comparison to similar tools](#comparison-to-similar-tools)
+15. [License](#license)
 
 ---
 
@@ -71,7 +72,7 @@ Tell Claude:
 
 > Set up kata for this project
 
-Claude runs `kata setup`, registers the hooks in `.claude/settings.json`, and configures `.kata/kata.yaml` for your project. For a more thorough walkthrough, tell Claude to enter onboard mode — it will interview you about your project and configure everything interactively.
+Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml`, copies mode templates to `.kata/templates/`, and installs skills to `.claude/skills/` — everything in one command. For a more thorough walkthrough, tell Claude to enter onboard mode — it will interview you about your project and configure everything interactively.
 
 **3. Enter a mode**
 
@@ -110,8 +111,8 @@ If `kata can-exit` reports unmet conditions (pending tasks, uncommitted changes,
 
 | Mode | Name | Description | Issue required? | Stop conditions |
 |------|------|-------------|-----------------|-----------------|
-| `research` | Research | Explore and synthesize findings | No | tasks_complete, committed, pushed |
-| `planning` | Planning | Research, spec, review, approved | **Yes** | tasks_complete, committed, pushed |
+| `research` | Research | Explore and synthesize findings | No | tasks_complete, doc_created, committed, pushed |
+| `planning` | Planning | Research, spec, review, approved | **Yes** | tasks_complete, spec_valid, committed, pushed |
 | `implementation` | Implementation | Execute approved specs | **Yes** | tasks_complete, committed, pushed, tests_pass, feature_tests_added |
 | `task` | Task | Combined planning + implementation for small tasks | No | tasks_complete, committed |
 | `freeform` | Freeform | Quick questions and discussion (no phases) | No | *(none — can always exit)* |
@@ -247,15 +248,13 @@ sequenceDiagram
     participant K as kata hooks
 
     U->>C: starts conversation
-    K->>C: SessionStart → kata prime injects mode context
+    K->>C: SessionStart → kata prime injects mode context + rules
     U->>C: sends message
     K->>C: UserPromptSubmit → detect mode intent
     C->>C: tool calls (Edit, Write, TaskUpdate...)
-    K->>C: PreToolUse [mode-gate] → enforce active mode
-    K->>C: PreToolUse [task-deps] → check dependency order (strict mode)
-    K->>C: PreToolUse [task-evidence] → require git evidence (strict mode)
+    K->>C: PreToolUse → mode-gate, session ID, gates, deps, evidence
     C->>C: tries to stop
-    K->>C: Stop → check all stop conditions
+    K->>C: Stop → check all stop conditions + detect active agents
     C->>C: blocked if conditions unmet
 ```
 
@@ -272,10 +271,12 @@ Stop conditions are checked by `kata hook stop-conditions` every time Claude tri
 | Condition | What it checks | Modes that use it |
 |-----------|----------------|-------------------|
 | `tasks_complete` | All native tasks in `~/.claude/tasks/{sessionId}/` have `status: completed` | research, planning, implementation, task, verify, debug |
-| `committed` | No uncommitted changes in git working tree (`git status --porcelain` returns empty) | research, planning, implementation, task, verify, debug |
+| `committed` | No uncommitted changes in git working tree (`git status --porcelain` returns empty, excludes `.kata/sessions/`) | research, planning, implementation, task, verify, debug |
 | `pushed` | Current HEAD has been pushed to a remote branch | research, planning, implementation, verify, debug |
 | `tests_pass` | `project.test_command` from `kata.yaml` exits with code 0 | implementation only |
-| `feature_tests_added` | At least one new test file added in the diff vs `project.diff_base` (default: `origin/main`) | implementation only |
+| `feature_tests_added` | At least one new test function added in the diff vs `project.diff_base` (default: `origin/main`) | implementation only |
+| `doc_created` | At least one new or modified file exists in the mode's `deliverable_path` | research |
+| `spec_valid` | Spec file has valid YAML frontmatter with phases and tasks | planning |
 
 `freeform` and `onboard` have no stop conditions — they can always exit.
 
@@ -283,13 +284,17 @@ Stop conditions are checked by `kata hook stop-conditions` every time Claude tri
 
 **`tasks_complete`** — Complete all phase tasks. In each phase, do the work and then call `TaskUpdate(taskId="X", status="completed")`. Run `TaskList` to see what's still pending.
 
-**`committed`** — Stage and commit all changes: `git add <files> && git commit -m "..."`. `kata can-exit` re-checks `git status --porcelain`; it must return empty.
+**`committed`** — Stage and commit all changes: `git add <files> && git commit -m "..."`. `kata can-exit` re-checks `git status --porcelain`; it must return empty. `.kata/sessions/` is excluded from this check.
 
 **`pushed`** — Push the current branch: `git push`. If the branch has no upstream yet: `git push -u origin <branch>`.
 
 **`tests_pass`** — Fix any failing tests. The test command is set in `kata.yaml` under `project.test_command`. Run it directly to see what's failing.
 
-**`feature_tests_added`** — Write at least one new test file in this implementation session. "New" means it appears in `git diff origin/main --name-only` and matches `project.test_file_pattern` (default: `**/*.test.ts`). Modifying existing test files does not satisfy this condition.
+**`feature_tests_added`** — Write at least one new test function in this implementation session. "New" means it appears in `git diff origin/main` and matches test function patterns (`it`, `test`, `describe`). Modifying existing test files does not satisfy this condition.
+
+**`doc_created`** — Write at least one file to the mode's `deliverable_path`. For research mode, this defaults to `planning/research/`. The path is configured per-mode in `kata.yaml`.
+
+**`spec_valid`** — The spec file for the linked issue must exist and have valid YAML frontmatter with a `phases` array containing tasks. Run `kata validate-spec --issue=N` to check.
 
 ### Example output
 
@@ -322,6 +327,46 @@ Use `kata can-exit --json` for machine-readable output in CI or scripts:
   }
 }
 ```
+
+---
+
+## Skills
+
+Skills are atomic methodology instructions that templates reference via `skill:` fields on steps. They live in `.claude/skills/<name>/SKILL.md` and are copied from the package during `kata setup`.
+
+### Batteries skills
+
+| Skill | Purpose |
+|-------|---------|
+| `code-impl` | Implementation methodology — spawn impl-agents, verify changes |
+| `code-review` | Code review against spec behaviors and quality standards |
+| `research` | Deep exploration with parallel searches and documented findings |
+| `interview` | Structured requirement gathering from the user |
+| `spec-writing` | Spec authoring with behaviors (B-IDs), phases, and acceptance criteria |
+| `spec-review` | Spec review for completeness, clarity, and feasibility |
+| `debug-methodology` | Systematic hypothesis-driven debugging |
+| `auto-debug` | Automated debug loop — reproduce, diagnose, fix, verify |
+| `test-protocol` | Build → typecheck → test verification sequence |
+| `vp-execution` | Verification Plan step execution with evidence recording |
+
+### How skills work
+
+Templates reference skills on phase steps:
+
+```yaml
+steps:
+  - id: implement
+    title: "Implement the change"
+    skill: code-impl
+```
+
+When Claude reaches this step, the task instruction tells it to invoke the skill (e.g., `Invoke /code-impl`). The skill's `SKILL.md` provides the detailed methodology — how to approach the work, what patterns to follow, what to verify.
+
+Skills are project-owned after setup. You can edit them, add project-specific skills, or replace the batteries versions entirely.
+
+### Updating skills
+
+After upgrading kata, run `kata update` to overwrite project skills with the latest package versions. Commit your customizations first — `kata update` overwrites without merging.
 
 ---
 
@@ -493,52 +538,42 @@ Run `kata doctor` when hooks stop firing, after manual edits to `.claude/setting
 
 ---
 
-#### `kata batteries`
+#### `kata setup`
 
-Seeds the project with kata config files, mode templates, agent definitions, and spec stubs.
+One-command project setup — registers hooks, writes config, scaffolds templates, and installs skills.
 
 ```
-kata batteries [--update]
+kata setup [--yes] [--strict]
 ```
+
+What it creates:
+
+- Registers `SessionStart`, `UserPromptSubmit`, `Stop`, and `PreToolUse` hooks in `.claude/settings.json`
+- Creates `.kata/` directory with `kata.yaml` (project config with mode definitions)
+- Copies mode templates to `.kata/templates/`
+- Installs skills to `.claude/skills/`
+- Seeds spec templates, interview configs, and GitHub issue templates
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Write everything with auto-detected defaults. Required for non-interactive setup. |
+| `--strict` | Also enables strict-mode enforcement in the `PreToolUse` hook (task dependency ordering, git evidence requirements). |
+
+For a guided walkthrough, run `kata enter onboard` instead. This starts an agent-guided session that interviews you about your project and configures kata interactively.
 
 Files scaffolded:
 
 | Source | Destination | Contents |
 |--------|-------------|----------|
-| `batteries/kata.yaml` | `.kata/kata.yaml` | Project config (project name, commands, spec paths, mode overrides) |
+| `batteries/kata.yaml` | `.kata/kata.yaml` | Project config (project name, commands, spec paths, mode definitions) |
 | `batteries/templates/*.md` | `.kata/templates/*.md` | Mode templates (research, planning, implementation, task, freeform, verify, debug) |
+| `batteries/skills/*/SKILL.md` | `.claude/skills/*/SKILL.md` | Methodology skills (code-impl, code-review, research, interview, etc.) |
+| `batteries/steps.yaml` | `.kata/steps.yaml` | Shared step definitions for `$ref` in templates |
 | `batteries/spec-templates/` | `planning/spec-templates/` | Spec document stubs |
-| `batteries/interviews.yaml` | `.kata/interviews.yaml` | Onboard interview questions |
-| `batteries/subphase-patterns.yaml` | `.kata/subphase-patterns.yaml` | Phase pattern definitions |
+| `batteries/interviews/` | `.kata/interviews/` | Interview question configs |
 | `batteries/verification-tools.md` | `.kata/verification-tools.md` | Verification tools reference |
 | `batteries/github/ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` | GitHub issue templates |
 | `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by onboard mode) |
-
-`--update` overwrites existing project files with the latest versions from the installed package. Use this after `npm update @codevibesmatter/kata`. Commit your customizations first — `--update` overwrites them.
-
----
-
-#### `kata setup`
-
-Registers hooks and initializes the `.kata/` directory structure for a project.
-
-```
-kata setup [--strict] [--batteries] [--yes]
-```
-
-What it creates:
-
-- Registers `SessionStart`, `UserPromptSubmit`, `Stop`, and `mode-gate` hooks in `.claude/settings.json`
-- Creates the `.kata/` directory
-- Writes `.kata/kata.yaml` with project defaults
-
-| Flag | Description |
-|------|-------------|
-| `--strict` | Also registers `PreToolUse` hooks: `task-deps` and `task-evidence`. Enforces task dependency ordering and requires uncommitted git changes as evidence before completing tasks. |
-| `--batteries` | Also runs the batteries scaffold after setup. Implies `--yes`. |
-| `--yes` | Non-interactive — accept all defaults without prompting. |
-
-For a guided walkthrough, run `kata enter onboard` instead. This starts an agent-guided session that interviews you about your project and configures kata interactively.
 
 ### Other commands
 
@@ -548,6 +583,8 @@ For a guided walkthrough, run `kata enter onboard` instead. This starts an agent
 | `kata suggest <message>` | | Detect mode intent from a message and output guidance on which mode to enter |
 | `kata hook <name>` | | Dispatch a named hook event; used internally by `.claude/settings.json` hook commands |
 | `kata modes` | | List available modes from `kata.yaml` with names, aliases, and stop conditions |
+| `kata update` | | Update project templates and skills to the latest package version. Overwrites existing files — commit first. |
+| `kata migrate` | `[--dry-run]` | Convert old-format templates to the new gate/hint/stage format |
 | `kata init` | `[--session=ID] [--force]` | Initialize session state; `--force` resets existing state |
 | `kata teardown` | `[--yes] [--all] [--dry-run]` | Remove kata hooks and config from the project |
 | `kata config` | `[--show]` | Show resolved `kata.yaml` config with provenance (project vs. defaults) |
@@ -575,18 +612,12 @@ Hooks are shell commands registered in `.claude/settings.json` that Claude Code 
 |-------|---------|---------------|--------------|
 | `SessionStart` | `kata hook session-start` | Every new Claude conversation | Initializes session registry; injects mode template, session state, and rules into Claude's context via `kata prime` |
 | `UserPromptSubmit` | `kata hook user-prompt` | Every user message | Detects mode intent from message text; suggests `kata enter <mode>` if no mode is active |
-| `PreToolUse` (mode-gate) | `kata hook mode-gate` | Every tool call | Blocks file writes when no kata mode is active; also injects `--session=ID` into kata bash commands |
-| `PreToolUse` (task-deps) | `kata hook task-deps` | `TaskUpdate` calls | Enforces task dependency ordering — blocks completing a task if its dependencies are not yet done (strict mode only) |
-| `PreToolUse` (task-evidence) | `kata hook task-evidence` | `TaskUpdate` "completed" calls | Requires uncommitted git changes as evidence before a task can be marked complete (strict mode only) |
-| `Stop` | `kata hook stop-conditions` | When Claude tries to end the session | Checks all stop conditions for the current mode; blocks exit and lists unmet conditions if any remain |
+| `PreToolUse` | `kata hook pre-tool-use` | Every tool call | Consolidated handler: mode-gate (blocks writes without active mode, injects `--session=ID`), task-deps (dependency ordering), gate evaluation (bash gates on task completion), task-evidence (git evidence check). Strict-mode features are activated by `kata setup --strict`. |
+| `Stop` | `kata hook stop-conditions` | When Claude tries to end the session | Checks all stop conditions for the current mode; blocks exit and lists unmet conditions if any remain. Detects active background agents to prevent premature exit. |
 
-### Registration tiers
+### Registration
 
-**Always registered** (by `kata setup`): `session-start`, `user-prompt`, `stop-conditions`, `mode-gate`
-
-**Strict mode only** (`kata setup --strict`): `task-deps`, `task-evidence`
-
-Note: `mode-gate` is always registered — not just in strict mode — because it also resolves `--session=ID` for all `kata` bash commands. This session ID forwarding is required for any hook-invoked subcommand to find the correct session state.
+`kata setup` registers all four hooks (`session-start`, `user-prompt`, `pre-tool-use`, `stop-conditions`). The `PreToolUse` hook always runs because it handles `--session=ID` forwarding for all kata bash commands. Strict-mode enforcement (task-deps, task-evidence) is enabled within the same hook when `--strict` was used during setup.
 
 ### Hook flow
 
@@ -596,20 +627,16 @@ User message
     ▼
 UserPromptSubmit ──► kata hook user-prompt
     │                  Detect mode intent → suggest kata enter
-    │
     ▼
 Claude tool call
     │
     ▼
-PreToolUse ──────► kata hook mode-gate
-    │                  Block writes if no mode active
-    │                  Inject --session=ID into kata commands
-    │
-    ├──────────────► kata hook task-deps      (strict mode only)
-    │                  Enforce dependency ordering
-    │
-    └──────────────► kata hook task-evidence  (strict mode only)
-                       Require git evidence before completing task
+PreToolUse ──────► kata hook pre-tool-use
+    │                  1. Mode gate: block writes if no mode active
+    │                  2. Session ID: inject --session=ID into kata commands
+    │                  3. Gate eval: check bash gates on task completion
+    │                  4. Task deps: enforce dependency ordering (strict)
+    │                  5. Task evidence: require git changes (strict)
     │
     ▼
 Claude Stop event
@@ -633,6 +660,7 @@ project:
   name: my-project           # Display name shown in kata status
   build_command: npm run build      # Run before typecheck in TEST phase
   test_command: npm test            # Used by tests_pass stop condition
+  test_command_changed: vitest --changed  # Scoped test command (used by impl gates; falls back to test_command)
   typecheck_command: npm run typecheck  # Run in TEST phase
   smoke_command: null               # Optional quick smoke test
   diff_base: origin/main            # Branch to diff against for feature_tests_added
@@ -665,7 +693,7 @@ task_rules:                         # Rules injected when mode has phases
   - "Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate."
   - "Run TaskList FIRST to discover pre-created tasks and their dependency chains."
 
-modes:                              # Project-level mode overrides (merged with built-ins)
+modes:                              # Project-level mode definitions (source of truth for all modes)
   my-custom-mode:
     template: my-mode.md
     stop_conditions: [tasks_complete, committed]
@@ -674,6 +702,9 @@ modes:                              # Project-level mode overrides (merged with 
     name: "My Custom Mode"
     description: "..."
     workflow_prefix: "MC"           # 2-letter prefix for workflow IDs
+    deliverable_path: docs/output   # Path checked by doc_created stop condition
+    rules:                          # Injected into context via kata prime
+      - "You are a CUSTOM MODE operator. Follow these instructions."
     intent_keywords:
       - "my custom task"
     aliases:
@@ -687,6 +718,7 @@ modes:                              # Project-level mode overrides (merged with 
 | `project.name` | string | `""` | Display name for the project |
 | `project.build_command` | string | null | Build command run before typecheck in the TEST phase |
 | `project.test_command` | string | null | Test command used by the `tests_pass` stop condition |
+| `project.test_command_changed` | string | null | Scoped test command for changed files only (used by implementation gates; falls back to `test_command`) |
 | `project.typecheck_command` | string | null | Typecheck command run in the TEST phase |
 | `project.smoke_command` | string | null | Optional quick smoke test command |
 | `project.diff_base` | string | `origin/main` | Branch to diff against for the `feature_tests_added` stop condition |
@@ -743,29 +775,51 @@ mode: <string>              # Alias for id (used for display)
 phases:
   - id: <string>            # Phase ID (e.g. p0, p1)
     name: <string>          # Phase name (e.g. "Research")
+    stage: setup | work | close  # Phase category (used for stop condition scoping)
+    expansion: static | agent | spec  # How sub-tasks are created (default: static)
+    skill: <skill-name>     # Skill to invoke for the whole phase (optional)
     task_config:
       title: <string>       # Title for native TaskCreate task
       labels: [string]      # Optional task labels
-    steps:                  # Ordered sub-steps Claude follows within this phase
+      depends_on: [<phase-id>]  # Phases that must complete before this one
+    agent_protocol:         # Config for agent-expanded phases
+      max_tasks: <number>   # Max sub-tasks the agent can create
+    steps:                  # Ordered sub-steps (for static phases)
       - id: <string>        # Step identifier
         title: <string>     # Step title
-        instruction: |      # Freeform markdown instructions for Claude
+        $ref: <step-name>   # Reference a shared step from steps.yaml (optional)
+        skill: <skill-name> # Skill to invoke for this step (optional)
+        instruction: |      # Freeform markdown instructions (optional)
           ...
-    depends_on: [<phase-id>]  # Phases that must complete before this one
+        gate:               # Completion gate (optional)
+          bash: <command>   # Shell command to run (supports {var} substitution)
+          expect_exit: 0    # Expected exit code
+    subphase_pattern:       # Pattern for spec-expanded phases (expansion: spec)
+      - id_suffix: <string>
+        title_template: <string>
+        gate:
+          bash: <command>
+          expect_exit: 0
+workflow_id_format: <string>  # Custom workflow ID format (optional)
+global_conditions:            # Stop conditions applied to all phases (optional)
+  - changes_committed
+  - changes_pushed
 ---
 ```
 
 **Key field notes:**
 
-- `steps` defines the sub-tasks inside each phase. Each step becomes one native task visible in Claude's task list.
-- `task_config.title` is the label shown for the phase's native TaskCreate entry.
-- `depends_on` creates the blocking relationship between phases. Phase `p1` will not become available until every phase listed in its `depends_on` array is complete.
-- The body of the template file (the markdown below the frontmatter) is the mode instruction text injected into Claude's context by `kata prime`.
+- `stage` categorizes phases as `setup`, `work`, or `close`. Stop conditions can be scoped to stages.
+- `expansion` controls sub-task creation: `static` (steps defined in template), `agent` (Claude discovers and creates tasks at runtime), `spec` (tasks generated from spec phases).
+- `skill` on a step tells Claude to invoke that skill (e.g., `Invoke /code-impl`) before starting the step's work.
+- `$ref` references a shared step definition from `.kata/steps.yaml` — avoids duplicating common steps like `env-check` or `commit-push` across templates.
+- `gate` defines a bash command that must pass (exit 0) before a task can be marked complete. Variables like `{build_command}` and `{test_command}` are substituted from `kata.yaml`.
+- `task_config.depends_on` creates the blocking relationship between phases.
 
 **Real examples in the package:**
 
-- `batteries/templates/planning.md` — a multi-phase mode with complex step trees and spec-writing instructions
-- `batteries/templates/implementation.md` — shows the subphase pattern and code-review integration
+- `batteries/templates/task.md` — simple three-phase template with skills and gates
+- `batteries/templates/implementation.md` — spec-expanded phases with subphase patterns and agent review
 
 ---
 
@@ -782,6 +836,9 @@ modes:
     name: "My Mode"
     description: "What it does"
     workflow_prefix: "MM"        # 2-letter prefix for workflow IDs
+    deliverable_path: docs/output  # For doc_created stop condition
+    rules:
+      - "You are a MODE operator. Follow these rules."
     intent_keywords:
       - "do my thing"
     aliases:
@@ -796,36 +853,36 @@ modes:
 | `name` | yes | Display name shown in `kata prime` and task headers |
 | `description` | no | One-line description shown in mode listings |
 | `workflow_prefix` | no | Two-letter prefix for workflow IDs (e.g. `MM-abc123`) |
+| `deliverable_path` | no | Directory path checked by the `doc_created` stop condition |
+| `rules` | no | Array of strings injected into Claude's context via `kata prime` |
 | `intent_keywords` | no | Phrases that trigger mode-suggestion in `UserPromptSubmit` hook |
 | `aliases` | no | Short aliases accepted by `kata enter` |
 
 ---
 
-## Batteries system
+## Template system
 
-`kata batteries` seeds a project with starter content from the kata package: mode templates, agent definitions, spec stubs, and config files. It is idempotent — safe to re-run at any time. Without `--update`, it never overwrites files that already exist.
+Templates, skills, and step definitions are copied from the kata package to your project during `kata setup`. After setup, they are project-owned — edit, extend, or replace them freely. kata reads from `.kata/templates/` and `.claude/skills/` at runtime, never from the package.
 
-### Two use cases
-
-**1. Initial scaffold**
-
-Run once at project setup, or automatically as part of `kata setup --batteries`. Creates the starter templates and config files your project needs to start using kata modes.
-
-**2. Upgrading templates**
+### Updating after upgrade
 
 After running `npm update @codevibesmatter/kata`, run:
 
 ```
-kata batteries --update
+kata update
 ```
 
-This overwrites project files with the latest versions from the updated package. **Commit your customizations first** — `--update` overwrites without merging. Any local edits to template files will be lost.
+This overwrites project templates, skills, and step definitions with the latest package versions. **Commit your customizations first** — `kata update` overwrites without merging.
 
-### Files are yours to own
+### Migrating old templates
 
-Files seeded by `kata batteries` are the project's to own and customize. kata does not reference package templates at runtime — it reads from `.kata/templates/`. Editing, extending, or replacing the seeded templates is encouraged and expected.
+If you have templates from kata 0.3.x or earlier (before the stage/gate/skill schema), run:
 
-See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
+```
+kata migrate [--dry-run]
+```
+
+This converts old-format templates to the new schema. Use `--dry-run` to preview changes without writing.
 
 ---
 
@@ -851,16 +908,17 @@ See [`kata batteries`](#kata-batteries) for the full list of scaffolded files.
 | Path | Contents |
 |------|---------|
 | `.kata/sessions/{sessionId}/state.json` | Per-session `SessionState` — mode, phase, workflow ID, issue number |
-| `.kata/kata.yaml` | Project config (`WmConfig`) — commands, spec paths, mode overrides |
-| `.kata/templates/` | Project-owned mode templates (seeded by batteries, customizable) |
+| `.kata/kata.yaml` | Project config — commands, spec paths, mode definitions with rules |
+| `.kata/templates/` | Project-owned mode templates (seeded by setup, customizable) |
+| `.kata/steps.yaml` | Shared step definitions for `$ref` in templates |
 | `.kata/verification-evidence/` | Output from verify mode runs |
 | `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned, created by `kata enter`) |
 | `.claude/settings.json` | Hook registration (Claude-owned) |
-| `.claude/skills/` | Skill definitions with prompt templates |
+| `.claude/skills/` | Methodology skills (seeded by setup, customizable) |
 
 ### Hook registration
 
-Hooks are registered in `.claude/settings.json` using the `kata hook <name>` dispatch pattern. Each hook reads Claude Code's stdin JSON, extracts `session_id`, and outputs a JSON decision. The session ID from hook stdin must be forwarded as `--session=ID` to any subcommand — there is no automatic session detection at hook time.
+Hooks are registered in `.claude/settings.json` using the `kata hook <name>` dispatch pattern. Four hooks are registered: `session-start`, `user-prompt`, `pre-tool-use`, and `stop-conditions`. Each hook reads Claude Code's stdin JSON, extracts `session_id`, and outputs a JSON decision. The session ID from hook stdin must be forwarded as `--session=ID` to any subcommand — there is no automatic session detection at hook time.
 
 ### Eval harness
 

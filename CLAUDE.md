@@ -48,13 +48,15 @@ All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/setting
 
 | Path | Contents |
 |---|---|
-| `.kata/kata.yaml` | Project config (modes, settings) |
+| `.kata/kata.yaml` | Project config (modes with rules, settings) |
 | `.kata/sessions/{sessionId}/state.json` | Per-session `SessionState` |
-| `.kata/templates/` | Mode templates |
+| `.kata/templates/` | Mode templates (stages, skills, gates, $ref) |
+| `.kata/steps.yaml` | Shared step definitions for `$ref` in templates |
 | `.kata/prompts/` | Review prompt templates (customizable) |
 | `.kata/verification-evidence/` | Verify-phase output |
 | `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned) |
 | `.claude/settings.json` | Hook registration (Claude-owned) |
+| `.claude/skills/` | Methodology skills (code-impl, code-review, etc.) |
 | `planning/spec-templates/` | Spec document stubs |
 
 ### Hook architecture
@@ -63,20 +65,22 @@ Hooks are registered in `.claude/settings.json` and call `kata hook <name>`. Eac
 
 | Hook event | Command | Role |
 |------------|---------|------|
-| `SessionStart` | `kata hook session-start` | Init session registry, inject mode context |
+| `SessionStart` | `kata hook session-start` | Init session registry, inject mode context + rules |
 | `UserPromptSubmit` | `kata hook user-prompt` | Detect mode intent, suggest entering a mode |
-| `Stop` | `kata hook stop-conditions` | Block exit while native tasks are incomplete |
-| `PreToolUse` (optional) | `kata hook mode-gate` / `task-deps` / `task-evidence` | Strict-mode enforcement |
+| `PreToolUse` | `kata hook pre-tool-use` | Consolidated: mode-gate, session ID, gate eval, task-deps, task-evidence |
+| `Stop` | `kata hook stop-conditions` | Block exit while conditions are unmet, detect active agents |
 
 ### Mode and template system
 
-Built-in modes are defined in `modes.yaml` (package root). Each mode references a template filename with YAML frontmatter defining phases, task titles, and dependency chains.
+Mode definitions live in `kata.yaml` under the `modes:` key. Each mode references a template filename with YAML frontmatter defining phases (with stages, skills, gates, `$ref` steps, and expansion types).
 
 **Template sources:**
 - `templates/` — system templates only: `onboard.md` and `SESSION-TEMPLATE.template.md`
-- `batteries/templates/` — canonical mode templates (implementation, planning, task, bugfix, etc.)
+- `batteries/templates/` — canonical mode templates (implementation, planning, task, etc.)
+- `batteries/skills/` — methodology skills (code-impl, code-review, research, etc.)
+- `batteries/steps.yaml` — shared step definitions for `$ref`
 
-After setup, the project owns copies under `.kata/templates/`. The package files are seeds only, not used at runtime. To update project templates with newer versions, run `kata batteries --update`.
+After setup, the project owns copies under `.kata/templates/`, `.claude/skills/`, and `.kata/steps.yaml`. The package files are seeds only, not used at runtime. To update project files with newer versions, run `kata update`.
 
 ### Key dependencies
 
@@ -85,11 +89,13 @@ After setup, the project owns copies under `.kata/templates/`. The package files
 
 ## Data-driven design principles
 
-**No hardcoded mode names in logic.** Mode behavior is driven by fields in `modes.yaml`:
+**No hardcoded mode names in logic.** Mode behavior is driven by fields in `kata.yaml` mode definitions:
 - `issue_handling: "required" | "none"` — whether mode entry requires a GitHub issue
-- `stop_conditions: string[]` — which exit checks to run (`tasks_complete`, `committed`, `pushed`, `verification`, `tests_pass`, `feature_tests_added`). Empty array = can always exit.
+- `stop_conditions: string[]` — which exit checks to run (`tasks_complete`, `committed`, `pushed`, `tests_pass`, `feature_tests_added`, `doc_created`, `spec_valid`). Empty array = can always exit.
+- `rules: string[]` — per-mode instructions injected into context via `kata prime`
+- `deliverable_path: string` — directory checked by `doc_created` stop condition
 
-When adding new per-mode behavior, add a field to `modes.yaml` + `ModeConfigSchema`, never hardcode mode names in TypeScript.
+When adding new per-mode behavior, add a field to `kata.yaml` mode config + `ModeConfigSchema`, never hardcode mode names in TypeScript.
 
 ## Eval harness (`eval/`)
 
@@ -100,7 +106,7 @@ Agentic eval suite using `@anthropic-ai/claude-agent-sdk`. The harness drives in
 - **`settingSources: ['project']`** loads `.claude/settings.json` — hooks fire naturally in the SDK, no manual context injection needed. Never use `appendSystemPrompt` for hook context.
 - **`permissionMode: 'bypassPermissions'`** — full agent autonomy, no tool approval prompts.
 - **AskUserQuestion pause/resume** — a PreToolUse hook intercepts AskUserQuestion, stops the session (`continue: false`), outputs question + session_id. Resume with `--resume=<session_id> --answer="<choice>"`.
-- **Fixture freshness** — `EvalScenario.fixture` field selects which `eval-fixtures/` dir to copy. After copying, the harness runs `kata batteries --update` so templates always reflect latest package versions. Fixtures carry only `settings.json` and `wm.yaml`, not template `.md` files.
+- **Fixture freshness** — `EvalScenario.fixture` field selects which `eval-fixtures/` dir to copy. After copying, the harness runs `kata update` so templates and skills always reflect latest package versions. Fixtures carry only `settings.json` and `kata.yaml`, not template `.md` files.
 - **`CLAUDE_PROJECT_DIR` stripped** from inner agent env so it doesn't escape to the outer project.
 
 ### Assertion library (`eval/assertions.ts`)
