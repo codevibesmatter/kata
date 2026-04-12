@@ -1,71 +1,71 @@
 ---
 id: planning
 name: Planning Mode
-description: Research, design spec, review, get approval
+description: Feature planning with research, interviews, spec writing, and review
 mode: planning
 
 phases:
   - id: p0
-    name: Orient
+    name: Research
     stage: setup
+    expansion: agent
+    skill: research
     task_config:
-      title: "P0: Setup - understand the problem"
+      title: "P0: Setup - research codebase and problem space"
       labels: [phase, setup]
-    steps:
-      - id: env-check
-        $ref: env-check
-        title: "Verify environment"
-      - id: understand
-        title: "Understand the problem"
-        skill: interview
-        instruction: |
-          Read the linked issue. Clarify scope and constraints.
-          Identify what needs to be planned.
+      instruction: |
+        CHECK FIRST: Did the user provide a research file in their prompt?
+        Also list recent files: ls -lt {research_path}/ | head -10
+        If a relevant file exists for this issue/topic — read it, mark this task complete, move on.
+        If nothing relevant — invoke /research and run the full research pipeline.
+    agent_protocol:
+      max_tasks: 10
 
   - id: p1
-    name: Research
-    stage: work
+    name: Interview
+    stage: setup
+    expansion: agent
+    skill: interview
     task_config:
-      title: "P1: Work - research and explore"
+      title: "P1: Setup - gather requirements from user"
+      labels: [phase, setup]
       depends_on: [p0]
-    steps:
-      - id: research
-        title: "Research the problem space"
-        skill: spec-writing
-        instruction: |
-          Explore the codebase. Read relevant code.
-          Document findings in planning/research/.
+    agent_protocol:
+      max_tasks: 10
 
   - id: p2
-    name: Design
+    name: Spec Writing
     stage: work
+    skill: spec-writing
     task_config:
-      title: "P2: Work - write the spec"
+      title: "P2: Work - write feature specification"
+      labels: [phase, work]
       depends_on: [p1]
-    steps:
-      - id: write-spec
-        title: "Write the spec"
-        skill: spec-writing
-        instruction: |
-          Write the spec using the template in planning/spec-templates/.
-          Include: behaviors with B-IDs, phases with tasks, non-goals.
-      - id: review-spec
-        title: "Review the spec"
-        skill: spec-review
 
   - id: p3
-    name: Close
+    name: Review
+    stage: work
+    expansion: agent
+    skill: spec-review
+    task_config:
+      title: "P3: Work - review spec, fix issues"
+      labels: [phase, work, review]
+      depends_on: [p2]
+    agent_protocol:
+      max_tasks: 10
+
+  - id: p4
+    name: Finalize
     stage: close
     task_config:
-      title: "P3: Close - commit and push"
-      depends_on: [p2]
-    steps:
-      - id: commit-push
-        $ref: commit-push
-        title: "Commit and push"
-      - id: update-issue
-        $ref: update-issue
-        title: "Update GitHub issue"
+      title: "P4: Close - validate, approve, commit, push"
+      labels: [phase, close]
+      depends_on: [p3]
+      instruction: |
+        Run in order:
+        1. kata validate-spec --issue={issue}
+        2. Update spec frontmatter: status: approved, updated: today
+        3. git add, git commit, git push
 
 global_conditions:
   - changes_committed
