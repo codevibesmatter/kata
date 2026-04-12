@@ -2,148 +2,189 @@
 
 **Date:** 2026-04-12
 **Type:** Feature research
-**Goal:** Design a `/setup` skill that runs directly in Claude Code (no modes) and configures kata from scratch.
+**Goal:** Design a `/setup` skill that runs directly in Claude Code (no modes) and configures kata from scratch — with a local-first distribution model (no npm).
 
-## Problem
+## Distribution model
 
-Current onboard is a full mode with 7 phases, stop conditions, and tasks. It requires kata hooks to already be registered before it can even start. The user wants: type `/setup`, everything works.
+kata is for tinkerers. The distribution model should reflect that:
 
-## What setup actually needs to do
+- **Clone the repo** (or add as monorepo package)
+- **Symlink `kata`** to PATH (e.g., `ln -s /path/to/kata-wm/kata ~/.local/bin/kata`)
+- **Run from source** — the `kata` shell script already falls back to `bun src/index.ts` when no dist exists
 
-1. Run `kata setup --yes` (creates `.kata/`, registers hooks, scaffolds batteries)
-2. Create GitHub labels (optional)
-3. Done.
+No npm publish, no global install, no postinstall scripts. Each project creates its own config. Users can run different versions by pointing symlinks at different clones.
 
-That's it. `kata setup --yes` already auto-detects project name, test command, CI system, and writes sensible defaults. The 7-phase interview is unnecessary ceremony — most users pick "Quick" anyway.
+## The setup problem without npm
 
-## Design: Pure Claude Code Skill
+With npm, postinstall could place a global skill at `~/.claude/skills/setup/`. Without npm, we need another way to make `/setup` available before kata is configured in a project.
 
-### Where it lives
+### Option A: `kata install` command
 
-The skill needs to be available BEFORE kata is configured (before `.claude/skills/` exists). Two options:
+New CLI command that installs the global skill:
 
-**Option A: Global skill at `~/.claude/skills/setup/SKILL.md`**
-
-Installed by `npm i -g @codevibesmatter/kata` postinstall script:
 ```bash
-mkdir -p ~/.claude/skills/setup
-cp batteries/skills/setup/SKILL.md ~/.claude/skills/setup/SKILL.md
+kata install
+# Creates ~/.claude/skills/setup/SKILL.md
+# Prints: "Done. Type /setup in Claude Code to configure a project."
 ```
 
-Available in every project, every session. No prerequisites.
+User runs this once after cloning kata. The skill is then available globally in every Claude Code session.
 
-**Option B: npm postinstall just tells the user**
-
+**Flow:**
 ```
-kata installed! In your project, type /setup in Claude Code to get started.
+git clone https://github.com/codevibesmatter/kata.git
+ln -s kata/kata ~/.local/bin/kata
+kata install       # ← one-time: places global /setup skill
+cd my-project
+claude
+> /setup           # ← skill runs, configures everything
 ```
 
-And the skill gets created by `kata setup --yes` as part of normal batteries scaffolding. Chicken-and-egg: user must run `kata setup --yes` once to get the skill that runs `kata setup --yes`.
+### Option B: Self-bootstrapping setup command
 
-**Recommendation: Option A.** Global install puts the skill in `~/.claude/skills/setup/`. It's always available. After setup runs, the project gets its own copy in `.claude/skills/setup/` which shadows the global one.
+`kata setup --yes` already works. Add a flag or make it also install the global skill:
 
-### The skill content
+```bash
+kata setup --yes   # configures current project AND installs global skill
+```
 
-The skill is simple — it's just instructions for Claude:
+Or keep them separate:
+```bash
+kata setup --yes       # configure this project
+kata install           # install global /setup skill (one-time)
+```
+
+Separate is cleaner — `setup` is per-project, `install` is per-user.
+
+### Option C: The skill lives in the kata repo, referenced by path
+
+Instead of copying to `~/.claude/skills/`, use Claude Code's ability to reference skills by path. If the user's `~/.claude/settings.json` has a `skillPaths` or similar config pointing to the kata repo's skills directory, the skill is always available.
+
+This depends on Claude Code supporting external skill paths — needs verification. If not supported, skip this option.
+
+### Recommendation: Option A (`kata install`)
+
+One command, run once. Clean separation: `install` = per-user global setup, `setup` = per-project config.
+
+## The /setup skill
+
+### What it does
+
+A pure Claude Code skill — no modes, no tasks, no hooks required. Claude reads the SKILL.md and follows the instructions.
+
+**Fresh project (no .kata/):**
+1. Run `kata setup --yes`
+2. Check `gh auth status` — if authed, offer to create labels
+3. Run `kata doctor`
+4. Report: ready, suggest entering a mode
+
+**Existing project (.kata/ exists):**
+1. Show current config summary (read kata.yaml)
+2. Ask what to change (labels, strict, reviewers, paths)
+3. Apply changes (patch kata.yaml, run commands)
+4. Run `kata doctor`
+
+### Skill content sketch
 
 ```markdown
 ---
 name: setup
-description: "Configure kata for a project. Run when setting up a new project or reconfiguring."
+description: "Configure kata for a project. Use for initial setup or reconfiguration."
 ---
 
-# Setup
+# /setup
 
-Configure kata for this project.
+Configure kata for this project. Works on fresh or existing projects.
 
-## Steps
+## If .kata/kata.yaml does NOT exist (fresh project)
 
-1. Run `kata setup --yes` to create config and register hooks
-2. Check if gh CLI is installed and authenticated (`gh auth status`)
-3. If gh is available, ask: create GitHub labels? If yes:
-   ```bash
-   cat .github/wm-labels.json | node -e "
-     const labels = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-     labels.forEach(l => process.stdout.write(
-       \`gh label create \"\${l.name}\" --color \"\${l.color}\" --description \"\${l.description}\" --force\n\`
-     ));
-   " | bash
-   ```
-4. Run `kata doctor` to verify
-5. Tell user they're ready — suggest `kata enter <mode>` to start working
+1. Run: `kata setup --yes`
+2. Check GitHub CLI: `gh auth status 2>&1`
+3. If gh is authenticated, ask one question:
+   - "Create GitHub labels for issue tracking? (15 workflow labels)"
+   - If yes: read .github/wm-labels.json and create each label with `gh label create`
+4. Run: `kata doctor`
+5. Print setup summary and suggest: `kata enter <mode>` to start working
+
+## If .kata/kata.yaml exists (reconfigure)
+
+1. Read .kata/kata.yaml and show summary: project name, test command, templates, hooks
+2. Ask: "What would you like to change?" (multi-select)
+   - GitHub labels, strict hooks, external reviewers, custom paths
+3. Apply selected changes
+4. Run: `kata doctor`
 ```
 
-No modes. No tasks. No phases. Just a skill with instructions.
+### Where it lives
 
-### What gets dropped vs kept
+- **Source:** `batteries/skills/setup/SKILL.md` (in the kata repo)
+- **Global install:** `~/.claude/skills/setup/SKILL.md` (via `kata install`)
+- **Project copy:** `.claude/skills/setup/SKILL.md` (via `kata setup --yes` batteries scaffold)
 
-| Current onboard phase | In /setup skill? | Why |
-|----------------------|-------------------|-----|
-| P0: Bootstrap (Node.js, tasks) | No — `kata setup --yes` handles it | Redundant check |
-| P1: Quick vs Custom | No — always quick | Custom was rarely used |
-| P2: Project Discovery | No — auto-detection is good enough | `kata setup --yes` auto-detects |
-| P3: Custom Config | No — use `/setup` again to reconfigure later | On-demand, not upfront |
-| P4: GitHub labels | Yes — single question | Only interactive part |
-| P5: Write Config | Yes — `kata setup --yes` | Core of the skill |
-| P6: Verify | Yes — `kata doctor` | Quick sanity check |
+The global copy makes it available everywhere. The project copy shadows it after setup runs (normal Claude Code skill resolution).
 
-### Reconfiguration
+## The `kata install` command
 
-If the user wants to change settings later (strict hooks, reviewers, paths), they just run `/setup` again. The skill detects existing config and offers to modify it:
+### What it does
 
-```
-If .kata/kata.yaml already exists:
-  1. Show current config summary
-  2. Ask what to change (labels, strict, reviewers, paths)
-  3. Apply changes
-  4. Run kata doctor
-```
-
-## Installation flow
-
-### npm postinstall (`package.json`)
-
-```json
-{
-  "scripts": {
-    "postinstall": "node scripts/install-global-skill.js"
-  }
+```typescript
+// src/commands/install.ts
+export async function install(args: string[]): Promise<void> {
+  const home = os.homedir()
+  const globalSkillsDir = join(home, '.claude', 'skills', 'setup')
+  mkdirSync(globalSkillsDir, { recursive: true })
+  
+  const src = join(getPackageRoot(), 'batteries', 'skills', 'setup', 'SKILL.md')
+  const dest = join(globalSkillsDir, 'SKILL.md')
+  copyFileSync(src, dest)
+  
+  console.log('Installed /setup skill globally.')
+  console.log('Type /setup in Claude Code to configure any project.')
 }
 ```
 
-The script:
-1. Creates `~/.claude/skills/setup/` if it doesn't exist
-2. Copies `SKILL.md` there
-3. Prints: "kata installed. Type /setup in Claude Code to configure a project."
+### Uninstall
 
-### First-run experience
+```bash
+kata uninstall   # removes ~/.claude/skills/setup/
+```
+
+Or just `rm -rf ~/.claude/skills/setup/`.
+
+## What gets dropped
+
+| Current | After |
+|---------|-------|
+| `onboard` mode (7 phases, stop conditions, tasks) | `/setup` skill (one-shot, no tracking) |
+| `kata enter onboard` | `/setup` in Claude Code |
+| `templates/onboard.md` (115 lines) | `batteries/skills/setup/SKILL.md` (~30 lines) |
+| Onboard mode in kata.yaml | Deprecated, then removed |
+
+## Complete first-run flow
 
 ```
-$ npm i -g @codevibesmatter/kata
-kata installed. Type /setup in Claude Code to configure a project.
+# One-time (after cloning kata)
+git clone https://github.com/codevibesmatter/kata.git ~/tools/kata
+ln -s ~/tools/kata/kata ~/.local/bin/kata
+kata install
 
-$ cd my-project
-$ claude
+# Per-project (in Claude Code)
 > /setup
-[skill runs kata setup --yes, asks about labels, runs doctor]
-Setup complete. Start working: kata enter task
+[kata setup --yes runs, labels created, doctor passes]
+Setup complete! Enter a mode to start: kata enter task
 ```
 
-Three steps: install, open Claude Code, `/setup`. No `kata enter onboard`, no 7-phase interview.
+Three commands to install kata globally. One slash command per project. No npm, no onboard mode, no 7-phase interview.
 
 ## Changes required
 
-1. **New skill:** `batteries/skills/setup/SKILL.md` — the skill content
-2. **Postinstall script:** `scripts/install-global-skill.js` — copies skill to `~/.claude/skills/`
-3. **Deprecate onboard mode:** Mark deprecated in `batteries/kata.yaml`
-4. **Remove onboard template:** After one release cycle
+1. **New skill:** `batteries/skills/setup/SKILL.md`
+2. **New command:** `src/commands/install.ts` — copies global skill to `~/.claude/skills/`
+3. **Register command:** Add `install` and `uninstall` to CLI dispatcher
+4. **Deprecate onboard:** Mark in kata.yaml, remove template after one cycle
 
 ## Open questions
 
-1. **Should postinstall overwrite an existing global skill?** Probably yes on upgrade, with version check.
-2. **Should the skill handle the case where `kata` isn't in PATH?** It should — use `npx kata setup --yes` as fallback.
-3. **Should we keep a `kata setup` CLI entry point?** Yes, for scripting and CI. The skill is the UX layer; the CLI is the programmatic layer.
-
-## Next step
-
-Implement — create the skill, add the postinstall script, deprecate onboard.
+1. **Should `kata install` also update an existing global skill?** Yes — always overwrite to stay current with the local kata version.
+2. **Should we keep the onboard mode config in kata.yaml for backwards compat?** Mark deprecated, keep for one release, then remove.
+3. **Should `/setup` detect if kata binary is reachable?** Yes — if `kata` isn't in PATH, the skill should tell the user to add it.
