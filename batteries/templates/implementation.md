@@ -6,35 +6,25 @@ mode: implementation
 
 phases:
   - id: p0
-    name: Baseline
+    name: Setup
     stage: setup
     task_config:
-      title: "P0: Setup - verify environment, read spec"
+      title: "P0: Setup - read spec, verify env, create branch, claim issue"
       labels: [phase, setup]
     steps:
       - id: read-spec
         $ref: read-spec
-        title: "Read and understand the spec"
+        gate:
+          bash: "test -f {spec_path}"
+          expect_exit: 0
       - id: env-check
         $ref: env-check
-        title: "Verify environment"
-
-  - id: p1
-    name: Claim
-    stage: setup
-    task_config:
-      title: "P1: Setup - create branch, claim issue"
-      labels: [phase, setup]
-      depends_on: [p0]
-    steps:
       - id: create-branch
         $ref: create-branch
-        title: "Create feature branch"
       - id: github-claim
         $ref: github-claim
-        title: "Claim GitHub issue"
 
-  - id: p2
+  - id: p1
     name: Implement
     stage: work
     expansion: spec
@@ -45,21 +35,21 @@ phases:
         todo_template: "Implement {task_summary}"
         active_form: "Implementing {phase_name}"
         labels: [impl]
-        instruction: "Implement the behavior described in the spec phase."
-      - id_suffix: test
-        title_template: "TEST - {phase_name}"
-        todo_template: "Test {phase_name} implementation"
-        active_form: "Testing {phase_name}"
-        labels: [test]
-        depends_on_previous: true
-        instruction: "Run tests and typecheck."
-      - id_suffix: review
-        title_template: "REVIEW - {reviewers}"
-        todo_template: "Review {phase_name} changes"
-        active_form: "Reviewing {phase_name}"
-        labels: [review]
-        depends_on_previous: true
-        instruction: "Run review-agent."
+        gate:
+          bash: "{test_command_changed}"
+          expect_exit: 0
+
+  - id: p2
+    name: Review
+    stage: work
+    expansion: agent
+    skill: code-review
+    task_config:
+      title: "P2: Work - review implementation, fix issues"
+      labels: [phase, work, review]
+      depends_on: [p1]
+    agent_protocol:
+      max_tasks: 10
 
   - id: p3
     name: Close

@@ -577,27 +577,66 @@ export async function enter(args: string[]): Promise<void> {
     // Read spec file content for VP extraction (used by {verification_plan} placeholder)
     const specContent = specPath ? readFileSync(specPath, 'utf-8') : undefined
 
-    const specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, specExpansionPhaseNum, specContent, reviewers, specExpansionPhase?.skill)
+    let specTasks: Task[]
+
+    if (resolvedSubphasePattern.length > 0) {
+      // Fan-out: IMPL/TEST/REVIEW subtasks per spec phase (legacy subphase_pattern)
+      specTasks = buildSpecTasks(specPhases, issueNum, resolvedSubphasePattern, specExpansionPhaseNum, specContent, reviewers, specExpansionPhase?.skill)
+    } else {
+      // Single task per spec phase — skill + gate on the phase
+      specTasks = []
+      for (let i = 0; i < specPhases.length; i++) {
+        const phase = specPhases[i]
+        const phaseNum = i + 1
+        const phaseName = phase.name || phase.id.toUpperCase()
+        const phaseLabel = `P${specExpansionPhaseNum}.${phaseNum}`
+        const taskSummary = phase.tasks?.length
+          ? (phase.tasks.length === 1 ? phase.tasks[0] : `${phase.tasks[0]} + ${phase.tasks.length - 1} more`)
+          : phaseName
+
+        // biome-ignore lint/suspicious/noConsole: intentional CLI output
+        console.error(`  ${phaseLabel}: ${phaseName}`)
+
+        let instruction = specExpansionPhase?.task_config?.instruction ?? 'Implement this spec phase.'
+        if (specExpansionPhase?.skill) {
+          instruction = `Invoke /${specExpansionPhase.skill}\n\n${instruction}`
+        }
+
+        const taskId = `p${specExpansionPhaseNum}.${phaseNum}`
+        const prevId = phaseNum > 1 ? `p${specExpansionPhaseNum}.${phaseNum - 1}` : undefined
+
+        specTasks.push({
+          id: taskId,
+          title: `GH#${issueNum}: ${phaseLabel}: ${taskSummary}`,
+          done: false,
+          depends_on: prevId ? [prevId] : [],
+          completedAt: null,
+          reason: null,
+          instruction,
+        })
+      }
+    }
 
       // Wire cross-phase dependencies:
-      // - First P2.X:impl depends on last task of P1 (Claim)
-      //   P1 may be expanded into steps, so find the last task with id 'p1' or 'p1:*'
-      const firstImplId = `p${specExpansionPhaseNum}.1:${resolvedSubphasePattern[0]?.id_suffix ?? 'impl'}`
-      const firstImpl = specTasks.find((t) => t.id === firstImplId)
+      // - First spec task depends on last task of P1 (Claim)
+      const firstSpecTaskId = resolvedSubphasePattern.length > 0
+        ? `p${specExpansionPhaseNum}.1:${resolvedSubphasePattern[0]?.id_suffix ?? 'impl'}`
+        : `p${specExpansionPhaseNum}.1`
+      const firstSpec = specTasks.find((t) => t.id === firstSpecTaskId)
       const lastP1TaskId = [...orchTasks]
         .filter((t) => t.id === 'p1' || t.id.startsWith('p1:'))
         .pop()?.id
-      if (firstImpl && lastP1TaskId) {
-        firstImpl.depends_on.push(lastP1TaskId)
+      if (firstSpec && lastP1TaskId) {
+        firstSpec.depends_on.push(lastP1TaskId)
       }
 
-      // - First task after spec expansion (P3) depends on last P2.X subphase task
-      //   P3 may be expanded into steps, so find the first task with id 'p3' or 'p3:*'
-      const lastPatternSuffix = resolvedSubphasePattern[resolvedSubphasePattern.length - 1]?.id_suffix ?? 'verify'
-      const lastVerifyId = `p${specExpansionPhaseNum}.${specPhases.length}:${lastPatternSuffix}`
+      // - First task after spec expansion (P3) depends on last spec task
+      const lastSpecTaskId = resolvedSubphasePattern.length > 0
+        ? `p${specExpansionPhaseNum}.${specPhases.length}:${resolvedSubphasePattern[resolvedSubphasePattern.length - 1]?.id_suffix ?? 'verify'}`
+        : `p${specExpansionPhaseNum}.${specPhases.length}`
       const firstP3Task = orchTasks.find((t) => t.id === 'p3' || t.id.startsWith('p3:'))
-      if (firstP3Task && specTasks.some((t) => t.id === lastVerifyId)) {
-        firstP3Task.depends_on.push(lastVerifyId)
+      if (firstP3Task && specTasks.some((t) => t.id === lastSpecTaskId)) {
+        firstP3Task.depends_on.push(lastSpecTaskId)
       }
 
       // Order: before-expansion (P0, P1), spec tasks (P2.X), after-expansion (P3, P4)

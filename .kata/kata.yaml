@@ -1,6 +1,8 @@
 project:
   name: kata-wm
   build_command: npm run build
+  test_command: npm test
+  test_command_changed: npm test
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
