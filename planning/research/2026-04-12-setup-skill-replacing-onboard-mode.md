@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-12
 **Type:** Feature research
-**Goal:** Replace onboard mode with a `/setup` skill. Zero ceremony — clone, open CC, `/setup`.
+**Goal:** Replace onboard mode with a `/kata-setup` skill. Zero ceremony — clone, open CC, `/kata-setup`.
 
 ## The flow
 
@@ -10,10 +10,10 @@
 git clone https://github.com/codevibesmatter/kata.git
 cd kata
 # open Claude Code
-> /setup
+> /kata-setup
 ```
 
-That's it. The `/setup` skill lives in the kata repo at `.claude/skills/setup/SKILL.md`. When you open Claude Code in the kata repo, it's already available. The skill handles everything: symlinking the binary, configuring the current or target project, scaffolding batteries.
+That's it. The `/kata-setup` skill lives in the kata repo at `.claude/skills/kata-setup/SKILL.md`. When you open Claude Code in the kata repo, it's already available. The skill handles everything: symlinking the binary, configuring the current or target project, scaffolding batteries.
 
 ## What the skill does
 
@@ -40,8 +40,8 @@ The skill is instructions for Claude. No modes, no tasks, no hooks needed.
 ## How it spreads to other projects
 
 After kata is in PATH, the user can either:
-- **Run `/setup` in any project** — if the skill isn't available there yet, they just ask Claude to run `kata setup --yes` directly. The skill gets scaffolded as part of batteries.
-- **Or** — after batteries scaffold, `.claude/skills/setup/SKILL.md` exists in the project too, making `/setup` available natively going forward.
+- **Run `/kata-setup` in any project** — if the skill isn't available there yet, they just ask Claude to run `kata setup --yes` directly. The skill gets scaffolded as part of batteries.
+- **Or** — after batteries scaffold, `.claude/skills/kata-setup/SKILL.md` exists in the project too, making `/kata-setup` available natively going forward.
 
 The bootstrapping chain: kata repo has the skill → skill puts kata in PATH → `kata setup --yes` in other projects scaffolds the skill there too.
 
@@ -49,11 +49,11 @@ The bootstrapping chain: kata repo has the skill → skill puts kata in PATH →
 
 ```markdown
 ---
-name: setup
+name: kata-setup
 description: "Configure kata for a project — initial setup or reconfigure."
 ---
 
-# /setup
+# /kata-setup
 
 ## If running in the kata repo (no .kata/kata.yaml, has src/index.ts)
 
@@ -62,7 +62,7 @@ You're in the kata source repo. Help the user get kata on their PATH:
 1. Check if `kata` is already in PATH: `which kata`
 2. If not, suggest: `ln -s $(pwd)/kata ~/.local/bin/kata`
 3. Verify: `kata --version`
-4. Tell user: "kata is ready. Open Claude Code in any project and run /setup."
+4. Tell user: "kata is ready. Open Claude Code in any project and run /kata-setup."
 
 ## If .kata/kata.yaml does NOT exist (fresh project)
 
@@ -95,7 +95,7 @@ You're in the kata source repo. Help the user get kata on their PATH:
 
 ## Changes required
 
-1. **New skill:** `batteries/skills/setup/SKILL.md` (also lives at `.claude/skills/setup/SKILL.md` in the kata repo)
+1. **New skill:** `batteries/skills/kata-setup/SKILL.md` (also lives at `.claude/skills/kata-setup/SKILL.md` in the kata repo)
 2. **Deprecate onboard mode:** Mark deprecated in `batteries/kata.yaml`
 3. **Remove onboard template:** `templates/onboard.md` after one cycle
 
