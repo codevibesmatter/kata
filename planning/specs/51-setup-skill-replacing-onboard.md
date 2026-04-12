@@ -52,8 +52,31 @@ phases:
         description: "grep -rn 'onboard' src/ eval/ returns no functional matches (only changelog/comments about removal)"
         type: "smoke"
       - id: "build-passes"
-        description: "npm run build && npm test exits 0"
+        description: "bun test passes"
         type: "integration"
+  - id: p4
+    name: "Switch to source-based execution via Bun"
+    tasks:
+      - "Update kata shell script: remove dist/index.js primary path, always use bun src/index.ts"
+      - "Update package.json scripts: replace 'npm run build' with bun-native commands, 'test' → 'bun test', remove 'build'/'dev'/'prepublishOnly'"
+      - "Remove tsup.config.ts and tsup from devDependencies"
+      - "Remove dist/ from .gitignore if listed, add to .gitignore if not already"
+      - "Remove exports/main/files/publishConfig/engines fields from package.json (no longer an npm package)"
+      - "Delete .github/workflows/publish.yml"
+      - "Update .github/workflows/ci.yml to use bun instead of node build+test"
+      - "Update CLAUDE.md build/test commands to reflect bun-based workflow"
+      - "Delete dist/ directory if present"
+      - "Verify bun test passes from source"
+    test_cases:
+      - id: "bun-test-passes"
+        description: "bun test exits 0 from source (no build step)"
+        type: "integration"
+      - id: "kata-runs-from-source"
+        description: "kata help runs successfully without dist/ existing"
+        type: "smoke"
+      - id: "no-build-artifacts"
+        description: "dist/ directory does not exist, tsup.config.ts does not exist"
+        type: "smoke"
 ---
 
 # Setup Skill Replacing Onboard Mode
@@ -62,7 +85,7 @@ phases:
 
 ## Overview
 
-Replace the heavyweight onboard mode (7 phases, 502-line template, stop conditions, native tasks) with a simple `/kata-setup` Claude Code skill. The skill is a SKILL.md file with instructions for Claude — no modes, no tasks, no hooks needed. The flow becomes: clone → open Claude Code → `/kata-setup`. Depends on #49 (simplify setup) being merged first so `kata setup --yes` scaffolds all content.
+Replace the heavyweight onboard mode (7 phases, 502-line template, stop conditions, native tasks) with a simple `/kata-setup` Claude Code skill. The skill is a SKILL.md file with instructions for Claude — no modes, no tasks, no hooks needed. The flow becomes: clone → open Claude Code → `/kata-setup`. Also remove the npm build/publish pipeline in favor of source-based execution via Bun — the `kata` script already has a Bun fallback, so this just makes it the primary path. Depends on #49 (simplify setup) being merged first so `kata setup --yes` scaffolds all content.
 
 ## Feature Behaviors
 
@@ -207,6 +230,29 @@ New file in batteries: `batteries/skills/kata-setup/SKILL.md`.
 
 ---
 
+### B7: Source-Based Execution via Bun
+
+**Core:**
+- **ID:** source-based-execution
+- **Trigger:** User runs `kata` (any command) after cloning and symlinking
+- **Expected:** The `kata` shell script runs `bun src/index.ts` directly — no build step required. The `dist/` directory, `tsup.config.ts`, and npm publish workflow are removed. Tests run via `bun test` from source.
+- **Verify:** Delete `dist/` if present. Run `kata help` — works without build. Run `bun test` — passes from source.
+- **Source:** `kata` (shell script), `package.json` (scripts), `tsup.config.ts` (deleted)
+
+#### UI Layer
+
+N/A — transparent to users. Same CLI behavior, just no build step.
+
+#### API Layer
+
+N/A — no longer published as an npm package.
+
+#### Data Layer
+
+Deleted: `dist/`, `tsup.config.ts`, `.github/workflows/publish.yml`. Modified: `package.json` (removed build/publish config), `kata` (simplified script), `.github/workflows/ci.yml` (bun-based).
+
+---
+
 ## Non-Goals
 
 - Custom configuration interview (users edit kata.yaml directly for custom settings)
@@ -214,7 +260,7 @@ New file in batteries: `batteries/skills/kata-setup/SKILL.md`.
 - Soft deprecation period for onboard mode — hard remove
 - Changes to `kata setup --yes` behavior (that's #49)
 - Changes to `kata doctor` behavior
-- npm/npx install flow — kata is installed via git clone + symlink
+- Rewriting TypeScript source to remove Node.js compatibility — Bun is compatible with existing code
 
 ## Open Questions
 
@@ -228,11 +274,11 @@ See YAML frontmatter `phases:` above. Each phase should be 1-2 hours of focused 
 
 ### Test Infrastructure
 
-Existing: `node --test` runner with tests in `src/commands/`. The skill itself is a markdown file requiring no unit tests — verification is structural (file exists, frontmatter valid) and behavioral (onboard mode gone).
+Existing: tests in `src/commands/` with `.test.ts` suffixes. After this change, tests run via `bun test` from source (no build step). The skill itself is a markdown file requiring no unit tests — verification is structural (file exists, frontmatter valid) and behavioral (onboard mode gone).
 
 ### Build Verification
 
-`npm run build && npm test`
+`bun test` (no build step — runs from source)
 
 ## Verification Plan
 
@@ -272,11 +318,23 @@ Steps:
 2. `test -f /tmp/vp4-test/.claude/skills/kata-setup/SKILL.md && echo EXISTS || echo MISSING`
    Expected: EXISTS
 
-### VP5: Build and Tests Pass
+### VP5: Source-Based Execution Works
 
 Steps:
-1. `npm run build && npm test`
-   Expected: Exit 0. No test failures.
+1. `rm -rf dist/`
+   Expected: No dist directory.
+2. `kata help`
+   Expected: Exit 0. Help text printed (runs from source via bun).
+3. `test -f tsup.config.ts && echo EXISTS || echo GONE`
+   Expected: GONE
+4. `test -f .github/workflows/publish.yml && echo EXISTS || echo GONE`
+   Expected: GONE
+
+### VP6: Tests Pass from Source
+
+Steps:
+1. `bun test`
+   Expected: Exit 0. All tests pass from source (no build step).
 
 ## Implementation Hints
 
@@ -298,7 +356,12 @@ Steps:
 | `eval/assertions.ts` | Remove onboard template check and onboardPresets (lines 404-405, 1398) |
 | `eval/assertions.test.ts` | Remove onboardPresets tests (lines 443-446) |
 | `README.md` | Replace onboard references with /kata-setup |
-| `CLAUDE.md` | Update onboard references (lines 78, 120, 137, 156) |
+| `CLAUDE.md` | Update onboard references (lines 78, 120, 137, 156) + build/test commands |
+| `kata` | Simplify: remove dist path, always use `bun src/index.ts` |
+| `package.json` | Remove build/publish config, scripts → bun-based, drop tsup |
+| `tsup.config.ts` | **Delete** — no longer building |
+| `.github/workflows/publish.yml` | **Delete** — no longer publishing to npm |
+| `.github/workflows/ci.yml` | Switch from node build+test to bun test |
 
 ### Gotchas
 
