@@ -348,7 +348,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   // Ensure sessions directory exists
   mkdirSync(getSessionsDir(projectRoot), { recursive: true })
 
-  // Seed onboard.md so `kata enter onboard` works without --batteries
+  // Seed onboard.md (lives in system templates/, not batteries/)
   const templatesDir = getProjectTemplatesDir(projectRoot)
   const onboardDest = join(templatesDir, 'onboard.md')
   if (!existsSync(onboardDest)) {

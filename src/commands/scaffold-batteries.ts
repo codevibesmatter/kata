@@ -1,5 +1,5 @@
 // scaffold-batteries.ts — copy batteries-included content to a project
-// Called by `kata setup --batteries` after base setup completes.
+// Called by `kata setup --yes` after base setup completes.
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
