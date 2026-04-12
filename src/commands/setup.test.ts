@@ -230,6 +230,35 @@ describe('setup --yes', () => {
     expect(issueFiles.length).toBeGreaterThan(0)
   })
 
+  it('--batteries flag prints deprecation notice and still scaffolds content', async () => {
+    const { setup } = await import('./setup.js')
+    let stdout = ''
+    let stderr = ''
+    const origStdout = process.stdout.write
+    const origStderr = process.stderr.write
+    process.stdout.write = (chunk: string | Uint8Array): boolean => {
+      stdout += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
+      return true
+    }
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      stderr += typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
+      return true
+    }
+    try {
+      await setup(['--batteries', `--cwd=${tmpDir}`])
+    } finally {
+      process.stdout.write = origStdout
+      process.stderr.write = origStderr
+    }
+
+    // Deprecation notice on stderr
+    expect(stderr).toContain('--batteries is deprecated')
+
+    // Still scaffolds everything
+    expect(stdout).toContain('kata setup complete')
+    expect(existsSync(join(tmpDir, '.kata', 'templates'))).toBe(true)
+  })
+
   it('setup --yes is idempotent with batteries content', async () => {
     // First setup
     await captureSetup(['--yes'], tmpDir)
