@@ -244,3 +244,42 @@ describe('setup --yes', () => {
   })
 })
 
+describe('kata-setup skill', () => {
+  it('batteries includes kata-setup skill', async () => {
+    const { getPackageRoot } = await import('../session/lookup.js')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    expect(existsSync(skillPath)).toBe(true)
+  })
+
+  it('kata-setup skill has valid frontmatter with description', async () => {
+    const { parseYamlFrontmatter } = await import('../yaml/parser.js')
+    const { getPackageRoot } = await import('../session/lookup.js')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    const frontmatter = parseYamlFrontmatter<{ description: string }>(skillPath)
+    expect(frontmatter).not.toBeNull()
+    expect(frontmatter!.description).toBeDefined()
+    expect(typeof frontmatter!.description).toBe('string')
+  })
+
+  it('kata-setup skill covers all 3 scenarios', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { getPackageRoot } = await import('../session/lookup.js')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    const content = readFileSync(skillPath, 'utf-8')
+    expect(content).toContain('Kata Source Repo')
+    expect(content).toContain('Fresh Project')
+    expect(content).toContain('Reconfigure')
+  })
+
+  it('setup --yes scaffolds kata-setup skill to project', async () => {
+    const tmpDir = makeTmpDir()
+    try {
+      await captureSetup(['--yes'], tmpDir)
+      const skillDest = join(tmpDir, '.claude', 'skills', 'kata-setup', 'SKILL.md')
+      expect(existsSync(skillDest)).toBe(true)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+})
+
