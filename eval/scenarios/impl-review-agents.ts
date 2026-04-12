@@ -34,7 +34,7 @@ export const implReviewAgentsScenario: EvalScenario = {
   templatePath: '.kata/templates/implementation.md',
   fixture: 'tanstack-start',
   fixtureSetup: [
-    // kata batteries --update writes a fresh kata.yaml with reviews commented out.
+    // kata update writes a fresh kata.yaml with reviews commented out.
     // Uncomment the reviews block and set code_review: true + code_reviewers list.
     "sed -i 's/^# reviews:/reviews:/' .kata/kata.yaml",
     "sed -i 's/^#   code_review:.*$/  code_review: true/' .kata/kata.yaml",

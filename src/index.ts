@@ -255,7 +255,7 @@ Usage:
   kata register-mode <template-path> [options]   Register existing template as mode
   kata suggest <message>                         Detect mode from message, output guidance
   kata doctor [--fix] [--json]                   Diagnose and fix session state
-  kata setup [--yes] [--strict] [--batteries]    Setup kata in a project
+  kata setup [--yes] [--strict]                   Setup kata in a project
   kata update                                      Update templates to latest package version
   kata migrate [--dry-run]                         Convert old-format templates to gate/hint format
   kata config [--show]                            Show resolved config with provenance
@@ -280,10 +280,8 @@ Hook Dispatch:
   kata hook stop-conditions       Check exit conditions (Stop)
 
 Setup:
-  kata setup --yes                Quick setup with auto-detected defaults
+  kata setup --yes                Quick setup (config, hooks, templates, skills)
   kata setup --yes --strict       Setup with PreToolUse gate hooks
-  kata setup --batteries          Setup + scaffold batteries-included starter content (implies --yes)
-  kata setup --batteries --strict Setup + batteries + strict PreToolUse hooks
   kata enter onboard                Guided setup interview (interactive, agent-driven)
   kata update                     Update templates + stamp kata_version
   kata migrate                    Convert old-format templates to new gate/hint format

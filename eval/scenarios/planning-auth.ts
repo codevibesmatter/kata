@@ -6,7 +6,7 @@
  * This scenario enters planning mode to spec the feature.
  *
  * Uses the tanstack-start fixture which already has:
- * - kata batteries installed (hooks, templates, spec-templates)
+ * - kata setup --yes installed (hooks, templates, spec-templates)
  * - The auth research doc committed
  * - A local bare remote for git push
  *

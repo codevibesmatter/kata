@@ -5,7 +5,7 @@ import { isKataEnabled } from '../../manager/discovery.js'
 import { readIndex, writeIndex, addProject as addToIndex } from '../../manager/registry.js'
 
 /**
- * kata projects init <path> [--alias=<name>] [--no-batteries]
+ * kata projects init <path> [--alias=<name>]
  *
  * Initialize a new project at the given path with .kata/ structure,
  * then register it in the manager.
@@ -13,13 +13,10 @@ import { readIndex, writeIndex, addProject as addToIndex } from '../../manager/r
 export async function initProject(args: string[]): Promise<void> {
   let projectPath: string | null = null
   let alias: string | undefined
-  let noBatteries = false
 
   for (const arg of args) {
     if (arg.startsWith('--alias=')) {
       alias = arg.slice('--alias='.length)
-    } else if (arg === '--no-batteries') {
-      noBatteries = true
     } else if (!arg.startsWith('--')) {
       projectPath = arg
     }
@@ -27,7 +24,7 @@ export async function initProject(args: string[]): Promise<void> {
 
   if (!projectPath) {
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Usage: kata projects init <path> [--alias=<name>] [--no-batteries]')
+    console.error('Usage: kata projects init <path> [--alias=<name>]')
     process.exitCode = 1
     return
   }
@@ -47,7 +44,7 @@ export async function initProject(args: string[]): Promise<void> {
     // biome-ignore lint/suspicious/noConsole: CLI output
     console.error(`Project already has kata config: ${absPath}`)
     // biome-ignore lint/suspicious/noConsole: CLI output
-    console.error('Use `kata batteries --update --cwd=' + absPath + '` to update templates instead.')
+    console.error('Use `kata update --cwd=' + absPath + '` to update templates instead.')
     process.exitCode = 1
     return
   }
@@ -57,12 +54,7 @@ export async function initProject(args: string[]): Promise<void> {
   console.error(`Initializing kata at: ${absPath}`)
 
   const { setup } = await import('../setup.js')
-  const setupArgs = ['--yes', '--batteries', `--cwd=${absPath}`]
-  if (noBatteries) {
-    // Remove --batteries, just do basic setup
-    setupArgs.splice(1, 1)
-  }
-  await setup(setupArgs)
+  await setup(['--yes', `--cwd=${absPath}`])
 
   // Register in manager if initialized
   if (isManagerInitialized()) {
@@ -91,7 +83,6 @@ export async function initProject(args: string[]): Promise<void> {
         action: 'initialized',
         path: absPath,
         alias: alias || absPath.split('/').pop(),
-        batteries: !noBatteries,
       },
       null,
       2,

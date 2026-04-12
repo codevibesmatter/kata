@@ -30,7 +30,7 @@ export const planningReviewAgentsScenario: EvalScenario = {
   name: 'Planning: review-agent + gemini + codex spawn simultaneously in P3',
   fixture: 'tanstack-start',
   fixtureSetup: [
-    // batteries --update comments out the reviews block; uncomment it and add spec reviewers
+    // kata update comments out the reviews block; uncomment it and add spec reviewers
     "sed -i 's/^# reviews:/reviews:/' .kata/kata.yaml",
     "sed -i '/^reviews:/a\\  spec_review: true' .kata/kata.yaml",
     "sed -i '/^  spec_review: true/a\\  spec_reviewers:' .kata/kata.yaml",

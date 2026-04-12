@@ -5,7 +5,7 @@
  * This scenario enters implementation mode to execute the spec.
  *
  * Uses the tanstack-start fixture which has:
- * - kata batteries installed
+ * - kata setup --yes installed
  * - Auth research doc at planning/research/RE-395c-0221-auth.md
  * - Approved spec at planning/specs/better-auth-integration.md
  *
