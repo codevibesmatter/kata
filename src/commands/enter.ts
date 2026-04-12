@@ -493,6 +493,13 @@ export async function enter(args: string[]): Promise<void> {
         printSpecError(canonical, specPath, issueNum, problemLines)
         process.exit(1)
       }
+    } else {
+      // ENFORCEMENT: No spec found for this issue — fail with clear error
+      process.stderr.write(`\nkata enter ${canonical}: no spec found for issue #${issueNum}\n\n`)
+      process.stderr.write(`  Searched: ${config.spec_path ?? 'planning/specs'}/\n`)
+      process.stderr.write(`  Expected: a file matching issue number ${issueNum}\n\n`)
+      process.stderr.write(`  Create a spec first with: kata enter planning --issue=${issueNum}\n\n`)
+      process.exit(1)
     }
   }
 
