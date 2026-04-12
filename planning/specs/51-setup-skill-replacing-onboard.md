@@ -7,7 +7,7 @@ priority: medium
 github_issue: 51
 created: 2026-04-12
 updated: 2026-04-12
-depends_on: [49]
+depends_on: []
 phases:
   - id: p1
     name: "Create /kata-setup skill"
@@ -85,7 +85,7 @@ phases:
 
 ## Overview
 
-Replace the heavyweight onboard mode (7 phases, 502-line template, stop conditions, native tasks) with a simple `/kata-setup` Claude Code skill. The skill is a SKILL.md file with instructions for Claude — no modes, no tasks, no hooks needed. The flow becomes: clone → open Claude Code → `/kata-setup`. Also remove the npm build/publish pipeline in favor of source-based execution via Bun — the `kata` script already has a Bun fallback, so this just makes it the primary path. Depends on #49 (simplify setup) being merged first so `kata setup --yes` scaffolds all content.
+Replace the heavyweight onboard mode (7 phases, 502-line template, stop conditions, native tasks) with a simple `/kata-setup` Claude Code skill. The skill is a SKILL.md file with instructions for Claude — no modes, no tasks, no hooks needed. The flow becomes: clone → open Claude Code → `/kata-setup`. Also remove the npm build/publish pipeline in favor of source-based execution via Bun — the `kata` script already has a Bun fallback, so this just makes it the primary path. #49 (simplify setup) is already merged — `kata setup --yes` scaffolds all content.
 
 ## Feature Behaviors
 
