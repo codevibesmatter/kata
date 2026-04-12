@@ -2,7 +2,8 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getStateFilePath, findProjectDir, getSessionsDir, resolveTemplatePath } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
@@ -458,6 +459,33 @@ function logStopHook(
 }
 
 /**
+ * Resolve the transcript path for a session.
+ * Claude Code stores transcripts at ~/.claude/projects/<encoded-dir>/<session-id>.jsonl
+ * where <encoded-dir> is the project path with / replaced by -.
+ */
+function resolveTranscriptPath(sessionId: string): string | undefined {
+  try {
+    const projectDir = findProjectDir()
+    if (!projectDir) return undefined
+    const encoded = projectDir.replace(/\//g, '-')
+    const transcriptDir = join(homedir(), '.claude', 'projects', encoded)
+    const transcriptPath = join(transcriptDir, `${sessionId}.jsonl`)
+    if (existsSync(transcriptPath)) return transcriptPath
+
+    // Fallback: scan the projects dir for any file matching the session ID
+    const projectsDir = join(homedir(), '.claude', 'projects')
+    if (!existsSync(projectsDir)) return undefined
+    for (const dir of readdirSync(projectsDir)) {
+      const candidate = join(projectsDir, dir, `${sessionId}.jsonl`)
+      if (existsSync(candidate)) return candidate
+    }
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Check if there are active background agents by scanning the session transcript.
  * An Agent tool_use without a matching tool_result means the agent is still running.
  * Returns true if at least one background agent is active.
@@ -551,7 +579,9 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
     if (!result.canExit) {
       // If background agents are active, allow exit — trust agent completion notifications.
       // The transcript records every tool_use/tool_result; unmatched Agent calls = active agents.
-      const transcriptPath = input.transcript_path as string | undefined
+      // Derive transcript path from session ID + project dir.
+      // Claude Code stores transcripts at ~/.claude/projects/<encoded-dir>/<session-id>.jsonl
+      const transcriptPath = resolveTranscriptPath(sessionId)
       if (hasActiveBackgroundAgents(transcriptPath)) {
         logHook(sessionId, { hook: 'stop-conditions', decision: 'allow', note: 'background agents active — deferring to agent notifications' })
         logStopHook(sessionId, 'allow', result.reasons, 'background agents active')
