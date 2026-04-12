@@ -7,11 +7,10 @@ workflow_prefix: "TK"
 
 phases:
   - id: p0
-    name: Orient
+    name: Setup
     stage: setup
-    skill: interview
     task_config:
-      title: "P0: Setup - scope task, verify env, claim issue"
+      title: "P0: Setup - verify env, claim issue"
       labels: [phase, setup]
     steps:
       - id: env-check
@@ -20,24 +19,37 @@ phases:
         $ref: github-claim
 
   - id: p1
+    name: Plan
+    stage: setup
+    skill: interview
+    task_config:
+      title: "P1: Plan - scope, quick research, approach"
+      labels: [phase, setup]
+      depends_on: [p0]
+      instruction: |
+        Understand the task. Quick context search — read relevant files, check for existing patterns.
+        Define approach: what to change, where, acceptance criteria.
+        If scope is larger than a task, suggest kata enter planning instead.
+
+  - id: p2
     name: Implement
     stage: work
     expansion: agent
     skill: code-impl
     task_config:
-      title: "P1: Work - implement and test"
+      title: "P2: Work - implement and test"
       labels: [phase, work]
-      depends_on: [p0]
+      depends_on: [p1]
     agent_protocol:
       max_tasks: 10
 
-  - id: p2
+  - id: p3
     name: Close
     stage: close
     task_config:
-      title: "P2: Close - build, test, commit, push"
+      title: "P3: Close - build, test, commit, push"
       labels: [phase, close]
-      depends_on: [p1]
+      depends_on: [p2]
     steps:
       - id: run-tests
         $ref: run-tests
