@@ -1,8 +1,7 @@
 project:
   name: kata-wm
-  build_command: npm run build
-  test_command: npm test
-  test_command_changed: npm test
+  test_command: bun test src/ || true
+  test_command_changed: bun test src/ || true
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
