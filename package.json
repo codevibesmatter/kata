@@ -3,36 +3,13 @@
   "version": "0.4.0",
   "description": "Structured workflow kata for Claude Code — modes, phases, tasks, and stop hooks for disciplined AI coding sessions",
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js"
-    }
-  },
   "bin": {
     "kata": "kata"
   },
-  "engines": {
-    "node": ">=18"
-  },
-  "files": [
-    "dist/",
-    "kata",
-    "templates/",
-    "batteries/",
-    "src/providers/prompts/"
-  ],
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "test": "node --test dist/testing/index.js 2>/dev/null || true",
-    "eval": "tsx eval/run.ts",
-    "prepublishOnly": "npm run build"
+    "test": "bun test src/",
+    "eval": "bun eval/run.ts"
   },
   "keywords": [
     "claude-code",
@@ -46,9 +23,6 @@
   ],
   "author": "codevibesmatter",
   "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/codevibesmatter/kata.git"
@@ -65,7 +39,6 @@
     "@anthropic-ai/claude-agent-sdk": "^0.2.50",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.5",
-    "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "~5.8.3"
   }

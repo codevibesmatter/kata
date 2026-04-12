@@ -5,17 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run build        # Compile TypeScript → dist/ (required before running tests)
-npm run dev          # Watch mode build
-npm run typecheck    # Type-check without emitting
-npm test             # Run tests (requires a prior build)
+bun test src/        # Run tests from source (no build step)
+bun run typecheck    # Type-check without emitting
 ```
 
-To run tests after code changes: `npm run build && npm test`.
+Test files live alongside source with `.test.ts` suffixes (e.g. `src/commands/can-exit.test.ts`). Bun's test runner discovers and runs them directly from TypeScript source.
 
-Test files live alongside source with `.test.ts` suffixes (e.g. `src/commands/can-exit.test.ts`). Node's built-in test runner (`node --test`) executes them from `dist/testing/index.js`.
-
-The `kata` shell script at the repo root is the CLI entry point. It runs `dist/index.js` via Node when built, or falls back to Bun running `src/index.ts` directly for no-build development.
+The `kata` shell script at the repo root is the CLI entry point. It runs `bun src/index.ts` directly — no build step required.
 
 ## Architecture
 
@@ -34,13 +30,7 @@ The `kata` shell script at the repo root is the CLI entry point. It runs `dist/i
 | `validation/` | Phase/template validation |
 | `yaml/` | YAML frontmatter parser for template files |
 | `utils/` | Workflow ID generation, session cleanup, timestamps |
-| `testing/` | Test utilities exported as `@codevibesmatter/kata/testing` — mock sessions, hook runners, assertions, pre-built scenarios |
-
-### Build outputs
-
-tsup produces ESM-only output with two entry points:
-- `dist/index.js` — main CLI and programmatic API
-- `dist/testing/index.js` — test utilities (also used by `node --test` as the test runner)
+| `testing/` | Test utilities — mock sessions, hook runners, assertions, pre-built scenarios |
 
 ### Runtime data layout
 

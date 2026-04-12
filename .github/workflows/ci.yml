@@ -12,20 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
+      - uses: oven-sh/setup-bun@v2
 
-      - run: npm ci
+      - run: bun install
 
       - name: Typecheck
-        run: npm run typecheck
+        run: bun run typecheck
 
-      - name: Build
-        run: npm run build
+      - name: Test
+        run: bun test src/
 
       - name: Smoke test binary
         run: |
-          # Verify the binary resolves correctly after npm install
-          node dist/index.js help
+          # Verify the kata script runs from source via bun
+          ./kata help
