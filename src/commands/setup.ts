@@ -1,5 +1,5 @@
 // kata setup - Configure kata in a project (pure config, flag-driven)
-// For the guided setup interview, use: kata enter onboard
+// For guided setup, use the /kata-setup skill in Claude Code.
 // Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -348,17 +348,6 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   // Ensure sessions directory exists
   mkdirSync(getSessionsDir(projectRoot), { recursive: true })
 
-  // Seed onboard.md (lives in system templates/, not batteries/)
-  const templatesDir = getProjectTemplatesDir(projectRoot)
-  const onboardDest = join(templatesDir, 'onboard.md')
-  if (!existsSync(onboardDest)) {
-    const onboardSrc = join(getPackageRoot(), 'templates', 'onboard.md')
-    if (existsSync(onboardSrc)) {
-      mkdirSync(templatesDir, { recursive: true })
-      copyFileSync(onboardSrc, onboardDest)
-    }
-  }
-
   // Register hooks in settings.json using absolute kata binary path
   // If kata_binary is set in kata.yaml, use it (for A/B testing branches)
   let binaryOverride: string | undefined
@@ -380,7 +369,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
  * Pure configuration — writes kata.yaml, registers hooks, scaffolds content.
  * Always flag-driven; never enters an interactive session.
  *
- * For the guided setup interview, use: kata enter onboard
+ * For guided setup, use the /kata-setup skill in Claude Code.
  *
  * Installs hooks in PROJECT-LEVEL .claude/settings.json only.
  * Bypasses findProjectDir() since .claude/ may not exist yet.
@@ -434,7 +423,6 @@ Flags:
   --strict      Also register PreToolUse hooks for task enforcement
   --cwd=PATH    Run setup in a different directory
 
-For the guided setup interview, run:
-  kata enter onboard
+For guided setup, use the /kata-setup skill in Claude Code.
 `)
 }

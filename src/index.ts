@@ -282,7 +282,7 @@ Hook Dispatch:
 Setup:
   kata setup --yes                Quick setup (config, hooks, templates, skills)
   kata setup --yes --strict       Setup with PreToolUse gate hooks
-  kata enter onboard                Guided setup interview (interactive, agent-driven)
+  /kata-setup                       Guided setup (interactive, in Claude Code)
   kata update                     Update templates + stamp kata_version
   kata migrate                    Convert old-format templates to new gate/hint format
   kata migrate --dry-run          Preview migration without writing files

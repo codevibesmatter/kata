@@ -186,15 +186,3 @@ modes:
     aliases:
       - "investigate"
 
-  onboard:
-    name: "Onboard"
-    description: "Configure kata for a new project"
-    rules:
-      - "You are an ONBOARDING GUIDE. Walk the user through kata setup with an interview."
-    stop_conditions: []
-    intent_keywords:
-      - "onboard"
-      - "setup kata"
-      - "configure kata"
-      - "initialize kata"
-    template: "onboard.md"

@@ -205,7 +205,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     backupRoot ? join(backupRoot, 'ISSUE_TEMPLATE') : undefined,
   )
 
-  // labels.json → .github/wm-labels.json (used by onboard mode to create labels)
+  // labels.json → .github/wm-labels.json (used by /kata-setup skill to create labels)
   const labelsSrc = join(batteryRoot, 'github', 'labels.json')
   const labelsDest = join(projectRoot, '.github', 'wm-labels.json')
   if (existsSync(labelsSrc)) {
