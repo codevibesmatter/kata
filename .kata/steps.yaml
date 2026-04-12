@@ -85,3 +85,24 @@ create-branch:
     git fetch origin
     git status
     ```
+
+run-tests:
+  title: "Run test suite"
+  instruction: |
+    ```bash
+    {test_command}
+    ```
+
+start-dev-server:
+  title: "Start dev server and confirm health"
+  instruction: |
+    If `dev_server_command` is configured, start the dev server
+    and confirm it responds before running verification steps.
+
+read-verification-tools:
+  title: "Read verification tools config"
+  instruction: |
+    Check for project verification tools:
+    ```bash
+    cat .kata/verification-tools.md 2>/dev/null || echo "No verification tools configured"
+    ```
