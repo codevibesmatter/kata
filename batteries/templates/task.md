@@ -15,27 +15,10 @@ phases:
     steps:
       - id: env-check
         title: "Verify environment"
-        instruction: |
-          Run sanity checks before making any changes:
-          ```bash
-          git status  # Should be clean
-          git log --oneline -3  # Confirm you're on the right branch
-          ```
-
-          If the build command is configured:
-          ```bash
-          {build_command}
-          ```
-
-          Document: current branch, any pre-existing issues.
+        instruction: "Follow ceremony.md § Environment Verification"
       - id: github-claim
         title: "Claim GitHub issue"
-        instruction: |
-          If GitHub issue exists, claim it:
-          ```bash
-          gh issue edit {issue_number} --remove-label "status:todo" --remove-label "approved" --add-label "status:in-progress"
-          gh issue comment {issue_number} --body "Starting work on branch: {branch_name}"
-          ```
+        instruction: "Follow ceremony.md § GitHub Issue Claiming"
 
   - id: p1
     name: Plan
@@ -72,22 +55,13 @@ phases:
     steps:
       - id: run-tests
         title: "Run test suite"
-        instruction: |
-          ```bash
-          {test_command}
-          ```
+        instruction: "Follow ceremony.md § Running Tests"
         gate:
           bash: "{build_command}"
           expect_exit: 0
       - id: commit-push
         title: "Commit and push"
-        instruction: |
-          Commit all implementation work:
-          ```bash
-          git add {changed_files}
-          git commit -m "{commit_message}"
-          git push
-          ```
+        instruction: "Follow ceremony.md § Committing and Pushing"
 
 global_conditions:
   - changes_committed
