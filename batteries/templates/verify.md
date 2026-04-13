@@ -48,6 +48,36 @@ phases:
       labels: [phase, close]
       depends_on: [p1]
     steps:
+      - id: write-evidence
+        title: "Write VP evidence JSON"
+        instruction: |
+          Write a **JSON** evidence file (NOT markdown) to:
+          `.kata/verification-evidence/vp-{issueNumber}.json`
+
+          Required format:
+          ```json
+          {
+            "issueNumber": 100,
+            "phaseId": "p1",
+            "timestamp": "2026-04-13T14:00:00.000Z",
+            "overallPassed": true,
+            "allStepsPassed": true,
+            "steps": [
+              {
+                "id": "vp1",
+                "title": "Step title",
+                "status": "pass",
+                "passed": true,
+                "output": "Actual output from running the step"
+              }
+            ]
+          }
+          ```
+
+          - File MUST be `.json` — tooling reads it programmatically
+          - `overallPassed`/`allStepsPassed`: true only if every step passed
+          - Each step needs `id`, `title`, `status` ("pass"/"fail"), `passed` (bool), `output`
+          - If no issue number, use the workflow ID in the filename
       - id: challenge-incomplete
         title: "Challenge all incomplete VP items"
         instruction: |
