@@ -48,6 +48,30 @@ phases:
       labels: [phase, close]
       depends_on: [p1]
     steps:
+      - id: challenge-incomplete
+        title: "Challenge all incomplete VP items"
+        instruction: |
+          Before closing, review every VP item that was NOT marked as passed.
+          For each incomplete or failed item, challenge it:
+
+          1. **Spawn a review agent** (Agent tool) for each incomplete item to determine
+             if it can actually be completed. The review agent should attempt the verification
+             itself, not just theorize about it.
+
+          2. **Push back on laziness.** Remind yourself:
+             - You have ALL tools: Bash, Read, Write, Edit, Grep, Glob, WebFetch, Agent
+             - You can **create test data freely** — write fixtures, seed databases, generate payloads
+             - You can **start servers, hit endpoints, run CLI commands** — do actual verification
+             - You can **use browser agents** (chrome-devtools-axi) for UI/visual testing — open pages, check rendering, validate interactions
+             - You can **spawn sub-agents** for parallel verification work
+             - You can **install packages, compile, build** — do whatever setup is needed
+
+          3. **"I can't verify this" is almost never true.** If a step says "check endpoint
+             returns 200", curl it. If it says "verify file exists", glob it. If it says
+             "run tests", run them. If it says "check the UI", open a browser.
+
+          Only after genuinely attempting each incomplete item (and documenting WHY it
+          cannot be completed if truly blocked) may you proceed to commit.
       - id: commit-push
         title: "Commit and push"
         instruction: |

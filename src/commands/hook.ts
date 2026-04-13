@@ -7,8 +7,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getStateFilePath, findProjectDir, getSessionsDir, resolveTemplatePath } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
-import { readNativeTaskFiles, getPendingNativeTaskTitles } from './enter/task-factory.js'
-import { getVerifyModeChallenge } from '../messages/stop-guidance.js'
+import { readNativeTaskFiles } from './enter/task-factory.js'
 import type { SessionState } from '../state/schema.js'
 import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import { resolvePlaceholders, type PlaceholderContext } from './enter/placeholder.js'
@@ -460,24 +459,6 @@ function logStopHook(
 }
 
 /**
- * Count how many times the stop hook has blocked this session.
- * Used to gate the verify-mode challenge (only show after repeated attempts).
- */
-function countStopBlocks(sessionId: string): number {
-  try {
-    const projectDir = findProjectDir()
-    const logPath = join(getSessionsDir(projectDir), sessionId, 'stop-hook.log.jsonl')
-    if (!existsSync(logPath)) return 0
-    const lines = readFileSync(logPath, 'utf-8').trim().split('\n').filter(Boolean)
-    return lines.filter(line => {
-      try { return JSON.parse(line).decision === 'block' } catch { return false }
-    }).length
-  } catch {
-    return 0
-  }
-}
-
-/**
  * Resolve the transcript path for a session.
  * Claude Code stores transcripts at ~/.claude/projects/<encoded-dir>/<session-id>.jsonl
  * where <encoded-dir> is the project path with / replaced by -.
@@ -610,13 +591,6 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
       const parts: string[] = ['Session has incomplete work:']
       for (const reason of result.reasons) {
         parts.push(`- ${reason}`)
-      }
-      // In verify mode, challenge incomplete items after repeated stop attempts
-      if (currentMode === 'verify' && countStopBlocks(sessionId) >= 2) {
-        const pendingTitles = getPendingNativeTaskTitles(sessionId)
-        if (pendingTitles.length > 0) {
-          parts.push(getVerifyModeChallenge(pendingTitles))
-        }
       }
       if (result.guidance?.nextStepMessage) {
         parts.push(result.guidance.nextStepMessage)
