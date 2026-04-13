@@ -135,37 +135,53 @@ async function captureConsoleLog(fn: () => Promise<void>): Promise<string> {
 export async function handleSessionStart(input: Record<string, unknown>): Promise<void> {
   const sessionId = input.session_id as string | undefined
 
-  // Import and run init (silently capture its output)
-  // No --force: session_id handles lifecycle naturally.
-  // New session or /clear → new session_id → fresh state created.
-  // Compact or resume → same session_id → existing state preserved.
-  const { init } = await import('./init.js')
-  const initArgs: string[] = []
-  if (sessionId) initArgs.push(`--session=${sessionId}`)
-  await captureConsoleLog(() => init(initArgs))
+  try {
+    // Import and run init (silently capture its output)
+    // No --force: session_id handles lifecycle naturally.
+    // New session or /clear → new session_id → fresh state created.
+    // Compact or resume → same session_id → existing state preserved.
+    const { init } = await import('./init.js')
+    const initArgs: string[] = []
+    if (sessionId) initArgs.push(`--session=${sessionId}`)
+    await captureConsoleLog(() => init(initArgs))
 
-  // Delegate to prime for the full kata hints context
-  const { prime } = await import('./prime.js')
-  const primeArgs: string[] = []
-  if (sessionId) primeArgs.push(`--session=${sessionId}`)
-  const additionalContext = await captureConsoleLog(() => prime(primeArgs))
+    // Delegate to prime for the full kata hints context
+    const { prime } = await import('./prime.js')
+    const primeArgs: string[] = []
+    if (sessionId) primeArgs.push(`--session=${sessionId}`)
+    const additionalContext = await captureConsoleLog(() => prime(primeArgs))
 
-  if (sessionId) {
-    const source = (input.source as string) ?? 'unknown'
-    logHook(sessionId, { hook: 'session-start', decision: 'context', source })
+    if (sessionId) {
+      const source = (input.source as string) ?? 'unknown'
+      logHook(sessionId, { hook: 'session-start', decision: 'context', source })
+    }
+
+    // Prepend tasks-disabled warning when CLAUDE_CODE_ENABLE_TASKS=false
+    const tasksWarning = isNativeTasksEnabled()
+      ? ''
+      : '\n⚠️ WARNING: CLAUDE_CODE_ENABLE_TASKS is disabled. kata workflow tracking (TaskList, TaskUpdate) will not work. To enable: set env.CLAUDE_CODE_ENABLE_TASKS to "true" in ~/.claude/settings.json, then restart Claude Code.\n'
+
+    outputJson({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext: tasksWarning + additionalContext,
+      },
+    })
+  } catch (err) {
+    // Config errors (missing kata.yaml, invalid config) should not crash the hook.
+    // Suggest freeform mode so the user can fix the config without being blocked.
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    outputJson({
+      hookSpecificOutput: {
+        hookEventName: 'SessionStart',
+        additionalContext:
+          `⚠️ **kata config error:** ${errorMsg}\n\n` +
+          `**To fix:** enter freeform mode to bypass mode-gate and repair the config:\n` +
+          '```\nkata enter freeform\n```\n' +
+          `Or run \`kata setup\` to reinitialize.`,
+      },
+    })
   }
-
-  // Prepend tasks-disabled warning when CLAUDE_CODE_ENABLE_TASKS=false
-  const tasksWarning = isNativeTasksEnabled()
-    ? ''
-    : '\n⚠️ WARNING: CLAUDE_CODE_ENABLE_TASKS is disabled. kata workflow tracking (TaskList, TaskUpdate) will not work. To enable: set env.CLAUDE_CODE_ENABLE_TASKS to "true" in ~/.claude/settings.json, then restart Claude Code.\n'
-
-  outputJson({
-    hookSpecificOutput: {
-      hookEventName: 'SessionStart',
-      additionalContext: tasksWarning + additionalContext,
-    },
-  })
 }
 
 // ── Handler: user-prompt ──
@@ -182,20 +198,32 @@ export async function handleUserPrompt(input: Record<string, unknown>): Promise<
   if (session) {
     const activeMode = session.state.currentMode || session.state.sessionType || 'default'
     if (activeMode !== 'default') {
-      const { loadKataConfig } = await import('../config/kata-config.js')
-      const kataConfig = loadKataConfig()
-      const availableModes = Object.keys(kataConfig.modes)
-        .filter((id) => !kataConfig.modes[id].deprecated)
-        .join(', ')
-      if (sessionId) logHook(sessionId, { hook: 'user-prompt', decision: 'context', active_mode: activeMode })
-      outputJson({
-        hookSpecificOutput: {
-          hookEventName: 'UserPromptSubmit',
-          additionalContext:
-            `Currently in **${activeMode}** mode. ` +
-            `To switch modes: \`kata enter <mode>\` (available: ${availableModes}).`,
-        },
-      })
+      try {
+        const { loadKataConfig } = await import('../config/kata-config.js')
+        const kataConfig = loadKataConfig()
+        const availableModes = Object.keys(kataConfig.modes)
+          .filter((id) => !kataConfig.modes[id].deprecated)
+          .join(', ')
+        if (sessionId) logHook(sessionId, { hook: 'user-prompt', decision: 'context', active_mode: activeMode })
+        outputJson({
+          hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext:
+              `Currently in **${activeMode}** mode. ` +
+              `To switch modes: \`kata enter <mode>\` (available: ${availableModes}).`,
+          },
+        })
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        outputJson({
+          hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext:
+              `⚠️ **kata config error:** ${errorMsg}\n\n` +
+              `Enter freeform mode to bypass and fix: \`kata enter freeform\``,
+          },
+        })
+      }
       return
     }
   }
