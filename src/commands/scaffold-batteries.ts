@@ -223,6 +223,7 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
 export interface CleanLegacyResult {
   removedTemplates: string[]
   removedSkills: string[]
+  backupDir?: string
 }
 
 /**
@@ -232,12 +233,19 @@ export interface CleanLegacyResult {
  * The dual-resolution system now reads these from the package at runtime, so project-level
  * copies are no longer needed.
  *
+ * Backs up files to .kata/batteries-backup/{timestamp}/ before removal so users can
+ * restore customizations as project overrides.
+ *
  * Only removes files that match batteries names — custom/user-authored files are preserved.
  * Does NOT remove .kata/steps.yaml (may contain user-authored content).
  */
 export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
   const batteryRoot = join(getPackageRoot(), 'batteries')
   const result: CleanLegacyResult = { removedTemplates: [], removedSkills: [] }
+
+  // Compute backup dir (only created if files are actually removed)
+  const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19)
+  const backupRoot = join(projectRoot, '.kata', 'batteries-backup', timestamp)
 
   // 1. Remove .kata/templates/{name} for each batteries template
   const batteriesTemplatesDir = join(batteryRoot, 'templates')
@@ -246,6 +254,7 @@ export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
     for (const file of readdirSync(batteriesTemplatesDir)) {
       const projectFile = join(projectTemplatesDir, file)
       if (existsSync(projectFile)) {
+        backupFile(projectFile, join(backupRoot, 'templates'), file)
         rmSync(projectFile)
         result.removedTemplates.push(file)
       }
@@ -266,13 +275,24 @@ export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
   if (existsSync(batteriesSkillsDir) && existsSync(projectSkillsDir)) {
     for (const entry of readdirSync(batteriesSkillsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue
-      const bareName = entry.name  // e.g. "code-impl"
+      const bareName = entry.name
       const bareDir = join(projectSkillsDir, bareName)
       if (existsSync(bareDir)) {
+        // Backup all files in the skill directory
+        const skillBackupDir = join(backupRoot, 'skills', bareName)
+        for (const file of readdirSync(bareDir)) {
+          const filePath = join(bareDir, file)
+          try { backupFile(filePath, skillBackupDir, file) } catch {}
+        }
         rmSync(bareDir, { recursive: true })
         result.removedSkills.push(bareName)
       }
     }
+  }
+
+  // Only set backupDir if something was actually backed up
+  if (result.removedTemplates.length > 0 || result.removedSkills.length > 0) {
+    result.backupDir = backupRoot
   }
 
   return result

@@ -85,12 +85,17 @@ describe('cleanLegacyFiles', () => {
     }
   })
 
-  it('removes batteries-matching templates', () => {
+  it('removes batteries-matching templates and backs them up', () => {
     mkdirSync(join(tmpDir, '.kata', 'templates'), { recursive: true })
-    writeFileSync(join(tmpDir, '.kata', 'templates', 'implementation.md'), 'old')
+    writeFileSync(join(tmpDir, '.kata', 'templates', 'implementation.md'), 'old content')
     const result = cleanLegacyFiles(tmpDir)
     expect(result.removedTemplates).toContain('implementation.md')
     expect(existsSync(join(tmpDir, '.kata', 'templates', 'implementation.md'))).toBe(false)
+    // Backup should exist
+    expect(result.backupDir).toBeDefined()
+    const backupFile = join(result.backupDir!, 'templates', 'implementation.md')
+    expect(existsSync(backupFile)).toBe(true)
+    expect(readFileSync(backupFile, 'utf-8')).toBe('old content')
   })
 
   it('preserves custom templates', () => {

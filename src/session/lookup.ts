@@ -283,7 +283,7 @@ export function resolveTemplatePath(templatePath: string): string {
   throw new Error(
     `Template not found: ${templatePath}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata setup --yes' to seed project templates.`,
+      `Ensure the template exists in batteries/templates/ or create a project override at .kata/templates/.`,
   )
 }
 

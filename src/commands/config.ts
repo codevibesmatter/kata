@@ -1,7 +1,6 @@
 // kata config — display resolved configuration
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
 import { findProjectDir, getPackageRoot, getProjectTemplatesDir, getProjectSkillsDir, getUserSkillsDir } from '../session/lookup.js'
 import { loadKataConfig, getKataConfigPath } from '../config/kata-config.js'
 

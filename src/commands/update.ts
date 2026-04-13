@@ -58,6 +58,9 @@ export async function update(args: string[]): Promise<void> {
     for (const s of cleaned.removedSkills) {
       process.stdout.write(`  - .claude/skills/${s}/\n`)
     }
+    if (cleaned.backupDir) {
+      process.stdout.write(`  Backups saved to: ${cleaned.backupDir}\n`)
+    }
   }
 
   // Report results
