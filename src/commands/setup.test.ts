@@ -207,15 +207,13 @@ describe('setup --yes', () => {
     expect(project.ci).toBe('github-actions')
   })
 
-  it('setup --yes scaffolds mode templates, spec-templates, and github templates', async () => {
+  it('setup --yes scaffolds spec-templates and github templates (no project templates)', async () => {
     const output = await captureSetup(['--yes'], tmpDir)
     expect(output).toContain('kata setup complete')
 
-    // Mode templates should exist in .kata/templates/
+    // Mode templates should NOT exist in .kata/templates/ (dual resolution from batteries)
     const templatesDir = join(tmpDir, '.kata', 'templates')
-    expect(existsSync(templatesDir)).toBe(true)
-    const templateFiles = readdirSync(templatesDir) as string[]
-    expect(templateFiles.length).toBeGreaterThan(0)
+    expect(existsSync(templatesDir)).toBe(false)
 
     // Spec templates should exist in planning/spec-templates/
     const specTemplatesDir = join(tmpDir, 'planning', 'spec-templates')
@@ -238,9 +236,9 @@ describe('setup --yes', () => {
     const output = await captureSetup(['--yes'], tmpDir)
     expect(output).toContain('kata setup complete')
 
-    // Templates should still exist
-    const templatesDir = join(tmpDir, '.kata', 'templates')
-    expect(existsSync(templatesDir)).toBe(true)
+    // Spec templates should still exist
+    const specTemplatesDir = join(tmpDir, 'planning', 'spec-templates')
+    expect(existsSync(specTemplatesDir)).toBe(true)
   })
 })
 
@@ -271,12 +269,13 @@ describe('kata-setup skill', () => {
     expect(content).toContain('Reconfigure')
   })
 
-  it('setup --yes scaffolds kata-setup skill to project', async () => {
+  it('setup --yes does not scaffold skills to project (user-scoped instead)', async () => {
     const tmpDir = makeTmpDir()
     try {
       await captureSetup(['--yes'], tmpDir)
+      // Skills should NOT be in project .claude/skills/ (they go to ~/.claude/skills/kata-{name}/)
       const skillDest = join(tmpDir, '.claude', 'skills', 'kata-setup', 'SKILL.md')
-      expect(existsSync(skillDest)).toBe(true)
+      expect(existsSync(skillDest)).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }

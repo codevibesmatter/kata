@@ -33,13 +33,14 @@ describe('all templates parse against templateYamlSchema', () => {
   }
 })
 
-describe('implementation.md has $ref steps and gates', () => {
-  it('has $ref read-spec step in p0', () => {
+describe('implementation.md has inline steps and gates', () => {
+  it('has read-spec step with inline title in p0', () => {
     const path = join(batteriesDir, 'implementation.md')
     const result = parseTemplateYaml(path)
     const p0 = result?.phases?.find(p => p.id === 'p0')
     const readSpec = p0?.steps?.find(s => s.id === 'read-spec')
-    expect(readSpec?.['$ref']).toBe('read-spec')
+    expect(readSpec?.title).toBeTruthy()
+    expect(readSpec?.instruction).toBeTruthy()
   })
 
   it('has gate on final-checks step in close phase', () => {
@@ -51,32 +52,30 @@ describe('implementation.md has $ref steps and gates', () => {
     expect(finalChecks?.gate?.expect_exit).toBe(0)
   })
 
-  it('has subphase_pattern on p2 with expansion: spec', () => {
+  it('has subphase_pattern on p1 with expansion: spec', () => {
     const path = join(batteriesDir, 'implementation.md')
     const result = parseTemplateYaml(path)
-    const p2 = result?.phases?.find(p => p.id === 'p2')
-    expect(p2?.expansion).toBe('spec')
-    expect(Array.isArray(p2?.subphase_pattern)).toBe(true)
+    const p1 = result?.phases?.find(p => p.id === 'p1')
+    expect(p1?.expansion).toBe('spec')
+    expect(Array.isArray(p1?.subphase_pattern)).toBe(true)
   })
 })
 
-describe('planning.md has skill references on steps', () => {
-  it('has interview skill on understand step', () => {
+describe('planning.md has phase-level skill references', () => {
+  it('has research skill on p0 phase', () => {
     const path = join(batteriesDir, 'planning.md')
     const result = parseTemplateYaml(path)
 
     const p0 = result?.phases?.find(p => p.id === 'p0')
-    const understand = p0?.steps?.find(s => s.id === 'understand')
-    expect(understand?.skill).toBe('interview')
+    expect(p0?.skill).toBe('research')
   })
 
-  it('has spec-writing skill on research and design steps', () => {
+  it('has spec-writing skill on p2 phase', () => {
     const path = join(batteriesDir, 'planning.md')
     const result = parseTemplateYaml(path)
 
-    const allSteps = result?.phases?.flatMap(p => p.steps ?? []) ?? []
-    const specWritingSteps = allSteps.filter(s => s.skill === 'spec-writing')
-    expect(specWritingSteps.length).toBeGreaterThanOrEqual(2)
+    const p2 = result?.phases?.find(p => p.id === 'p2')
+    expect(p2?.skill).toBe('spec-writing')
   })
 })
 
