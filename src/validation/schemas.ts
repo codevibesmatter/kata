@@ -9,6 +9,7 @@ export const phaseTaskConfigSchema = z.object({
   title: z.string().min(1, 'Task config title cannot be empty'),
   labels: z.array(z.string()).optional().default([]),
   depends_on: z.array(z.string()).optional(),
+  instruction: z.string().optional(),
 })
 
 /**
