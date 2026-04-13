@@ -1,7 +1,8 @@
 // kata config — display resolved configuration
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { findProjectDir, getPackageRoot, getProjectTemplatesDir } from '../session/lookup.js'
+import { homedir } from 'node:os'
+import { findProjectDir, getPackageRoot, getProjectTemplatesDir, getProjectSkillsDir, getUserSkillsDir } from '../session/lookup.js'
 import { loadKataConfig, getKataConfigPath } from '../config/kata-config.js'
 
 /**
@@ -66,6 +67,17 @@ function showConfig(): void {
     process.stdout.write('  project:  (no project)\n')
   }
   process.stdout.write(`  package:  ${packageTemplateDir} ${existsSync(packageTemplateDir) ? '(exists)' : '(not found)'}\n`)
+
+  // Skills resolution summary
+  process.stdout.write('\nskills (lookup order: project → user):\n')
+  try {
+    const projSkillsDir = getProjectSkillsDir(projectRoot)
+    process.stdout.write(`  project:  ${projSkillsDir} ${existsSync(projSkillsDir) ? '(exists)' : '(not found)'}\n`)
+  } catch {
+    process.stdout.write('  project:  (no project)\n')
+  }
+  const userSkillsDir = getUserSkillsDir()
+  process.stdout.write(`  user:     ${userSkillsDir} ${existsSync(userSkillsDir) ? '(exists)' : '(not found)'}\n`)
 }
 
 function getConfigValue(key: string): void {

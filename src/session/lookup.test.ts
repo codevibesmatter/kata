@@ -116,6 +116,53 @@ describe('resolveSpecTemplatePath', () => {
   })
 })
 
+describe('resolveTemplatePath — batteries fallback', () => {
+  const origProjectDir = process.env.CLAUDE_PROJECT_DIR
+  let tmpDirs: string[] = []
+
+  afterEach(() => {
+    for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true })
+    tmpDirs = []
+    if (origProjectDir !== undefined) {
+      process.env.CLAUDE_PROJECT_DIR = origProjectDir
+    } else {
+      delete process.env.CLAUDE_PROJECT_DIR
+    }
+  })
+
+  it('returns project template when .kata/templates/ has the file', () => {
+    const tmpDir = makeTmpDir('proj-override')
+    tmpDirs.push(tmpDir)
+    mkdirSync(join(tmpDir, '.kata', 'templates'), { recursive: true })
+    writeFileSync(join(tmpDir, '.kata', 'templates', 'implementation.md'), '---\nid: custom\n---\n# custom')
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+
+    const result = resolveTemplatePath('implementation.md')
+    expect(result).toBe(join(tmpDir, '.kata', 'templates', 'implementation.md'))
+  })
+
+  it('falls back to batteries when project template does not exist', () => {
+    const tmpDir = makeTmpDir('batteries-fb')
+    tmpDirs.push(tmpDir)
+    // Create .kata/ dir but NO templates subdir
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+
+    // implementation.md exists in batteries/templates/
+    const result = resolveTemplatePath('implementation.md')
+    expect(result).toMatch(/batteries\/templates\/implementation\.md$/)
+  })
+
+  it('error message lists both checked paths', () => {
+    const tmpDir = makeTmpDir('err-msg')
+    tmpDirs.push(tmpDir)
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+
+    expect(() => resolveTemplatePath('nonexistent-xyz.md')).toThrow(/Checked:/)
+  })
+})
+
 describe('getCurrentSessionId', () => {
   const origProjectDir = process.env.CLAUDE_PROJECT_DIR
   let tmpDir: string
