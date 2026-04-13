@@ -174,7 +174,6 @@ export const verifySubagentScenario: EvalScenario = {
     'Enter verify mode with `kata enter verify --issue=100` and execute the Verification Plan ' +
     'for the health endpoint. The spec is at planning/specs/100-health-endpoint.md. ' +
     'Execute all VP steps, write evidence, and report results.',
-  maxTurns: 20,
   timeoutMs: 10 * 60 * 1000,
   checkpoints: [
     assertVerifyModeEntered(),
