@@ -442,7 +442,7 @@ export async function checkPhase(args: string[]): Promise<void> {
   }
 
   // Step 3: Tests
-  const testStep = runStep('tests', project.test_command)
+  const testStep = runStep('tests', project.test_command_changed ?? project.test_command)
   steps.push(testStep)
   printStep(testStep)
   if (!testStep.passed) {
