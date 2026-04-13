@@ -2,6 +2,7 @@ project:
   name: kata-wm
   test_command: bun test src/ || true
   test_command_changed: bun test src/ || true
+  build_command: bun run typecheck
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
