@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
-import { resolveTemplatePath, resolveSpecTemplatePath, getCurrentSessionId, getStateFilePath, resolveCeremonyPath } from './lookup.js'
+import { resolveTemplatePath, resolveSpecTemplatePath, getCurrentSessionId, getStateFilePath } from './lookup.js'
 
 function makeTmpDir(label: string): string {
   const dir = join(
@@ -241,23 +241,36 @@ describe('getStateFilePath — layout-shift resilience', () => {
   })
 })
 
-describe('resolveCeremonyPath', () => {
-
-  it('returns batteries ceremony.md when no project override exists', () => {
-    const result = resolveCeremonyPath()
-    expect(result).not.toBeNull()
-    expect(result).toContain('batteries/ceremony.md')
+describe('ceremony.md scaffolding', () => {
+  it('scaffoldBatteries creates .kata/ceremony.md', () => {
+    const { scaffoldBatteries } = require('../commands/scaffold-batteries.js') as typeof import('../commands/scaffold-batteries.js')
+    const tmpDir = join(os.tmpdir(), `wm-ceremony-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    const origEnv = process.env.CLAUDE_PROJECT_DIR
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+    try {
+      scaffoldBatteries(tmpDir)
+      expect(existsSync(join(tmpDir, '.kata', 'ceremony.md'))).toBe(true)
+    } finally {
+      if (origEnv !== undefined) process.env.CLAUDE_PROJECT_DIR = origEnv
+      else delete process.env.CLAUDE_PROJECT_DIR
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 
-  it('returns project ceremony.md when it exists', () => {
+  it('scaffoldBatteries skips existing ceremony.md on non-update', () => {
+    const { scaffoldBatteries } = require('../commands/scaffold-batteries.js') as typeof import('../commands/scaffold-batteries.js')
     const tmpDir = join(os.tmpdir(), `wm-ceremony-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     writeFileSync(join(tmpDir, '.kata', 'ceremony.md'), '# Custom ceremony')
     const origEnv = process.env.CLAUDE_PROJECT_DIR
     process.env.CLAUDE_PROJECT_DIR = tmpDir
     try {
-      const result = resolveCeremonyPath()
-      expect(result).toBe(join(tmpDir, '.kata', 'ceremony.md'))
+      const result = scaffoldBatteries(tmpDir)
+      expect(result.skipped).toContain('ceremony.md')
+      // Custom content preserved
+      const { readFileSync } = require('node:fs') as typeof import('node:fs')
+      expect(readFileSync(join(tmpDir, '.kata', 'ceremony.md'), 'utf-8')).toBe('# Custom ceremony')
     } finally {
       if (origEnv !== undefined) process.env.CLAUDE_PROJECT_DIR = origEnv
       else delete process.env.CLAUDE_PROJECT_DIR

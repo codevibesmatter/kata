@@ -239,23 +239,6 @@ export function getBatteriesTemplatesDir(): string {
   return path.join(getPackageRoot(), 'batteries', 'templates')
 }
 
-/**
- * Resolve ceremony.md path.
- * Lookup order: project .kata/ceremony.md → batteries/ceremony.md
- * @returns Absolute path to ceremony.md, or null if not found
- */
-export function resolveCeremonyPath(): string | null {
-  try {
-    const projectRoot = findProjectDir()
-    const projectCeremony = path.join(projectRoot, '.kata', 'ceremony.md')
-    if (existsSync(projectCeremony)) return projectCeremony
-  } catch {
-    // No project dir
-  }
-  const batteriesCeremony = path.join(getPackageRoot(), 'batteries', 'ceremony.md')
-  if (existsSync(batteriesCeremony)) return batteriesCeremony
-  return null
-}
 
 /**
  * Resolve a template path.

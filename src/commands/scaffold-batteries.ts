@@ -198,6 +198,25 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     backupRoot ? join(backupRoot, 'interviews') : undefined,
   )
 
+  // ceremony.md → .kata/ceremony.md (shared workflow instructions)
+  const ceremonySrc = join(batteryRoot, 'ceremony.md')
+  const ceremonyDest = join(projectRoot, '.kata', 'ceremony.md')
+  if (existsSync(ceremonySrc)) {
+    if (existsSync(ceremonyDest)) {
+      if (update) {
+        if (backupRoot) backupFile(ceremonyDest, backupRoot, 'ceremony.md')
+        copyFileSync(ceremonySrc, ceremonyDest)
+        result.updated.push('ceremony.md')
+      } else {
+        result.skipped.push('ceremony.md')
+      }
+    } else {
+      mkdirSync(join(ceremonyDest, '..'), { recursive: true })
+      copyFileSync(ceremonySrc, ceremonyDest)
+      result.kataConfig.push('ceremony.md')
+    }
+  }
+
   // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')
   const vtDest = getProjectVerificationToolsPath(projectRoot)

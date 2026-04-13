@@ -7,7 +7,6 @@ import {
   getStateFilePath,
   findProjectDir,
   getPackageRoot,
-  resolveCeremonyPath,
 } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { writeState } from '../state/writer.js'
@@ -419,12 +418,11 @@ export async function enter(args: string[]): Promise<void> {
     }
   }
 
-  // Validate ceremony.md is reachable (project or batteries)
-  const ceremonyPath = resolveCeremonyPath()
-  if (!ceremonyPath) {
+  // Validate ceremony.md exists in project
+  const ceremonyPath = join(findProjectDir(), '.kata', 'ceremony.md')
+  if (!existsSync(ceremonyPath)) {
     process.stderr.write(
-      `\nkata enter ${canonical}: ceremony.md not found.\n` +
-      `Expected at .kata/ceremony.md or batteries/ceremony.md.\n` +
+      `\nkata enter ${canonical}: .kata/ceremony.md not found.\n` +
       `Run: kata update\n\n`,
     )
     process.exitCode = 1
