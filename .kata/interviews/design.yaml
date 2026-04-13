@@ -1,0 +1,20 @@
+name: "UI Design"
+description: "Layout, components, visual states"
+rounds:
+  - header: "Reference"
+    question: "Which existing page or screen is most similar to what you're building?"
+    options:
+      - {label: "I'll name it", description: "Reference an existing page/screen"}
+      - {label: "Nothing similar", description: "This is a new pattern"}
+  - header: "Layout"
+    question: "What layout pattern fits this feature?"
+    options:
+      - {label: "List/table", description: "Data listing with sorting/filtering"}
+      - {label: "Detail view", description: "Single-item view with sections"}
+      - {label: "Form", description: "Input form with validation"}
+      - {label: "Dashboard", description: "Multiple cards/panels overview"}
+  - header: "Components"
+    question: "Which existing components can you reuse?"
+    options:
+      - {label: "I'll list them", description: "Free-form list of reusable components"}
+      - {label: "All new", description: "No existing components apply"}

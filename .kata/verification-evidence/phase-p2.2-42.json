@@ -1,0 +1,39 @@
+{
+  "phaseId": "p2.2",
+  "issueNumber": 42,
+  "timestamp": "2026-04-06T02:46:54.131Z",
+  "steps": [
+    {
+      "name": "build",
+      "passed": true,
+      "skipped": true
+    },
+    {
+      "name": "typecheck",
+      "passed": true,
+      "skipped": true
+    },
+    {
+      "name": "tests",
+      "passed": true,
+      "skipped": true
+    },
+    {
+      "name": "smoke",
+      "passed": true,
+      "skipped": true
+    },
+    {
+      "name": "delta",
+      "passed": true,
+      "output": "Assertion count OK (before: 42, after: 60)"
+    },
+    {
+      "name": "micro-review",
+      "passed": true,
+      "skipped": true,
+      "output": "No code_reviewer configured in wm.yaml — micro-review skipped"
+    }
+  ],
+  "overallPassed": true
+}
