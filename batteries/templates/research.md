@@ -13,7 +13,20 @@ phases:
       labels: [phase, setup]
     steps:
       - id: env-check
-        $ref: env-check
+        title: "Verify environment"
+        instruction: |
+          Run sanity checks before making any changes:
+          ```bash
+          git status  # Should be clean
+          git log --oneline -3  # Confirm you're on the right branch
+          ```
+
+          If the build command is configured:
+          ```bash
+          {build_command}
+          ```
+
+          Document: current branch, any pre-existing issues.
       - id: classify
         title: "Classify research type"
         instruction: |
@@ -51,7 +64,14 @@ phases:
       depends_on: [p1]
     steps:
       - id: commit-push
-        $ref: commit-push
+        title: "Commit and push"
+        instruction: |
+          Commit all implementation work:
+          ```bash
+          git add {changed_files}
+          git commit -m "{commit_message}"
+          git push
+          ```
 
 global_conditions:
   - changes_committed

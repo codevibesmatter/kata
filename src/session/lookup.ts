@@ -224,6 +224,14 @@ export function getTemplatesDir(): string {
 }
 
 /**
+ * Get path to batteries templates directory
+ * @returns Absolute path to batteries/templates/
+ */
+export function getBatteriesTemplatesDir(): string {
+  return path.join(getPackageRoot(), 'batteries', 'templates')
+}
+
+/**
  * Resolve a template path.
  * Lookup order:
  *
@@ -255,6 +263,13 @@ export function resolveTemplatePath(templatePath: string): string {
     }
   } catch {
     // No project dir found — skip project tier
+  }
+
+  // Batteries fallback
+  const batteriesTemplate = path.join(getBatteriesTemplatesDir(), templatePath)
+  checked.push(batteriesTemplate)
+  if (existsSync(batteriesTemplate)) {
+    return batteriesTemplate
   }
 
   throw new Error(

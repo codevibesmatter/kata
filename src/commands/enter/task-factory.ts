@@ -6,7 +6,6 @@ import { resolveTemplatePath } from '../../session/lookup.js'
 import type { AgentProtocol, Hint, SubphasePattern } from '../../validation/index.js'
 import type { SpecPhase } from '../../yaml/index.js'
 import { resolvePlaceholders } from './placeholder.js'
-import { loadStepLibrary, resolveStepRef } from './step-library.js'
 import { parseTemplateYaml } from './template.js'
 
 export interface Task {
@@ -239,8 +238,6 @@ export function buildPhaseTasks(
     return []
   }
 
-  const stepLibrary = loadStepLibrary()
-
   const tasks: Task[] = []
 
   // Tracks the last task ID per phase — used to chain cross-phase dependencies
@@ -290,26 +287,21 @@ export function buildPhaseTasks(
     if (phase.steps?.length) {
       const stepLines: string[] = []
       for (const step of phase.steps) {
-        let resolvedStep = step
-        if (step['$ref']) {
-          const resolved = resolveStepRef(step['$ref'], step, stepLibrary)
-          resolvedStep = { ...step, ...resolved }
-        }
-        const stepTitle = resolvedStep.title ?? resolvedStep.id
+        const stepTitle = step.title ?? step.id
         const resolvedTitle = reviewers ? stepTitle.replace(/{reviewers}/g, reviewers) : stepTitle
 
         let stepBlock = `### ${resolvedTitle}`
-        if (resolvedStep.skill) {
-          stepBlock += `\nInvoke /${resolvedStep.skill}`
+        if (step.skill) {
+          stepBlock += `\nInvoke /${step.skill}`
         }
-        if (resolvedStep.instruction) {
+        if (step.instruction) {
           const resolvedInstruction = reviewers
-            ? resolvedStep.instruction.replace(/{reviewers}/g, reviewers)
-            : resolvedStep.instruction
+            ? step.instruction.replace(/{reviewers}/g, reviewers)
+            : step.instruction
           stepBlock += `\n${resolvedInstruction.trim()}`
         }
-        if (resolvedStep.hints?.length) {
-          stepBlock += `\n${renderHints(resolvedStep.hints)}`
+        if (step.hints?.length) {
+          stepBlock += `\n${renderHints(step.hints)}`
         }
         stepLines.push(stepBlock)
       }
