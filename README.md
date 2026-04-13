@@ -72,7 +72,7 @@ Tell Claude:
 
 > Set up kata for this project
 
-Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml`, copies mode templates to `.kata/templates/`, and installs skills to `.claude/skills/` — everything in one command. For a guided walkthrough, use the `/kata-setup` skill in Claude Code — it detects your project state and walks you through setup interactively.
+Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml` and `.kata/ceremony.md`, and installs skills to `~/.claude/skills/kata-{name}/` — everything in one command. Templates resolve from the package at runtime (no project copies needed). For a guided walkthrough, use the `/kata-setup` skill in Claude Code — it detects your project state and walks you through setup interactively.
 
 **3. Enter a mode**
 
@@ -135,7 +135,7 @@ If `kata can-exit` reports unmet conditions (pending tasks, uncommitted changes,
 
 ```mermaid
 flowchart TD
-    A["kata enter &lt;mode&gt; [--issue=N]"] --> B[Template loaded from .kata/templates/]
+    A["kata enter &lt;mode&gt; [--issue=N]"] --> B[Template resolved: project override → batteries fallback]
     B --> C[Native tasks created with dependency chains]
     C --> D[Claude works through tasks via TaskList]
     D --> E{Claude tries to stop?}
@@ -331,7 +331,7 @@ Use `kata can-exit --json` for machine-readable output in CI or scripts:
 
 ## Skills
 
-Skills are atomic methodology instructions that templates reference via `skill:` fields on steps. They live in `.claude/skills/<name>/SKILL.md` and are copied from the package during `kata setup`.
+Skills are atomic methodology instructions that templates reference via `skill:` fields on phases. They are installed to `~/.claude/skills/kata-{name}/SKILL.md` (user-scoped with `kata-` prefix) during `kata setup`. Projects can override any skill by placing a file at `.claude/skills/kata-{name}/SKILL.md` in the project — Claude Code gives project-level skills precedence.
 
 ### Batteries skills
 
@@ -361,11 +361,11 @@ steps:
 
 When Claude reaches this step, the task instruction tells it to invoke the skill (e.g., `Invoke /code-impl`). The skill's `SKILL.md` provides the detailed methodology — how to approach the work, what patterns to follow, what to verify.
 
-Skills are project-owned after setup. You can edit them, add project-specific skills, or replace the batteries versions entirely.
+To customize a skill, copy it from `~/.claude/skills/kata-{name}/` to `.claude/skills/kata-{name}/` in your project and edit the project copy.
 
 ### Updating skills
 
-After upgrading kata, run `kata update` to overwrite project skills with the latest package versions. Commit your customizations first — `kata update` overwrites without merging.
+After upgrading kata, run `kata update` to refresh user-scoped skills with the latest package versions. Project-level overrides in `.claude/skills/` are not touched by `kata update`.
 
 ---
 
@@ -539,7 +539,7 @@ Run `kata doctor` when hooks stop firing, after manual edits to `.claude/setting
 
 #### `kata setup`
 
-One-command project setup — registers hooks, writes config, scaffolds templates, and installs skills.
+One-command project setup — registers hooks, writes config, and installs skills.
 
 ```
 kata setup [--yes] [--strict]
@@ -548,9 +548,8 @@ kata setup [--yes] [--strict]
 What it creates:
 
 - Registers `SessionStart`, `UserPromptSubmit`, `Stop`, and `PreToolUse` hooks in `.claude/settings.json`
-- Creates `.kata/` directory with `kata.yaml` (project config with mode definitions)
-- Copies mode templates to `.kata/templates/`
-- Installs skills to `.claude/skills/`
+- Creates `.kata/` directory with `kata.yaml` (project config with mode definitions) and `ceremony.md` (shared workflow instructions)
+- Installs skills to `~/.claude/skills/kata-{name}/` (user-scoped, shared across projects)
 - Seeds spec templates, interview configs, and GitHub issue templates
 
 | Flag | Description |
@@ -565,14 +564,15 @@ Files scaffolded:
 | Source | Destination | Contents |
 |--------|-------------|----------|
 | `batteries/kata.yaml` | `.kata/kata.yaml` | Project config (project name, commands, spec paths, mode definitions) |
-| `batteries/templates/*.md` | `.kata/templates/*.md` | Mode templates (research, planning, implementation, task, freeform, verify, debug) |
-| `batteries/skills/*/SKILL.md` | `.claude/skills/*/SKILL.md` | Methodology skills (code-impl, code-review, research, interview, etc.) |
-| `batteries/steps.yaml` | `.kata/steps.yaml` | Shared step definitions for `$ref` in templates |
+| `batteries/ceremony.md` | `.kata/ceremony.md` | Shared workflow instructions (commit, PR, branch, env-check, tests) |
+| `batteries/skills/*/SKILL.md` | `~/.claude/skills/kata-*/SKILL.md` | User-scoped methodology skills (kata-code-impl, kata-code-review, etc.) |
 | `batteries/spec-templates/` | `planning/spec-templates/` | Spec document stubs |
 | `batteries/interviews/` | `.kata/interviews/` | Interview question configs |
 | `batteries/verification-tools.md` | `.kata/verification-tools.md` | Verification tools reference |
 | `batteries/github/ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` | GitHub issue templates |
 | `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by /kata-setup skill) |
+
+Templates (`batteries/templates/*.md`) are **not** copied to the project — they resolve from the package at runtime. To override a template, manually create `.kata/templates/{name}.md`.
 
 ### Other commands
 
@@ -582,11 +582,11 @@ Files scaffolded:
 | `kata suggest <message>` | | Detect mode intent from a message and output guidance on which mode to enter |
 | `kata hook <name>` | | Dispatch a named hook event; used internally by `.claude/settings.json` hook commands |
 | `kata modes` | | List available modes from `kata.yaml` with names, aliases, and stop conditions |
-| `kata update` | | Update project templates and skills to the latest package version. Overwrites existing files — commit first. |
+| `kata update` | | Update project files and user-scoped skills to latest package version. Removes legacy project-level template/skill copies (backs up to `.kata/batteries-backup/`). |
 | `kata migrate` | `[--dry-run]` | Convert old-format templates to the new gate/hint/stage format |
 | `kata init` | `[--session=ID] [--force]` | Initialize session state; `--force` resets existing state |
 | `kata teardown` | `[--yes] [--all] [--dry-run]` | Remove kata hooks and config from the project |
-| `kata config` | `[--show]` | Show resolved `kata.yaml` config with provenance (project vs. defaults) |
+| `kata config` | `[--show \| get <key>]` | Show resolved config or get a specific value by dot-notation key (e.g., `kata config get project.test_command`) |
 | `kata validate-spec` | `--issue=N \| path.md` | Validate a spec file's phase format and required sections |
 | `kata validate-template` | `<path> [--json]` | Validate a template file's YAML frontmatter and structure |
 | `kata init-mode` | `<name>` | Create a new mode — generates a template file and registers it in `kata.yaml` |
