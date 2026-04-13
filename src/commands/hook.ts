@@ -654,11 +654,12 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
 function evaluateBashGate(
   gate: Gate,
   placeholderContext: PlaceholderContext,
+  sessionId?: string,
 ): { passed: boolean; output: string; exitCode: number; onFail?: string } {
   // 1. Resolve placeholders in gate.bash and gate.on_fail
   const resolvedBash = resolvePlaceholders(gate.bash, placeholderContext)
 
-  // 2. Run the command
+  // 2. Run the command (pass KATA_SESSION_ID so child kata commands resolve the session)
   let output = ''
   let exitCode = 0
   try {
@@ -668,10 +669,14 @@ function evaluateBashGate(
     } catch {
       /* use hook runner cwd */
     }
+    const env = sessionId
+      ? { ...process.env, KATA_SESSION_ID: sessionId }
+      : process.env
     output = execSync(resolvedBash, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 30000,
+      env,
       ...(cwd ? { cwd } : {}),
     }).trim()
   } catch (err: unknown) {
@@ -859,7 +864,7 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
                 // No config available
               }
 
-              const result = evaluateBashGate(gate, placeholderContext)
+              const result = evaluateBashGate(gate, placeholderContext, session.sessionId)
               if (!result.passed) {
                 const reason = result.onFail ?? `Gate failed for task [${taskId}] (exit code: ${result.exitCode})`
                 if (sessionId) logHook(sessionId, { hook: 'pre-tool-use', decision: 'deny', check: 'gate', task: taskId, originalId, exitCode: result.exitCode })
