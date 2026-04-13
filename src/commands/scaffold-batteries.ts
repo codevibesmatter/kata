@@ -3,6 +3,7 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectVerificationToolsPath, getProjectSkillsDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
@@ -270,6 +271,63 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
       mkdirSync(join(vtDest, '..'), { recursive: true })
       copyFileSync(vtSrc, vtDest)
       result.verificationTools.push('verification-tools.md')
+    }
+  }
+
+  return result
+}
+
+export interface UserSkillsResult {
+  installed: string[]  // skill names newly installed
+  updated: string[]    // skill names overwritten
+  skipped: string[]    // skill names already existed (not overwritten when update=false)
+}
+
+/**
+ * Install user-scoped skills to ~/.claude/skills/kata-{name}/.
+ *
+ * Copies each directory from batteries/skills/{name}/ to ~/.claude/skills/kata-{name}/.
+ * The kata- prefix namespaces battery skills to avoid collisions with user skills.
+ *
+ * @param options.update - When true, overwrite existing skills. Default false (skip existing).
+ * @param options.homeDir - Override home directory (for test isolation). Default os.homedir().
+ */
+export function installUserSkills(options: {
+  update?: boolean
+  homeDir?: string
+} = {}): UserSkillsResult {
+  const { update = false, homeDir = homedir() } = options
+  const batteryRoot = join(getPackageRoot(), 'batteries')
+  const skillsSrc = join(batteryRoot, 'skills')
+  const userSkillsDir = join(homeDir, '.claude', 'skills')
+
+  const result: UserSkillsResult = { installed: [], updated: [], skipped: [] }
+
+  if (!existsSync(skillsSrc)) return result
+
+  for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const skillName = entry.name
+    const destName = `kata-${skillName}`
+    const srcDir = join(skillsSrc, skillName)
+    const destDir = join(userSkillsDir, destName)
+
+    if (existsSync(destDir)) {
+      if (update) {
+        // Overwrite all files in the skill directory
+        for (const file of readdirSync(srcDir)) {
+          copyFileSync(join(srcDir, file), join(destDir, file))
+        }
+        result.updated.push(skillName)
+      } else {
+        result.skipped.push(skillName)
+      }
+    } else {
+      mkdirSync(destDir, { recursive: true })
+      for (const file of readdirSync(srcDir)) {
+        copyFileSync(join(srcDir, file), join(destDir, file))
+      }
+      result.installed.push(skillName)
     }
   }
 

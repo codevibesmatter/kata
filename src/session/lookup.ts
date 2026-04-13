@@ -2,6 +2,7 @@
 import * as path from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { homedir } from 'node:os'
 
 /**
  * Get the workflow-management package root directory
@@ -129,6 +130,13 @@ export function getProjectVerificationToolsPath(projectRoot?: string): string {
 export function getProjectPromptsDir(projectRoot?: string): string {
   const root = projectRoot ?? findProjectDir()
   return resolveKataPath(root, 'prompts')
+}
+
+/**
+ * Get path to user-scoped skills directory (~/.claude/skills/)
+ */
+export function getUserSkillsDir(): string {
+  return path.join(homedir(), '.claude', 'skills')
 }
 
 /**
