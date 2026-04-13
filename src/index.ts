@@ -35,6 +35,7 @@ import { review as reviewCommand } from './commands/review.js'
 import { agentRun as agentRunCommand } from './commands/agent-run.js'
 import { postmortem } from './commands/postmortem.js'
 import { interview } from './commands/interview.js'
+import { testBaseline } from './commands/test-baseline.js'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getPackageRoot } from './session/lookup.js'
@@ -159,6 +160,10 @@ async function main() {
 
       case 'check-phase':
         await checkPhase(commandArgs)
+        break
+
+      case 'test-baseline':
+        await testBaseline(commandArgs)
         break
 
       case 'verify-phase':

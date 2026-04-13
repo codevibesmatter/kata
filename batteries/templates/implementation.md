@@ -28,7 +28,7 @@ phases:
           bash: "test -f {spec_path}"
           expect_exit: 0
       - id: env-check
-        title: "Verify environment"
+        title: "Verify environment and capture test baseline"
         instruction: |
           Run sanity checks before making any changes:
           ```bash
@@ -41,7 +41,13 @@ phases:
           {build_command}
           ```
 
-          Document: current branch, any pre-existing issues.
+          **Capture test baseline** — records pre-existing test failures so phase
+          gates only flag NEW failures introduced by your changes:
+          ```bash
+          kata test-baseline save
+          ```
+
+          Document: current branch, baseline test results, any pre-existing issues.
       - id: create-branch
         title: "Create feature branch"
         instruction: |
@@ -77,7 +83,7 @@ phases:
         active_form: "Implementing {phase_name}"
         labels: [impl]
         gate:
-          bash: "{test_command_changed}"
+          bash: "kata test-baseline check"
           expect_exit: 0
 
   - id: p2
