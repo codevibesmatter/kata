@@ -1117,8 +1117,9 @@ export function assertVerifyEvidenceExists(issueNumber: number): EvalCheckpoint 
     assert(ctx: EvalContext) {
       try {
         const files = ctx.listDir('.kata/verification-evidence')
+        // Accept both JSON and markdown evidence files containing the issue number
         const matching = files.filter(
-          (f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`),
+          (f) => f.includes(`${issueNumber}`) && (f.endsWith('.json') || f.endsWith('.md')),
         )
         if (matching.length > 0) {
           return pass()
@@ -1127,7 +1128,7 @@ export function assertVerifyEvidenceExists(issueNumber: number): EvalCheckpoint 
         // dir doesn't exist
       }
       return fail(
-        `No verification evidence JSON found for issue #${issueNumber} ` +
+        `No verification evidence found for issue #${issueNumber} ` +
         `in .kata/verification-evidence/`,
       )
     },

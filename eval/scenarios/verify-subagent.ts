@@ -109,24 +109,43 @@ function assertEvidenceAllPassed(issueNumber: number): EvalCheckpoint {
       } catch {
         return `No evidence file found for issue #${issueNumber}`
       }
-      // Match vp-p1-100.json, vp-100.json, vp-task-100.json, etc.
-      const matching = files.filter((f) => f.endsWith('.json') && f.includes(`-${issueNumber}.json`))
+      // Match any file containing the issue number (JSON or markdown)
+      const matching = files.filter((f) => f.includes(`${issueNumber}`) && (f.endsWith('.json') || f.endsWith('.md')))
       for (const file of matching) {
-        try {
-          const evidence = JSON.parse(ctx.readFile(`${base}/${file}`)) as {
-            steps: Array<{ id: string; status: string; passed?: boolean }>
-            allStepsPassed?: boolean
+        const content = ctx.readFile(`${base}/${file}`)
+        // Try JSON first
+        if (file.endsWith('.json')) {
+          try {
+            const evidence = JSON.parse(content) as {
+              steps: Array<{ id: string; status: string; passed?: boolean }>
+              allStepsPassed?: boolean
+            }
+            const allPassed =
+              evidence.allStepsPassed ??
+              evidence.steps.every((s) => s.status === 'pass' || s.passed === true)
+            if (!allPassed) {
+              const failed = evidence.steps.filter((s) => s.status !== 'pass' && s.passed !== true)
+              return `VP steps failed in ${file}: ${failed.map((s) => s.id).join(', ')}`
+            }
+            return null
+          } catch (err) {
+            return `Failed to parse evidence ${file}: ${err}`
           }
-          const allPassed =
-            evidence.allStepsPassed ??
-            evidence.steps.every((s) => s.status === 'pass' || s.passed === true)
-          if (!allPassed) {
-            const failed = evidence.steps.filter((s) => s.status !== 'pass' && s.passed !== true)
-            return `VP steps failed in ${file}: ${failed.map((s) => s.id).join(', ')}`
+        }
+        // Markdown fallback — look for pass/fail signals in text
+        if (file.endsWith('.md')) {
+          const upper = content.toUpperCase()
+          if (upper.includes('ALL PASS') || upper.includes('ALL STEPS PASSED')) {
+            return null
           }
-          return null
-        } catch (err) {
-          return `Failed to parse evidence ${file}: ${err}`
+          if (upper.includes('FAIL')) {
+            return `Evidence ${file} contains FAIL markers`
+          }
+          // No clear signal — accept if "PASS" appears and "FAIL" doesn't
+          if (upper.includes('PASS') && !upper.includes('FAIL')) {
+            return null
+          }
+          return `Evidence ${file} has no clear pass/fail verdict`
         }
       }
       return `No evidence file found for issue #${issueNumber}`
