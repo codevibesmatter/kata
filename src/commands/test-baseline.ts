@@ -169,7 +169,9 @@ async function checkBaseline(sessionId: string): Promise<void> {
 export async function testBaseline(args: string[]): Promise<void> {
   const subcommand = args.find(a => !a.startsWith('--')) ?? 'check'
   const sessionArg = args.find(a => a.startsWith('--session='))
-  const sessionId = sessionArg?.slice('--session='.length) || await getCurrentSessionId()
+  const sessionId = sessionArg?.slice('--session='.length)
+    || process.env.KATA_SESSION_ID
+    || await getCurrentSessionId()
 
   switch (subcommand) {
     case 'save':
