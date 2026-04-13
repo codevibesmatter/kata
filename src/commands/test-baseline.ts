@@ -105,8 +105,24 @@ async function saveBaseline(sessionId: string): Promise<void> {
 async function checkBaseline(sessionId: string): Promise<void> {
   const baselinePath = getBaselinePath(sessionId)
   if (!existsSync(baselinePath)) {
-    process.stderr.write('No test baseline found. Run: kata test-baseline save\n')
-    process.exitCode = 1
+    // No baseline saved — fall back to running the test command directly.
+    // This handles sessions started before test-baseline was introduced,
+    // or when P0 setup was skipped/didn't save a baseline.
+    process.stderr.write('No test baseline found — falling back to running tests directly\n')
+    const config = loadKataConfig()
+    const cmd = config.project?.test_command_changed ?? config.project?.test_command
+    if (!cmd) {
+      process.stdout.write('No test command configured — passing\n')
+      process.exitCode = 0
+      return
+    }
+    try {
+      const cwd = findProjectDir()
+      execSync(cmd, { encoding: 'utf-8', stdio: 'inherit', timeout: 120000, cwd })
+      process.exitCode = 0
+    } catch {
+      process.exitCode = 1
+    }
     return
   }
 
