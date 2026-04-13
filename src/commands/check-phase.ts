@@ -423,8 +423,11 @@ export async function checkPhase(args: string[]): Promise<void> {
 
   const steps: StepResult[] = []
 
+  // check_phase overrides: project.check_phase.X takes precedence over project.X
+  const cp = project.check_phase ?? {}
+
   // Step 1: Build
-  const buildStep = runStep('build', project.build_command)
+  const buildStep = runStep('build', cp.build_command !== undefined ? cp.build_command : project.build_command)
   steps.push(buildStep)
   printStep(buildStep)
   if (!buildStep.passed) {
@@ -433,7 +436,7 @@ export async function checkPhase(args: string[]): Promise<void> {
   }
 
   // Step 2: Typecheck
-  const typecheckStep = runStep('typecheck', project.typecheck_command)
+  const typecheckStep = runStep('typecheck', cp.typecheck_command !== undefined ? cp.typecheck_command : project.typecheck_command)
   steps.push(typecheckStep)
   printStep(typecheckStep)
   if (!typecheckStep.passed) {
@@ -442,7 +445,7 @@ export async function checkPhase(args: string[]): Promise<void> {
   }
 
   // Step 3: Tests
-  const testStep = runStep('tests', project.test_command)
+  const testStep = runStep('tests', cp.test_command !== undefined ? cp.test_command : project.test_command)
   steps.push(testStep)
   printStep(testStep)
   if (!testStep.passed) {
@@ -451,7 +454,7 @@ export async function checkPhase(args: string[]): Promise<void> {
   }
 
   // Step 4: Smoke
-  const smokeStep = runStep('smoke', project.smoke_command)
+  const smokeStep = runStep('smoke', cp.smoke_command !== undefined ? cp.smoke_command : project.smoke_command)
   steps.push(smokeStep)
   printStep(smokeStep)
   if (!smokeStep.passed) {

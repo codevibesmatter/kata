@@ -51,6 +51,14 @@ export const KataProjectSchema = z.object({
   ci: z.string().nullable().optional(),
   dev_server_command: z.string().nullable().optional(),
   dev_server_health: z.string().nullable().optional(),
+  // Per-step overrides for check-phase. Each key overrides the default
+  // command for that step. Unset keys fall back to the top-level project commands.
+  check_phase: z.object({
+    build_command: z.string().nullable().optional(),
+    typecheck_command: z.string().nullable().optional(),
+    test_command: z.string().nullable().optional(),
+    smoke_command: z.string().nullable().optional(),
+  }).optional(),
 })
 
 /**
