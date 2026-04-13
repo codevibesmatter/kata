@@ -239,6 +239,7 @@ export function getBatteriesTemplatesDir(): string {
   return path.join(getPackageRoot(), 'batteries', 'templates')
 }
 
+
 /**
  * Resolve a template path.
  * Lookup order:

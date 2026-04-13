@@ -49,8 +49,18 @@ This project has no kata configuration yet.
      gh label create "bug" --color "D73A4A" --description "Something isn't working" --force
      gh label create "chore" --color "BFD4F2" --description "Maintenance and cleanup" --force
      ```
-4. Run: `kata doctor`
-5. Print summary of what was created and suggest: "You're ready — enter a mode to start working."
+4. Ensure CLAUDE.md references `.kata/ceremony.md` for workflow context:
+   - If CLAUDE.md exists, check if it already mentions `ceremony.md`
+   - If not, append this block:
+     ```markdown
+
+     ## Kata Workflow Reference
+
+     Read `.kata/ceremony.md` for shared workflow instructions: commit patterns, PR creation, branch naming, environment checks, and test running.
+     ```
+   - If CLAUDE.md doesn't exist, create it with the block above
+5. Run: `kata doctor`
+6. Print summary of what was created and suggest: "You're ready — enter a mode to start working."
 
 ---
 

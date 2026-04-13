@@ -240,3 +240,41 @@ describe('getStateFilePath — layout-shift resilience', () => {
     expect(result).toBe(join(tmpDir, '.claude', 'sessions', sessionId, 'state.json'))
   })
 })
+
+describe('ceremony.md scaffolding', () => {
+  it('scaffoldBatteries creates .kata/ceremony.md', () => {
+    const { scaffoldBatteries } = require('../commands/scaffold-batteries.js') as typeof import('../commands/scaffold-batteries.js')
+    const tmpDir = join(os.tmpdir(), `wm-ceremony-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    const origEnv = process.env.CLAUDE_PROJECT_DIR
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+    try {
+      scaffoldBatteries(tmpDir)
+      expect(existsSync(join(tmpDir, '.kata', 'ceremony.md'))).toBe(true)
+    } finally {
+      if (origEnv !== undefined) process.env.CLAUDE_PROJECT_DIR = origEnv
+      else delete process.env.CLAUDE_PROJECT_DIR
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('scaffoldBatteries skips existing ceremony.md on non-update', () => {
+    const { scaffoldBatteries } = require('../commands/scaffold-batteries.js') as typeof import('../commands/scaffold-batteries.js')
+    const tmpDir = join(os.tmpdir(), `wm-ceremony-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    writeFileSync(join(tmpDir, '.kata', 'ceremony.md'), '# Custom ceremony')
+    const origEnv = process.env.CLAUDE_PROJECT_DIR
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+    try {
+      const result = scaffoldBatteries(tmpDir)
+      expect(result.skipped).toContain('ceremony.md')
+      // Custom content preserved
+      const { readFileSync } = require('node:fs') as typeof import('node:fs')
+      expect(readFileSync(join(tmpDir, '.kata', 'ceremony.md'), 'utf-8')).toBe('# Custom ceremony')
+    } finally {
+      if (origEnv !== undefined) process.env.CLAUDE_PROJECT_DIR = origEnv
+      else delete process.env.CLAUDE_PROJECT_DIR
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+})
