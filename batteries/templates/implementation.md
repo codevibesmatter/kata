@@ -83,7 +83,7 @@ phases:
         active_form: "Implementing {phase_name}"
         labels: [impl]
         gate:
-          bash: "kata test-baseline check"
+          bash: "{test_command_changed}"
           expect_exit: 0
 
   - id: p2
