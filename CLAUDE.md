@@ -39,14 +39,15 @@ All kata-owned config lives under `.kata/`. Claude-owned files (`.claude/setting
 | Path | Contents |
 |---|---|
 | `.kata/kata.yaml` | Project config (modes with rules, settings) |
+| `.kata/ceremony.md` | Shared workflow instructions (commit, PR, branch, env-check, tests) |
 | `.kata/sessions/{sessionId}/state.json` | Per-session `SessionState` |
-| `.kata/templates/` | Mode templates (stages, skills, gates, $ref) |
-| `.kata/steps.yaml` | Shared step definitions for `$ref` in templates |
+| `.kata/templates/` | Project-level template overrides (optional — batteries fallback if absent) |
 | `.kata/prompts/` | Review prompt templates (customizable) |
 | `.kata/verification-evidence/` | Verify-phase output |
 | `~/.claude/tasks/{sessionId}/` | Native task files (Claude-owned) |
 | `.claude/settings.json` | Hook registration (Claude-owned) |
-| `.claude/skills/` | Methodology skills (code-impl, code-review, etc.) |
+| `~/.claude/skills/kata-{name}/` | User-scoped methodology skills (kata-code-impl, kata-code-review, etc.) |
+| `.claude/skills/` | Project-level skill overrides (optional — takes precedence over user-scoped) |
 | `planning/spec-templates/` | Spec document stubs |
 
 ### Hook architecture
@@ -62,15 +63,21 @@ Hooks are registered in `.claude/settings.json` and call `kata hook <name>`. Eac
 
 ### Mode and template system
 
-Mode definitions live in `kata.yaml` under the `modes:` key. Each mode references a template filename with YAML frontmatter defining phases (with stages, skills, gates, `$ref` steps, and expansion types).
+Mode definitions live in `kata.yaml` under the `modes:` key. Each mode references a template filename with YAML frontmatter defining phases (with stages, skills, gates, and expansion types).
 
-**Template sources:**
-- `templates/` — system templates only: `SESSION-TEMPLATE.template.md`
-- `batteries/templates/` — canonical mode templates (implementation, planning, task, etc.)
-- `batteries/skills/` — methodology skills (code-impl, code-review, research, etc.)
-- `batteries/steps.yaml` — shared step definitions for `$ref`
+**Template resolution (dual resolution):**
+1. Project-level: `.kata/templates/{name}.md` (optional overrides)
+2. Package-level: `batteries/templates/{name}.md` (fallback)
 
-After setup, the project owns copies under `.kata/templates/`, `.claude/skills/`, and `.kata/steps.yaml`. The package files are seeds only, not used at runtime. To update project files with newer versions, run `kata update`.
+Templates resolve at runtime — no project copies needed. Projects only create `.kata/templates/` files to override specific templates.
+
+**Skill resolution:**
+- User-scoped: `~/.claude/skills/kata-{name}/` (installed by `kata setup`/`kata update`)
+- Project-scoped: `.claude/skills/kata-{name}/` (optional overrides, takes precedence)
+
+**Ceremony:** `.kata/ceremony.md` contains shared workflow instructions (commit patterns, PR creation, branch naming, env checks, tests). Created by `kata setup`, updated by `kata update`.
+
+**Other batteries content** (prompts, interviews, spec-templates, etc.) is still copied to the project by `kata setup`.
 
 ### Key dependencies
 
