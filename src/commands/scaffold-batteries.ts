@@ -124,51 +124,50 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // Review prompts → .kata/prompts/
+  // User-customizable directories: NEVER overwrite existing files, only add new ones.
+  // These are meant to be edited by the project — `kata update` must not clobber them.
+
+  // Review prompts → .kata/prompts/ (user-customizable)
   copyDirectory(
     join(batteryRoot, 'prompts'),
     getProjectPromptsDir(projectRoot),
     result.prompts,
     result.skipped,
     result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'prompts') : undefined,
+    false, // never overwrite — user may have customized
   )
 
-  // Provider plugins → .kata/providers/ (example files only, never overwritten)
+  // Provider plugins → .kata/providers/ (user-customizable)
   copyDirectory(
     join(batteryRoot, 'providers'),
     getProjectProvidersDir(projectRoot),
     result.providerPlugins,
     result.skipped,
     result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'providers') : undefined,
+    false, // never overwrite
   )
 
-  // Spec templates → planning/spec-templates/
+  // Spec templates → planning/spec-templates/ (user-customizable)
   copyDirectory(
     join(batteryRoot, 'spec-templates'),
     join(projectRoot, 'planning', 'spec-templates'),
     result.specTemplates,
     result.skipped,
     result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'spec-templates') : undefined,
+    false, // never overwrite
   )
 
-  // GitHub issue templates → .github/ISSUE_TEMPLATE/
+  // GitHub issue templates → .github/ISSUE_TEMPLATE/ (user-customizable)
   copyDirectory(
     join(batteryRoot, 'github', 'ISSUE_TEMPLATE'),
     join(projectRoot, '.github', 'ISSUE_TEMPLATE'),
     result.githubTemplates,
     result.skipped,
     result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'ISSUE_TEMPLATE') : undefined,
+    false, // never overwrite
   )
 
-  // labels.json → .github/wm-labels.json (used by /kata-setup skill to create labels)
+  // labels.json → .github/wm-labels.json (kata-managed, safe to update)
   const labelsSrc = join(batteryRoot, 'github', 'labels.json')
   const labelsDest = join(projectRoot, '.github', 'wm-labels.json')
   if (existsSync(labelsSrc)) {
@@ -187,15 +186,14 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     }
   }
 
-  // Interview configs → .kata/interviews/
+  // Interview configs → .kata/interviews/ (user-customizable)
   copyDirectory(
     join(batteryRoot, 'interviews'),
     join(projectRoot, '.kata', 'interviews'),
     result.interviews,
     result.skipped,
     result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'interviews') : undefined,
+    false, // never overwrite
   )
 
   // ceremony.md → .kata/ceremony.md (shared workflow instructions)
