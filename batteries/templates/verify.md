@@ -15,9 +15,17 @@ phases:
       labels: [phase, setup]
     steps:
       - id: read-verification-tools
-        $ref: read-verification-tools
+        title: "Read verification tools config"
+        instruction: |
+          Check for project verification tools:
+          ```bash
+          cat .kata/verification-tools.md 2>/dev/null || echo "No verification tools configured"
+          ```
       - id: start-dev-server
-        $ref: start-dev-server
+        title: "Start dev server and confirm health"
+        instruction: |
+          If `dev_server_command` is configured, start the dev server
+          and confirm it responds before running verification steps.
 
   - id: p1
     name: Execute & Fix
@@ -41,9 +49,21 @@ phases:
       depends_on: [p1]
     steps:
       - id: commit-push
-        $ref: commit-push
+        title: "Commit and push"
+        instruction: |
+          Commit all implementation work:
+          ```bash
+          git add {changed_files}
+          git commit -m "{commit_message}"
+          git push
+          ```
       - id: update-issue
-        $ref: update-issue
+        title: "Update GitHub issue"
+        instruction: |
+          Comment on the GitHub issue with results:
+          ```bash
+          gh issue comment {issue_number} --body "{comment_body}"
+          ```
 
 global_conditions:
   - changes_committed

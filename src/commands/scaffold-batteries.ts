@@ -1,17 +1,15 @@
 // scaffold-batteries.ts — copy batteries-included content to a project
 // Called by `kata setup --yes` after base setup completes.
-import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { getPackageRoot, getProjectTemplatesDir, getProjectPromptsDir, getProjectProvidersDir, getProjectVerificationToolsPath, getProjectSkillsDir } from '../session/lookup.js'
 import { getKataConfigPath } from '../config/kata-config.js'
 
 export interface BatteriesResult {
-  templates: string[]
-
   prompts: string[]
   providerPlugins: string[]
-  skills: string[]
   specTemplates: string[]
   githubTemplates: string[]
   interviews: string[]
@@ -94,11 +92,8 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
   }
 
   const result: BatteriesResult = {
-    templates: [],
-
     prompts: [],
     providerPlugins: [],
-    skills: [],
     specTemplates: [],
     githubTemplates: [],
     interviews: [],
@@ -126,38 +121,6 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
       mkdirSync(dirname(kataYamlDest), { recursive: true })
       copyFileSync(kataYamlSrc, kataYamlDest)
       result.kataConfig.push('kata.yaml')
-    }
-  }
-
-  // Mode templates → .kata/templates/
-  copyDirectory(
-    join(batteryRoot, 'templates'),
-    getProjectTemplatesDir(projectRoot),
-    result.templates,
-    result.skipped,
-    result.updated,
-    update,
-    backupRoot ? join(backupRoot, 'templates') : undefined,
-  )
-
-  // Skills → .claude/skills/ (two-level: skills/<name>/SKILL.md)
-  const skillsSrc = join(batteryRoot, 'skills')
-  if (existsSync(skillsSrc)) {
-    const skillsDest = getProjectSkillsDir(projectRoot)
-    for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue
-      const skillName = entry.name
-      const srcDir = join(skillsSrc, skillName)
-      const destDir = join(skillsDest, skillName)
-      copyDirectory(
-        srcDir,
-        destDir,
-        result.skills,
-        result.skipped,
-        result.updated,
-        update,
-        backupRoot ? join(backupRoot, 'skills', skillName) : undefined,
-      )
     }
   }
 
@@ -235,25 +198,6 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     backupRoot ? join(backupRoot, 'interviews') : undefined,
   )
 
-  // steps.yaml → .kata/steps.yaml (shared step definitions for $ref)
-  const stepsYamlSrc = join(batteryRoot, 'steps.yaml')
-  const stepsYamlDest = join(projectRoot, '.kata', 'steps.yaml')
-  if (existsSync(stepsYamlSrc)) {
-    if (existsSync(stepsYamlDest)) {
-      if (update) {
-        if (backupRoot) backupFile(stepsYamlDest, backupRoot, 'steps.yaml')
-        copyFileSync(stepsYamlSrc, stepsYamlDest)
-        result.updated.push('steps.yaml')
-      } else {
-        result.skipped.push('steps.yaml')
-      }
-    } else {
-      mkdirSync(join(stepsYamlDest, '..'), { recursive: true })
-      copyFileSync(stepsYamlSrc, stepsYamlDest)
-      result.kataConfig.push('steps.yaml')
-    }
-  }
-
   // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')
   const vtDest = getProjectVerificationToolsPath(projectRoot)
@@ -270,6 +214,141 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
       mkdirSync(join(vtDest, '..'), { recursive: true })
       copyFileSync(vtSrc, vtDest)
       result.verificationTools.push('verification-tools.md')
+    }
+  }
+
+  return result
+}
+
+export interface CleanLegacyResult {
+  removedTemplates: string[]
+  removedSkills: string[]
+  backupDir?: string
+}
+
+/**
+ * Remove legacy project-level copies of batteries templates and skills.
+ *
+ * Prior kata versions copied templates to .kata/templates/ and skills to .claude/skills/.
+ * The dual-resolution system now reads these from the package at runtime, so project-level
+ * copies are no longer needed.
+ *
+ * Backs up files to .kata/batteries-backup/{timestamp}/ before removal so users can
+ * restore customizations as project overrides.
+ *
+ * Only removes files that match batteries names — custom/user-authored files are preserved.
+ * Does NOT remove .kata/steps.yaml (may contain user-authored content).
+ */
+export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
+  const batteryRoot = join(getPackageRoot(), 'batteries')
+  const result: CleanLegacyResult = { removedTemplates: [], removedSkills: [] }
+
+  // Compute backup dir (only created if files are actually removed)
+  const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19)
+  const backupRoot = join(projectRoot, '.kata', 'batteries-backup', timestamp)
+
+  // 1. Remove .kata/templates/{name} for each batteries template
+  const batteriesTemplatesDir = join(batteryRoot, 'templates')
+  const projectTemplatesDir = getProjectTemplatesDir(projectRoot)
+  if (existsSync(batteriesTemplatesDir) && existsSync(projectTemplatesDir)) {
+    for (const file of readdirSync(batteriesTemplatesDir)) {
+      const projectFile = join(projectTemplatesDir, file)
+      if (existsSync(projectFile)) {
+        backupFile(projectFile, join(backupRoot, 'templates'), file)
+        rmSync(projectFile)
+        result.removedTemplates.push(file)
+      }
+    }
+    // If templates dir is now empty, remove it
+    try {
+      const remaining = readdirSync(projectTemplatesDir)
+      if (remaining.length === 0) {
+        rmSync(projectTemplatesDir, { recursive: true })
+      }
+    } catch {}
+  }
+
+  // 2. Remove .claude/skills/{name}/ for bare-named batteries skills
+  //    (NOT kata-{name} or custom skills)
+  const batteriesSkillsDir = join(batteryRoot, 'skills')
+  const projectSkillsDir = getProjectSkillsDir(projectRoot)
+  if (existsSync(batteriesSkillsDir) && existsSync(projectSkillsDir)) {
+    for (const entry of readdirSync(batteriesSkillsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      const bareName = entry.name
+      const bareDir = join(projectSkillsDir, bareName)
+      if (existsSync(bareDir)) {
+        // Backup all files in the skill directory
+        const skillBackupDir = join(backupRoot, 'skills', bareName)
+        for (const file of readdirSync(bareDir)) {
+          const filePath = join(bareDir, file)
+          try { backupFile(filePath, skillBackupDir, file) } catch {}
+        }
+        rmSync(bareDir, { recursive: true })
+        result.removedSkills.push(bareName)
+      }
+    }
+  }
+
+  // Only set backupDir if something was actually backed up
+  if (result.removedTemplates.length > 0 || result.removedSkills.length > 0) {
+    result.backupDir = backupRoot
+  }
+
+  return result
+}
+
+export interface UserSkillsResult {
+  installed: string[]  // skill names newly installed
+  updated: string[]    // skill names overwritten
+  skipped: string[]    // skill names already existed (not overwritten when update=false)
+}
+
+/**
+ * Install user-scoped skills to ~/.claude/skills/kata-{name}/.
+ *
+ * Copies each directory from batteries/skills/{name}/ to ~/.claude/skills/kata-{name}/.
+ * The kata- prefix namespaces battery skills to avoid collisions with user skills.
+ *
+ * @param options.update - When true, overwrite existing skills. Default false (skip existing).
+ * @param options.homeDir - Override home directory (for test isolation). Default os.homedir().
+ */
+export function installUserSkills(options: {
+  update?: boolean
+  homeDir?: string
+} = {}): UserSkillsResult {
+  const { update = false, homeDir = homedir() } = options
+  const batteryRoot = join(getPackageRoot(), 'batteries')
+  const skillsSrc = join(batteryRoot, 'skills')
+  const userSkillsDir = join(homeDir, '.claude', 'skills')
+
+  const result: UserSkillsResult = { installed: [], updated: [], skipped: [] }
+
+  if (!existsSync(skillsSrc)) return result
+
+  for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const skillName = entry.name
+    const destName = `kata-${skillName}`
+    const srcDir = join(skillsSrc, skillName)
+    const destDir = join(userSkillsDir, destName)
+
+    if (existsSync(destDir)) {
+      if (update) {
+        // Overwrite all files in the skill directory
+        for (const file of readdirSync(srcDir)) {
+          copyFileSync(join(srcDir, file), join(destDir, file))
+        }
+        result.updated.push(skillName)
+      } else {
+        result.skipped.push(skillName)
+      }
+    } else {
+      mkdirSync(destDir, { recursive: true })
+      for (const file of readdirSync(srcDir)) {
+        copyFileSync(join(srcDir, file), join(destDir, file))
+      }
+      result.installed.push(skillName)
     }
   }
 

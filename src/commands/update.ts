@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import jsYaml from 'js-yaml'
 import { getPackageRoot, findProjectDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
-import { scaffoldBatteries } from './scaffold-batteries.js'
+import { scaffoldBatteries, installUserSkills, cleanLegacyFiles } from './scaffold-batteries.js'
 
 export async function update(args: string[]): Promise<void> {
   let projectRoot: string
@@ -30,8 +30,14 @@ export async function update(args: string[]): Promise<void> {
     process.stdout.write(`Updating from v${installedVersion ?? 'unknown'} to v${currentVersion}\n`)
   }
 
+  // Clean legacy project-level template/skill copies before scaffolding
+  const cleaned = cleanLegacyFiles(projectRoot)
+
   // Use scaffoldBatteries with update=true to overwrite all files
   const result = scaffoldBatteries(projectRoot, true)
+
+  // Install/update user-scoped skills
+  const userSkillsResult = installUserSkills({ update: true })
 
   // Update kata_version in kata.yaml
   const kataYamlPath = getKataConfigPath(projectRoot)
@@ -42,9 +48,24 @@ export async function update(args: string[]): Promise<void> {
     writeFileSync(kataYamlPath, jsYaml.dump(yaml, { lineWidth: 120, noRefs: true }))
   }
 
+  // Report cleaned legacy files
+  const totalCleaned = cleaned.removedTemplates.length + cleaned.removedSkills.length
+  if (totalCleaned > 0) {
+    process.stdout.write(`Cleaned ${totalCleaned} legacy files:\n`)
+    for (const f of cleaned.removedTemplates) {
+      process.stdout.write(`  - .kata/templates/${f}\n`)
+    }
+    for (const s of cleaned.removedSkills) {
+      process.stdout.write(`  - .claude/skills/${s}/\n`)
+    }
+    if (cleaned.backupDir) {
+      process.stdout.write(`  Backups saved to: ${cleaned.backupDir}\n`)
+    }
+  }
+
   // Report results
   const totalUpdated = result.updated.length
-  const totalNew = result.templates.length + result.skills.length + result.specTemplates.length +
+  const totalNew = result.specTemplates.length +
     result.prompts.length + result.interviews.length + result.verificationTools.length +
     result.kataConfig.length + result.githubTemplates.length
 
@@ -56,7 +77,7 @@ export async function update(args: string[]): Promise<void> {
   }
   if (totalNew > 0) {
     process.stdout.write(`Added ${totalNew} new files:\n`)
-    for (const f of [...result.templates, ...result.skills, ...result.specTemplates,
+    for (const f of [...result.specTemplates,
       ...result.prompts, ...result.interviews, ...result.verificationTools,
       ...result.kataConfig, ...result.githubTemplates]) {
       process.stdout.write(`  + ${f}\n`)
@@ -67,6 +88,18 @@ export async function update(args: string[]): Promise<void> {
   }
   if (totalUpdated === 0 && totalNew === 0) {
     process.stdout.write('All files up to date\n')
+  }
+
+  // Report user-scoped skill results
+  const userSkillTotal = userSkillsResult.installed.length + userSkillsResult.updated.length
+  if (userSkillTotal > 0) {
+    process.stdout.write(`\nUser skills (~/.claude/skills/):\n`)
+    for (const s of userSkillsResult.installed) {
+      process.stdout.write(`  + kata-${s}\n`)
+    }
+    for (const s of userSkillsResult.updated) {
+      process.stdout.write(`  ↻ kata-${s}\n`)
+    }
   }
 
   process.stdout.write(`\nkata v${currentVersion} — version stamped in kata.yaml\n`)

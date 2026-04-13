@@ -17,7 +17,7 @@ type WmConfig = Record<string, unknown> & {
 }
 import { getPackageRoot, findProjectDir, getSessionsDir, getProjectTemplatesDir } from '../session/lookup.js'
 import { getKataConfigPath, loadKataConfig } from '../config/kata-config.js'
-import { scaffoldBatteries } from './scaffold-batteries.js'
+import { scaffoldBatteries, installUserSkills } from './scaffold-batteries.js'
 
 /**
  * Resolve the absolute path to the kata binary.
@@ -395,14 +395,16 @@ export async function setup(args: string[]): Promise<void> {
     // Always scaffold batteries content (templates, skills, spec templates, etc.)
     const result = scaffoldBatteries(projectRoot)
 
+    // Install user-scoped skills
+    const userSkillsResult = installUserSkills()
+
     // Unified output summary
     process.stdout.write('kata setup complete:\n')
     process.stdout.write(`  Project: ${profile.project_name}\n`)
     process.stdout.write(`  Config: .kata/kata.yaml\n`)
     process.stdout.write(`  Hooks: .claude/settings.json\n`)
-    process.stdout.write(`  Templates: ${result.templates.length} mode templates\n`)
     process.stdout.write(`  Spec templates: ${result.specTemplates.length}\n`)
-    process.stdout.write(`  Skills: ${result.skills.length}\n`)
+    process.stdout.write(`  User skills: ${userSkillsResult.installed.length} installed to ~/.claude/skills/\n`)
 
     process.stdout.write('\nOptional: add shorthand to package.json scripts:\n')
     process.stdout.write('  "kata": "kata"\n')

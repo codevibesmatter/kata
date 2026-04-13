@@ -1,7 +1,7 @@
 // kata config — display resolved configuration
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { findProjectDir, getPackageRoot, getProjectTemplatesDir } from '../session/lookup.js'
+import { findProjectDir, getPackageRoot, getProjectTemplatesDir, getProjectSkillsDir, getUserSkillsDir } from '../session/lookup.js'
 import { loadKataConfig, getKataConfigPath } from '../config/kata-config.js'
 
 /**
@@ -11,10 +11,12 @@ import { loadKataConfig, getKataConfigPath } from '../config/kata-config.js'
  * Single file, no merge — provenance is always "project".
  */
 export async function config(args: string[]): Promise<void> {
-  if (args.includes('--show') || args.length === 0) {
+  if (args[0] === 'get' && args[1]) {
+    getConfigValue(args[1])
+  } else if (args.includes('--show') || args.length === 0) {
     showConfig()
   } else {
-    process.stdout.write('Usage: kata config --show\n')
+    process.stdout.write('Usage: kata config [--show | get <key>]\n')
   }
 }
 
@@ -64,4 +66,53 @@ function showConfig(): void {
     process.stdout.write('  project:  (no project)\n')
   }
   process.stdout.write(`  package:  ${packageTemplateDir} ${existsSync(packageTemplateDir) ? '(exists)' : '(not found)'}\n`)
+
+  // Skills resolution summary
+  process.stdout.write('\nskills (lookup order: project → user):\n')
+  try {
+    const projSkillsDir = getProjectSkillsDir(projectRoot)
+    process.stdout.write(`  project:  ${projSkillsDir} ${existsSync(projSkillsDir) ? '(exists)' : '(not found)'}\n`)
+  } catch {
+    process.stdout.write('  project:  (no project)\n')
+  }
+  const userSkillsDir = getUserSkillsDir()
+  process.stdout.write(`  user:     ${userSkillsDir} ${existsSync(userSkillsDir) ? '(exists)' : '(not found)'}\n`)
+}
+
+function getConfigValue(key: string): void {
+  const cfg = loadKataConfig()
+
+  // Walk the dot-separated path
+  const parts = key.split('.')
+  let value: unknown = cfg
+
+  for (const part of parts) {
+    if (value === null || value === undefined || typeof value !== 'object') {
+      process.stderr.write(`Key not found: ${key}\n`)
+      process.exitCode = 1
+      return
+    }
+    value = (value as Record<string, unknown>)[part]
+  }
+
+  if (value === undefined) {
+    process.stderr.write(`Key not found: ${key}\n`)
+    process.exitCode = 1
+    return
+  }
+
+  // Output formatting
+  if (value === null) {
+    process.stdout.write('\n')
+  } else if (typeof value === 'boolean') {
+    process.stdout.write(`${value}\n`)
+  } else if (typeof value === 'string' || typeof value === 'number') {
+    process.stdout.write(`${value}\n`)
+  } else if (Array.isArray(value)) {
+    for (const item of value) {
+      process.stdout.write(`${item}\n`)
+    }
+  } else if (typeof value === 'object') {
+    process.stdout.write(JSON.stringify(value, null, 2) + '\n')
+  }
 }

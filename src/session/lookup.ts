@@ -2,6 +2,7 @@
 import * as path from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { homedir } from 'node:os'
 
 /**
  * Get the workflow-management package root directory
@@ -132,6 +133,13 @@ export function getProjectPromptsDir(projectRoot?: string): string {
 }
 
 /**
+ * Get path to user-scoped skills directory (~/.claude/skills/)
+ */
+export function getUserSkillsDir(): string {
+  return path.join(homedir(), '.claude', 'skills')
+}
+
+/**
  * Get path to project skills directory (.claude/skills/)
  */
 export function getProjectSkillsDir(projectRoot?: string): string {
@@ -224,6 +232,14 @@ export function getTemplatesDir(): string {
 }
 
 /**
+ * Get path to batteries templates directory
+ * @returns Absolute path to batteries/templates/
+ */
+export function getBatteriesTemplatesDir(): string {
+  return path.join(getPackageRoot(), 'batteries', 'templates')
+}
+
+/**
  * Resolve a template path.
  * Lookup order:
  *
@@ -257,10 +273,17 @@ export function resolveTemplatePath(templatePath: string): string {
     // No project dir found — skip project tier
   }
 
+  // Batteries fallback
+  const batteriesTemplate = path.join(getBatteriesTemplatesDir(), templatePath)
+  checked.push(batteriesTemplate)
+  if (existsSync(batteriesTemplate)) {
+    return batteriesTemplate
+  }
+
   throw new Error(
     `Template not found: ${templatePath}\n` +
       `Checked:\n${checked.map((p) => `  - ${p}`).join('\n')}\n` +
-      `Run 'kata setup --yes' to seed project templates.`,
+      `Ensure the template exists in batteries/templates/ or create a project override at .kata/templates/.`,
   )
 }
 
