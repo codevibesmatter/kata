@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
-import { resolveTemplatePath, resolveSpecTemplatePath, getCurrentSessionId, getStateFilePath } from './lookup.js'
+import { resolveTemplatePath, resolveSpecTemplatePath, getCurrentSessionId, getStateFilePath, resolveCeremonyPath } from './lookup.js'
 
 function makeTmpDir(label: string): string {
   const dir = join(
@@ -238,5 +238,30 @@ describe('getStateFilePath — layout-shift resilience', () => {
 
     const result = await getStateFilePath(sessionId)
     expect(result).toBe(join(tmpDir, '.claude', 'sessions', sessionId, 'state.json'))
+  })
+})
+
+describe('resolveCeremonyPath', () => {
+
+  it('returns batteries ceremony.md when no project override exists', () => {
+    const result = resolveCeremonyPath()
+    expect(result).not.toBeNull()
+    expect(result).toContain('batteries/ceremony.md')
+  })
+
+  it('returns project ceremony.md when it exists', () => {
+    const tmpDir = join(os.tmpdir(), `wm-ceremony-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
+    writeFileSync(join(tmpDir, '.kata', 'ceremony.md'), '# Custom ceremony')
+    const origEnv = process.env.CLAUDE_PROJECT_DIR
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+    try {
+      const result = resolveCeremonyPath()
+      expect(result).toBe(join(tmpDir, '.kata', 'ceremony.md'))
+    } finally {
+      if (origEnv !== undefined) process.env.CLAUDE_PROJECT_DIR = origEnv
+      else delete process.env.CLAUDE_PROJECT_DIR
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
   })
 })
