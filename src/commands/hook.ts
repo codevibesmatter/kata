@@ -2,7 +2,7 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getStateFilePath, findProjectDir, getSessionsDir, resolveTemplatePath } from '../session/lookup.js'
@@ -93,11 +93,40 @@ async function getSessionState(
 ): Promise<{ state: SessionState; sessionId: string } | null> {
   if (!sessionId) return null
   try {
+    // Try exact session ID first
     const stateFile = await getStateFilePath(sessionId)
     if (await stateExists(stateFile)) {
       const state = await readState(stateFile)
       return { state, sessionId }
     }
+
+    // Fallback: find the most recent session with an active mode.
+    // This handles session ID drift (e.g., /clear creates a new Claude session ID
+    // but the user's kata mode is in the previous session).
+    const projectDir = findProjectDir()
+    const sessionsDir = getSessionsDir(projectDir)
+    if (existsSync(sessionsDir)) {
+      const entries = readdirSync(sessionsDir, { withFileTypes: true })
+      let bestMatch: { state: SessionState; sessionId: string; mtimeMs: number } | null = null
+      for (const e of entries) {
+        if (!e.isDirectory()) continue
+        const candidateStateFile = join(sessionsDir, e.name, 'state.json')
+        try {
+          if (await stateExists(candidateStateFile)) {
+            const { mtimeMs } = statSync(candidateStateFile)
+            const candidateState = await readState(candidateStateFile)
+            // Only consider sessions with an active (non-default) mode
+            if (candidateState.currentMode && candidateState.currentMode !== 'default') {
+              if (!bestMatch || mtimeMs > bestMatch.mtimeMs) {
+                bestMatch = { state: candidateState, sessionId: e.name, mtimeMs }
+              }
+            }
+          }
+        } catch { /* skip unreadable */ }
+      }
+      if (bestMatch) return { state: bestMatch.state, sessionId: bestMatch.sessionId }
+    }
+
     return null
   } catch {
     return null
