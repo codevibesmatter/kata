@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
-import { installUserSkills, cleanLegacyFiles } from './scaffold-batteries.js'
+import { installUserSkills, cleanLegacyFiles, scaffoldBatteries } from './scaffold-batteries.js'
 
 function makeTmpDir(label: string): string {
   const dir = join(
@@ -32,14 +32,14 @@ describe('installUserSkills', () => {
     expect(existsSync(skillDir)).toBe(true)
   })
 
-  it('all installed skills use kata- prefix', () => {
+  it('all installed skills have kata- prefix in name', () => {
     const result = installUserSkills({ homeDir: tmpHome })
     for (const name of result.installed) {
-      const prefixedDir = join(tmpHome, '.claude', 'skills', `kata-${name}`)
-      expect(existsSync(prefixedDir)).toBe(true)
-      // Bare name should NOT exist
-      const bareDir = join(tmpHome, '.claude', 'skills', name)
-      expect(existsSync(bareDir)).toBe(false)
+      // All batteries skill names start with kata-
+      expect(name.startsWith('kata-')).toBe(true)
+      // Installed dir matches the name exactly
+      const dir = join(tmpHome, '.claude', 'skills', name)
+      expect(existsSync(dir)).toBe(true)
     }
   })
 
@@ -63,6 +63,14 @@ describe('installUserSkills', () => {
     const result = installUserSkills({ homeDir: tmpHome, update: true })
     expect(result.updated.length).toBeGreaterThan(0)
     expect(result.installed.length).toBe(0)
+  })
+
+  it('installs kata-mode-setup and kata-mode-close skills', () => {
+    const result = installUserSkills({ homeDir: tmpHome })
+    expect(result.installed).toContain('kata-mode-setup')
+    expect(result.installed).toContain('kata-mode-close')
+    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-mode-setup', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-mode-close', 'SKILL.md'))).toBe(true)
   })
 })
 
@@ -105,19 +113,19 @@ describe('cleanLegacyFiles', () => {
     expect(existsSync(join(tmpDir, '.kata', 'templates', 'my-custom.md'))).toBe(true)
   })
 
-  it('removes bare-named skills matching batteries', () => {
-    mkdirSync(join(tmpDir, '.claude', 'skills', 'code-impl'), { recursive: true })
-    writeFileSync(join(tmpDir, '.claude', 'skills', 'code-impl', 'SKILL.md'), 'old')
+  it('removes batteries-matching skills', () => {
+    mkdirSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl'), { recursive: true })
+    writeFileSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl', 'SKILL.md'), 'old')
     const result = cleanLegacyFiles(tmpDir)
-    expect(result.removedSkills).toContain('code-impl')
-    expect(existsSync(join(tmpDir, '.claude', 'skills', 'code-impl'))).toBe(false)
+    expect(result.removedSkills).toContain('kata-code-impl')
+    expect(existsSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl'))).toBe(false)
   })
 
-  it('preserves kata-prefixed skills', () => {
-    mkdirSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl'), { recursive: true })
-    writeFileSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl', 'SKILL.md'), 'new')
+  it('preserves non-batteries kata-prefixed skills', () => {
+    mkdirSync(join(tmpDir, '.claude', 'skills', 'kata-my-custom'), { recursive: true })
+    writeFileSync(join(tmpDir, '.claude', 'skills', 'kata-my-custom', 'SKILL.md'), 'custom')
     cleanLegacyFiles(tmpDir)
-    expect(existsSync(join(tmpDir, '.claude', 'skills', 'kata-code-impl', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(tmpDir, '.claude', 'skills', 'kata-my-custom', 'SKILL.md'))).toBe(true)
   })
 
   it('preserves custom skills not in batteries', () => {
@@ -132,5 +140,27 @@ describe('cleanLegacyFiles', () => {
     const result = cleanLegacyFiles(tmpDir)
     expect(result.removedTemplates).toEqual([])
     expect(result.removedSkills).toEqual([])
+  })
+})
+
+describe('ceremony.md removal', () => {
+  let tmpHome: string
+
+  beforeEach(() => {
+    tmpHome = makeTmpDir('ceremony')
+  })
+
+  afterEach(() => {
+    rmSync(tmpHome, { recursive: true, force: true })
+  })
+
+  it('scaffoldBatteries does not create ceremony.md', () => {
+    // Create minimal project structure
+    mkdirSync(join(tmpHome, '.kata'), { recursive: true })
+    const result = scaffoldBatteries(tmpHome)
+    expect(existsSync(join(tmpHome, '.kata', 'ceremony.md'))).toBe(false)
+    // ceremony should not appear in any result arrays
+    expect(result.kataConfig).not.toContain('ceremony.md')
+    expect(result.updated).not.toContain('ceremony.md')
   })
 })
