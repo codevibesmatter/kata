@@ -8,6 +8,7 @@ phases:
   - id: p0
     name: Setup
     stage: setup
+    skill: kata-mode-setup
     task_config:
       title: "P0: Setup - read spec, verify env, create branch, claim issue"
       labels: [phase, setup]
@@ -27,55 +28,12 @@ phases:
         gate:
           bash: "test -f {spec_path}"
           expect_exit: 0
-      - id: env-check
-        title: "Verify environment and capture test baseline"
-        instruction: |
-          Run sanity checks before making any changes:
-          ```bash
-          git status  # Should be clean
-          git log --oneline -3  # Confirm you're on the right branch
-          ```
-
-          If the build command is configured:
-          ```bash
-          {build_command}
-          ```
-
-          **Capture test baseline** — records pre-existing test failures so phase
-          gates only flag NEW failures introduced by your changes:
-          ```bash
-          kata test-baseline save
-          ```
-
-          Document: current branch, baseline test results, any pre-existing issues.
-      - id: create-branch
-        title: "Create feature branch"
-        instruction: |
-          Create a branch for this work:
-          ```bash
-          git checkout -b feature/{issue_number}-{slug}
-          git push -u origin feature/{issue_number}-{slug}
-          ```
-
-          Or if already on a feature branch, confirm it's up to date:
-          ```bash
-          git fetch origin
-          git status
-          ```
-      - id: github-claim
-        title: "Claim GitHub issue"
-        instruction: |
-          If GitHub issue exists, claim it:
-          ```bash
-          gh issue edit {issue_number} --remove-label "status:todo" --remove-label "approved" --add-label "status:in-progress"
-          gh issue comment {issue_number} --body "Starting work on branch: {branch_name}"
-          ```
 
   - id: p1
     name: Implement
     stage: work
     expansion: spec
-    skill: code-impl
+    skill: kata-code-impl
     subphase_pattern:
       - id_suffix: impl
         title_template: "IMPL - {task_summary}"
@@ -90,7 +48,7 @@ phases:
     name: Review
     stage: work
     expansion: agent
-    skill: code-review
+    skill: kata-code-review
     task_config:
       title: "P2: Work - review implementation, fix issues"
       labels: [phase, work, review]
@@ -101,6 +59,7 @@ phases:
   - id: p3
     name: Close
     stage: close
+    skill: kata-mode-close
     task_config:
       title: "P3: Close - final checks, commit, PR, close issue"
       labels: [phase, close]
@@ -108,39 +67,10 @@ phases:
     steps:
       - id: final-checks
         title: "Run final checks"
-        skill: test-protocol
+        skill: kata-test-protocol
         gate:
           bash: "{build_command}"
           expect_exit: 0
-      - id: commit-push
-        title: "Commit and push all changes"
-        instruction: |
-          Commit all implementation work:
-          ```bash
-          git add {changed_files}
-          git commit -m "{commit_message}"
-          git push
-          ```
-      - id: create-pr
-        title: "Create pull request"
-        instruction: |
-          Create a PR:
-          ```bash
-          gh pr create \
-            --title "{pr_title}" \
-            --body "## Summary
-          {pr_summary}
-
-          Closes #{issue_number}" \
-            --base main
-          ```
-      - id: update-issue
-        title: "Update GitHub issue"
-        instruction: |
-          Comment on the GitHub issue with results:
-          ```bash
-          gh issue comment {issue_number} --body "{comment_body}"
-          ```
 
 global_conditions:
   - changes_committed
