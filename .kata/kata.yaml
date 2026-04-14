@@ -126,6 +126,11 @@ modes:
     - bug
     - why is
     - broken
+    - not working
+    - error
+    - failing
+    - crash
+    - problem
     template: debug.md
     workflow_prefix: DB
     aliases:
