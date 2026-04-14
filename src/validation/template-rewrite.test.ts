@@ -67,7 +67,7 @@ describe('planning.md has phase-level skill references', () => {
     const result = parseTemplateYaml(path)
 
     const p0 = result?.phases?.find(p => p.id === 'p0')
-    expect(p0?.skill).toBe('research')
+    expect(p0?.skill).toBe('kata-research')
   })
 
   it('has spec-writing skill on p2 phase', () => {
@@ -75,7 +75,7 @@ describe('planning.md has phase-level skill references', () => {
     const result = parseTemplateYaml(path)
 
     const p2 = result?.phases?.find(p => p.id === 'p2')
-    expect(p2?.skill).toBe('spec-writing')
+    expect(p2?.skill).toBe('kata-spec-writing')
   })
 })
 

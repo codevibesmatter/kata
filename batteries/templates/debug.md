@@ -34,9 +34,12 @@ phases:
       title: "P2: Close - verify fix, commit, push"
       labels: [phase, close]
       depends_on: [p1]
-    gate:
-      bash: "{test_command}"
-      expect_exit: 0
+    steps:
+      - id: final-checks
+        title: "Run test suite"
+        gate:
+          bash: "{test_command}"
+          expect_exit: 0
 
 global_conditions:
   - changes_committed

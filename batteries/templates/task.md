@@ -47,9 +47,12 @@ phases:
       title: "P3: Close - build, test, commit, push"
       labels: [phase, close]
       depends_on: [p2]
-    gate:
-      bash: "{build_command}"
-      expect_exit: 0
+    steps:
+      - id: final-checks
+        title: "Run build checks"
+        gate:
+          bash: "{build_command}"
+          expect_exit: 0
 
 global_conditions:
   - changes_committed

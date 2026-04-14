@@ -266,8 +266,7 @@ export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
     } catch {}
   }
 
-  // 2. Remove .claude/skills/{name}/ for bare-named batteries skills
-  //    (NOT kata-{name} or custom skills)
+  // 2. Remove .claude/skills/{name}/ for batteries-matching skills
   const batteriesSkillsDir = join(batteryRoot, 'skills')
   const projectSkillsDir = getProjectSkillsDir(projectRoot)
   if (existsSync(batteriesSkillsDir) && existsSync(projectSkillsDir)) {
