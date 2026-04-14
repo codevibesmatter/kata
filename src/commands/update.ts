@@ -95,10 +95,10 @@ export async function update(args: string[]): Promise<void> {
   if (userSkillTotal > 0) {
     process.stdout.write(`\nUser skills (~/.claude/skills/):\n`)
     for (const s of userSkillsResult.installed) {
-      process.stdout.write(`  + kata-${s}\n`)
+      process.stdout.write(`  + ${s}\n`)
     }
     for (const s of userSkillsResult.updated) {
-      process.stdout.write(`  ↻ kata-${s}\n`)
+      process.stdout.write(`  ↻ ${s}\n`)
     }
   }
 
