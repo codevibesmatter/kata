@@ -262,4 +262,62 @@ Instructions here.
     expect(result.success).toBe(true)
     expect(result.issueNumber).toBe(99)
   })
+
+  it('task mode setup phase references kata-mode-setup skill', async () => {
+    const { stdout, stderr } = await captureEnter([
+      'task',
+      '--dry-run',
+      '--skip-cleanup',
+      `--session=${process.env.CLAUDE_SESSION_ID}`,
+    ])
+
+    const result = JSON.parse(stdout) as {
+      success: boolean
+      mode: string
+      tasks: string[]
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.mode).toBe('task')
+    // The dry-run stderr preview includes native task subjects with skill invocations
+    expect(stderr).toContain('kata-mode-setup')
+  })
+
+  it('task mode close phase references kata-mode-close skill', async () => {
+    const { stdout, stderr } = await captureEnter([
+      'task',
+      '--dry-run',
+      '--skip-cleanup',
+      `--session=${process.env.CLAUDE_SESSION_ID}`,
+    ])
+
+    const result = JSON.parse(stdout) as {
+      success: boolean
+      tasks: string[]
+    }
+
+    expect(result.success).toBe(true)
+    // The dry-run stderr preview includes native task subjects with skill invocations
+    expect(stderr).toContain('kata-mode-close')
+  })
+
+  it('implementation mode setup phase references kata-mode-setup skill', async () => {
+    const { stdout, stderr } = await captureEnter([
+      'implementation',
+      '--dry-run',
+      '--skip-cleanup',
+      `--session=${process.env.CLAUDE_SESSION_ID}`,
+    ])
+
+    const result = JSON.parse(stdout) as {
+      success: boolean
+      mode: string
+      tasks: string[]
+    }
+
+    expect(result.success).toBe(true)
+    expect(result.mode).toBe('implementation')
+    // The dry-run stderr preview includes native task subjects with skill invocations
+    expect(stderr).toContain('kata-mode-setup')
+  })
 })

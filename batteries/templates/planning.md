@@ -9,7 +9,7 @@ phases:
     name: Research
     stage: setup
     expansion: agent
-    skill: research
+    skill: kata-research
     task_config:
       title: "P0: Setup - research codebase and problem space"
       labels: [phase, setup]
@@ -25,7 +25,7 @@ phases:
     name: Interview
     stage: setup
     expansion: agent
-    skill: interview
+    skill: kata-interview
     task_config:
       title: "P1: Setup - gather requirements from user"
       labels: [phase, setup]
@@ -36,7 +36,7 @@ phases:
   - id: p2
     name: Spec Writing
     stage: work
-    skill: spec-writing
+    skill: kata-spec-writing
     task_config:
       title: "P2: Work - write feature specification"
       labels: [phase, work]
@@ -46,7 +46,7 @@ phases:
     name: Review
     stage: work
     expansion: agent
-    skill: spec-review
+    skill: kata-spec-review
     task_config:
       title: "P3: Work - review spec, fix issues"
       labels: [phase, work, review]
@@ -57,6 +57,7 @@ phases:
   - id: p4
     name: Finalize
     stage: close
+    skill: kata-mode-close
     task_config:
       title: "P4: Close - validate, approve, commit, push"
       labels: [phase, close]

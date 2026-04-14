@@ -266,19 +266,14 @@ describe('stage field on phaseSchema', () => {
   })
 })
 
-describe('phaseStepSchema $ref support', () => {
-  it('accepts step with $ref and no title', () => {
-    const result = phaseStepSchema.safeParse({ id: 'env-check', '$ref': 'env-check' })
-    expect(result.success).toBe(true)
-  })
-
-  it('requires title when $ref absent', () => {
+describe('phaseStepSchema title required', () => {
+  it('rejects step without title', () => {
     const result = phaseStepSchema.safeParse({ id: 'test' })
     expect(result.success).toBe(false)
   })
 
-  it('accepts vars on $ref step', () => {
-    const result = phaseStepSchema.safeParse({ id: 'cp', '$ref': 'commit-push', vars: { message: 'feat: done' } })
-    expect(result.success).toBe(true)
+  it('rejects step with empty title', () => {
+    const result = phaseStepSchema.safeParse({ id: 'test', title: '' })
+    expect(result.success).toBe(false)
   })
 })

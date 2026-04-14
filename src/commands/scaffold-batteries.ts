@@ -196,25 +196,6 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
     false, // never overwrite
   )
 
-  // ceremony.md → .kata/ceremony.md (shared workflow instructions)
-  const ceremonySrc = join(batteryRoot, 'ceremony.md')
-  const ceremonyDest = join(projectRoot, '.kata', 'ceremony.md')
-  if (existsSync(ceremonySrc)) {
-    if (existsSync(ceremonyDest)) {
-      if (update) {
-        if (backupRoot) backupFile(ceremonyDest, backupRoot, 'ceremony.md')
-        copyFileSync(ceremonySrc, ceremonyDest)
-        result.updated.push('ceremony.md')
-      } else {
-        result.skipped.push('ceremony.md')
-      }
-    } else {
-      mkdirSync(join(ceremonyDest, '..'), { recursive: true })
-      copyFileSync(ceremonySrc, ceremonyDest)
-      result.kataConfig.push('ceremony.md')
-    }
-  }
-
   // verification-tools.md → .kata/verification-tools.md
   const vtSrc = join(batteryRoot, 'verification-tools.md')
   const vtDest = getProjectVerificationToolsPath(projectRoot)
@@ -285,8 +266,7 @@ export function cleanLegacyFiles(projectRoot: string): CleanLegacyResult {
     } catch {}
   }
 
-  // 2. Remove .claude/skills/{name}/ for bare-named batteries skills
-  //    (NOT kata-{name} or custom skills)
+  // 2. Remove .claude/skills/{name}/ for batteries-matching skills
   const batteriesSkillsDir = join(batteryRoot, 'skills')
   const projectSkillsDir = getProjectSkillsDir(projectRoot)
   if (existsSync(batteriesSkillsDir) && existsSync(projectSkillsDir)) {
@@ -322,10 +302,10 @@ export interface UserSkillsResult {
 }
 
 /**
- * Install user-scoped skills to ~/.claude/skills/kata-{name}/.
+ * Install user-scoped skills to ~/.claude/skills/{name}/.
  *
- * Copies each directory from batteries/skills/{name}/ to ~/.claude/skills/kata-{name}/.
- * The kata- prefix namespaces battery skills to avoid collisions with user skills.
+ * Copies each directory from batteries/skills/{name}/ to ~/.claude/skills/{name}/.
+ * Battery skill directories are already prefixed with kata- (e.g. kata-code-impl).
  *
  * @param options.update - When true, overwrite existing skills. Default false (skip existing).
  * @param options.homeDir - Override home directory (for test isolation). Default os.homedir().
@@ -346,7 +326,7 @@ export function installUserSkills(options: {
   for (const entry of readdirSync(skillsSrc, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const skillName = entry.name
-    const destName = `kata-${skillName}`
+    const destName = skillName
     const srcDir = join(skillsSrc, skillName)
     const destDir = join(userSkillsDir, destName)
 

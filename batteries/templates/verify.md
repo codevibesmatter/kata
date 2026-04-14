@@ -9,7 +9,7 @@ phases:
   - id: p0
     name: Setup
     stage: setup
-    skill: vp-execution
+    skill: kata-mode-setup
     task_config:
       title: "P0: Setup - determine VP source, prepare environment"
       labels: [phase, setup]
@@ -31,7 +31,7 @@ phases:
     name: Execute & Fix
     stage: work
     expansion: agent
-    skill: vp-execution
+    skill: kata-vp-execution
     task_config:
       title: "P1: Work - execute VP steps, fix failures, review fixes"
       labels: [phase, work]
@@ -42,7 +42,7 @@ phases:
   - id: p2
     name: Evidence
     stage: close
-    skill: vp-execution
+    skill: kata-mode-close
     task_config:
       title: "P2: Close - write evidence, commit, report"
       labels: [phase, close]
@@ -102,22 +102,6 @@ phases:
 
           Only after genuinely attempting each incomplete item (and documenting WHY it
           cannot be completed if truly blocked) may you proceed to commit.
-      - id: commit-push
-        title: "Commit and push"
-        instruction: |
-          Commit all implementation work:
-          ```bash
-          git add {changed_files}
-          git commit -m "{commit_message}"
-          git push
-          ```
-      - id: update-issue
-        title: "Update GitHub issue"
-        instruction: |
-          Comment on the GitHub issue with results:
-          ```bash
-          gh issue comment {issue_number} --body "{comment_body}"
-          ```
 
 global_conditions:
   - changes_committed

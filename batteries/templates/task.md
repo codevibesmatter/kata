@@ -9,21 +9,15 @@ phases:
   - id: p0
     name: Setup
     stage: setup
+    skill: kata-mode-setup
     task_config:
       title: "P0: Setup - verify env, claim issue"
       labels: [phase, setup]
-    steps:
-      - id: env-check
-        title: "Verify environment"
-        instruction: "Follow ceremony.md § Environment Verification"
-      - id: github-claim
-        title: "Claim GitHub issue"
-        instruction: "Follow ceremony.md § GitHub Issue Claiming"
 
   - id: p1
     name: Plan
     stage: setup
-    skill: interview
+    skill: kata-interview
     task_config:
       title: "P1: Plan - scope, quick research, approach"
       labels: [phase, setup]
@@ -37,7 +31,7 @@ phases:
     name: Implement
     stage: work
     expansion: agent
-    skill: code-impl
+    skill: kata-code-impl
     task_config:
       title: "P2: Work - implement and test"
       labels: [phase, work]
@@ -48,20 +42,17 @@ phases:
   - id: p3
     name: Close
     stage: close
+    skill: kata-mode-close
     task_config:
       title: "P3: Close - build, test, commit, push"
       labels: [phase, close]
       depends_on: [p2]
     steps:
-      - id: run-tests
-        title: "Run test suite"
-        instruction: "Follow ceremony.md § Running Tests"
+      - id: final-checks
+        title: "Run build checks"
         gate:
           bash: "{build_command}"
           expect_exit: 0
-      - id: commit-push
-        title: "Commit and push"
-        instruction: "Follow ceremony.md § Committing and Pushing"
 
 global_conditions:
   - changes_committed
