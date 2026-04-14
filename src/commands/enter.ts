@@ -418,16 +418,6 @@ export async function enter(args: string[]): Promise<void> {
     }
   }
 
-  // Validate ceremony.md exists in project
-  const ceremonyPath = join(findProjectDir(), '.kata', 'ceremony.md')
-  if (!existsSync(ceremonyPath)) {
-    process.stderr.write(
-      `\nkata enter ${canonical}: .kata/ceremony.md not found.\n` +
-      `Run: kata update\n\n`,
-    )
-    process.exitCode = 1
-    return
-  }
 
   const sessionId = parsed.session || (await getCurrentSessionId())
   const stateFile = await getStateFilePath(sessionId)

@@ -1,0 +1,130 @@
+---
+description: "Universal mode close — tests, commit, push, plus mode-conditional steps (PR, issue update, evidence)."
+context: inline
+---
+
+# Mode Close
+
+Run these steps at the end of any kata mode session to finalize and deliver work.
+
+## 1. Discover Mode Context
+
+Run `kata status` to confirm the current session:
+
+```bash
+kata status
+```
+
+Note the following from the output:
+- Current mode name
+- Issue number (if any)
+- Workflow ID
+
+## 2. Run Tests
+
+Run the project test suite using the configured test command:
+
+```bash
+{test_command}
+```
+
+If a build command is configured, run it too:
+
+```bash
+{build_command}
+```
+
+Fix any failures before proceeding.
+
+## 3. Commit and Push
+
+Stage and commit all changes:
+
+```bash
+git add {changed_files}
+git commit -m "{commit_message}"
+git push
+```
+
+## 4. Mode-Conditional Steps
+
+### If in task mode
+
+Universal steps only (tests, commit, push). No PR creation, no issue update.
+
+### If in implementation mode
+
+Create a pull request:
+
+```bash
+gh pr create \
+  --title "{pr_title}" \
+  --body "## Summary
+{pr_summary}
+
+Closes #{issue_number}" \
+  --base main
+```
+
+Update the GitHub issue:
+
+```bash
+gh issue comment {issue_number} --body "{comment_body}"
+```
+
+### If in debug mode
+
+Update the GitHub issue with the root-cause summary:
+
+```bash
+gh issue comment {issue_number} --body "{comment_body}"
+```
+
+### If in research mode
+
+Commit and push only. Tests are not required for research mode — skip step 2.
+
+No PR creation, no issue update.
+
+### If in planning mode
+
+Run spec validation:
+
+```bash
+kata validate-spec --issue={issue}
+```
+
+Update spec frontmatter: set `status: approved` and `updated: {today}`.
+
+Commit and push the updated spec.
+
+### If in verify mode
+
+Write VP evidence JSON to `.kata/verification-evidence/vp-{issueNumber}.json`:
+
+```json
+{
+  "issueNumber": 100,
+  "phaseId": "p1",
+  "timestamp": "2026-04-13T14:00:00.000Z",
+  "overallPassed": true,
+  "allStepsPassed": true,
+  "steps": [
+    {
+      "id": "vp1",
+      "title": "Step title",
+      "status": "pass",
+      "passed": true,
+      "output": "Actual output from running the step"
+    }
+  ]
+}
+```
+
+Challenge all incomplete VP items — push back on laziness, attempt each verification with available tools.
+
+Update the GitHub issue with results:
+
+```bash
+gh issue comment {issue_number} --body "{comment_body}"
+```
