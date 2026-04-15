@@ -1,6 +1,6 @@
 ---
 description: "Spec writing methodology — build from research + interview findings, behaviors with B-IDs and layers, implementation phases, verification plan."
-context: fork
+context: inline
 ---
 
 # Spec Writing
