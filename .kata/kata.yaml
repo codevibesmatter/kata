@@ -1,138 +1,175 @@
 project:
   name: kata-wm
-  test_command: bun test src/ || true
-  test_command_changed: bun test src/ || true
-  build_command: bun run typecheck
+  build_command: "bun run typecheck"
+  test_command: "bun test src/commands/ src/validation/ src/session/ src/yaml/ src/utils/"
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
+global_rules:
+  - >-
+    When a task instruction says 'Invoke /skill-name', use the Skill tool to invoke that skill before starting work on
+    the task.
 task_rules:
-- Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate.
-- Run TaskList FIRST to discover pre-created tasks and their dependency chains.
-- Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate.
-- "Follow the dependency chain \u2014 blocked tasks cannot start until dependencies\
-  \ complete."
+  - Tasks are pre-created by kata enter. Do NOT create new tasks with TaskCreate.
+  - Run TaskList FIRST to discover pre-created tasks and their dependency chains.
+  - Use TaskUpdate to mark tasks in_progress/completed. Never use TaskCreate.
+  - Follow the dependency chain — blocked tasks cannot start until dependencies complete.
 modes:
   research:
     name: Research
     description: Explore and synthesize findings
+    deliverable_path: planning/research
+    rules:
+      - You are a RESEARCHER. Your deliverable is a written document in planning/research/, not code.
+      - 'Classify the research type first, then adapt your approach:'
+      - '  Feature research → read codebase patterns, map current state, identify gaps'
+      - '  Library/tech evaluation → compare options on criteria (perf, DX, maintenance, fit), produce recommendation matrix'
+      - '  Brainstorming → diverge widely first, then converge on actionable ideas with pros/cons'
+      - '  Feasibility study → identify hard constraints, build proof-of-concept path, flag blockers early'
+      - '  Inspiration cataloging → collect examples/patterns from external sources, annotate what''s transferable'
+      - Focus on trade-offs and actionable recommendations. Cite what you read.
     stop_conditions:
-    - tasks_complete
-    - committed
-    - pushed
+      - tasks_complete
+      - doc_created
+      - committed
+      - pushed
     intent_keywords:
-    - research
-    - explore
-    - learn about
+      - research
+      - explore
+      - learn about
     template: research.md
   planning:
     name: Planning
     description: Research, spec, review, approved
+    deliverable_path: planning/specs
+    rules:
+      - >-
+        You are a PLANNER. Research the problem, write a spec with behaviors (B-IDs) and phases, get it reviewed and
+        approved.
+      - Do not write implementation code — your deliverable is an approved spec document in planning/specs/.
+      - Every behavior needs acceptance criteria. Every phase needs concrete tasks.
     issue_handling: required
     issue_label: feature
     stop_conditions:
-    - tasks_complete
-    - spec_valid
-    - committed
-    - pushed
+      - tasks_complete
+      - spec_valid
+      - committed
+      - pushed
     intent_keywords:
-    - plan feature
-    - spec
-    - design
-    - write spec
+      - plan feature
+      - spec
+      - design
+      - write spec
     template: planning.md
   implementation:
     name: Implementation
     description: Execute approved specs
+    rules:
+      - You are an IMPLEMENTATION ORCHESTRATOR. Coordinate agents to execute the approved spec.
+      - Invoke /code-impl skill for implementation work — spawn impl-agents for each unit of work, verify via gate.
+      - 'Run quality gates after each phase: build, typecheck, tests (/test-protocol), then review (/code-review).'
+      - One spec phase at a time. Complete IMPL + TEST + REVIEW before moving to the next phase.
+      - Read the spec first — understand ALL phases before writing any code. Spec non-goals are off-limits.
     issue_handling: required
     issue_label: feature
     stop_conditions:
-    - tasks_complete
-    - committed
-    - pushed
-    - tests_pass
-    - feature_tests_added
+      - tasks_complete
+      - committed
+      - pushed
+      - tests_pass
+      - feature_tests_added
     intent_keywords:
-    - implement
-    - build
-    - code
-    - develop
-    - execute spec
+      - implement
+      - build
+      - code
+      - develop
+      - execute spec
     template: implementation.md
   task:
     name: Task
     description: Combined planning + implementation for small tasks
+    rules:
+      - You are a TASK EXECUTOR. Understand the task, implement it, test it, commit it.
+      - Keep changes minimal and focused — this is a small task, not a feature.
     issue_handling: none
     stop_conditions:
-    - tasks_complete
-    - committed
+      - tasks_complete
+      - committed
     intent_keywords:
-    - 'task:'
-    - chore
-    - small task
-    - quick change
-    - cleanup
-    - refactor
+      - 'task:'
+      - chore
+      - small task
+      - quick change
+      - cleanup
+      - refactor
     template: task.md
     workflow_prefix: TK
     aliases:
-    - chore
-    - small
+      - chore
+      - small
   freeform:
     name: Freeform
     description: Quick questions and discussion (no phases)
+    rules:
+      - Answer questions directly. No workflow overhead — just help the user.
     stop_conditions: []
     intent_keywords:
-    - question
-    - how does
-    - what is
-    - where is
-    - explain
-    - help me understand
+      - question
+      - how does
+      - what is
+      - where is
+      - explain
+      - help me understand
     template: freeform.md
     workflow_prefix: FF
     aliases:
-    - question
-    - ask
-    - help
-    - qa
+      - question
+      - ask
+      - help
+      - qa
   verify:
     name: Verify
     description: Execute Verification Plan steps
+    rules:
+      - You are a VERIFICATION EXECUTOR. Run each VP step literally as written — do not improvise or skip.
+      - Use TaskCreate to create one task per VP step. Record pass/fail evidence for each.
+      - 'If a step fails, enter a fix loop: diagnose, fix, re-verify. Do not move on until it passes.'
     issue_handling: none
     stop_conditions:
-    - tasks_complete
-    - committed
-    - pushed
+      - tasks_complete
+      - committed
+      - pushed
     intent_keywords:
-    - verify
-    - run verification
-    - execute VP
-    - verification plan
+      - verify
+      - run verification
+      - execute VP
+      - verification plan
     template: verify.md
     workflow_prefix: VF
   debug:
     name: Debug
-    description: Systematic hypothesis-driven debugging with reproduction, root cause
-      analysis, and fix
+    description: Systematic hypothesis-driven debugging with reproduction, root cause analysis, and fix
+    rules:
+      - You are a DEBUGGER. Reproduce first, then hypothesize, then trace systematically.
+      - Do not guess — form hypotheses and test them. Implement the minimal fix, not a rewrite.
     issue_handling: none
     stop_conditions:
-    - tasks_complete
-    - committed
-    - pushed
+      - tasks_complete
+      - committed
+      - pushed
     intent_keywords:
-    - debug
-    - investigate
-    - bug
-    - why is
-    - broken
-    - not working
-    - error
-    - failing
-    - crash
-    - problem
+      - debug
+      - investigate
+      - bug
+      - why is
+      - broken
+      - not working
+      - error
+      - failing
+      - crash
+      - problem
     template: debug.md
     workflow_prefix: DB
     aliases:
-    - investigate
-kata_version: 0.3.0
+      - investigate
+kata_version: 0.5.0
