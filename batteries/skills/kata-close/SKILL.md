@@ -1,5 +1,5 @@
 ---
-description: "Universal mode close — tests, commit, push, plus mode-conditional steps (PR, issue update, evidence)."
+description: "Universal session close — tests, commit, push, plus mode-conditional steps (PR, issue update, evidence)."
 context: inline
 ---
 

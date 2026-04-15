@@ -57,7 +57,7 @@ phases:
   - id: p4
     name: Finalize
     stage: close
-    skill: kata-mode-close
+    skill: kata-close
     task_config:
       title: "P4: Close - validate, approve, commit, push"
       labels: [phase, close]

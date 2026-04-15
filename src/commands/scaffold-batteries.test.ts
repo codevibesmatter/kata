@@ -65,12 +65,12 @@ describe('installUserSkills', () => {
     expect(result.installed.length).toBe(0)
   })
 
-  it('installs kata-mode-setup and kata-mode-close skills', () => {
+  it('installs kata-setup and kata-close skills', () => {
     const result = installUserSkills({ homeDir: tmpHome })
-    expect(result.installed).toContain('kata-mode-setup')
-    expect(result.installed).toContain('kata-mode-close')
-    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-mode-setup', 'SKILL.md'))).toBe(true)
-    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-mode-close', 'SKILL.md'))).toBe(true)
+    expect(result.installed).toContain('kata-setup')
+    expect(result.installed).toContain('kata-close')
+    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-setup', 'SKILL.md'))).toBe(true)
+    expect(existsSync(join(tmpHome, '.claude', 'skills', 'kata-close', 'SKILL.md'))).toBe(true)
   })
 })
 

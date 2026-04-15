@@ -8,7 +8,7 @@ phases:
   - id: p0
     name: Classify
     stage: setup
-    skill: kata-mode-setup
+    skill: kata-setup
     task_config:
       title: "P0: Setup - classify research type and context"
       labels: [phase, setup]
@@ -44,7 +44,7 @@ phases:
   - id: p2
     name: Close
     stage: close
-    skill: kata-mode-close
+    skill: kata-close
     task_config:
       title: "P2: Close - commit research doc"
       labels: [phase, close]

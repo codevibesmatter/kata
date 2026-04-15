@@ -9,7 +9,7 @@ phases:
   - id: p0
     name: Reproduce & Map
     stage: setup
-    skill: kata-mode-setup
+    skill: kata-setup
     task_config:
       title: "P0: Setup - reproduce, map system, classify"
       labels: [phase, setup]
@@ -29,7 +29,7 @@ phases:
   - id: p2
     name: Close
     stage: close
-    skill: kata-mode-close
+    skill: kata-close
     task_config:
       title: "P2: Close - verify fix, commit, push"
       labels: [phase, close]

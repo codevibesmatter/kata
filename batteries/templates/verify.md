@@ -9,7 +9,7 @@ phases:
   - id: p0
     name: Setup
     stage: setup
-    skill: kata-mode-setup
+    skill: kata-setup
     task_config:
       title: "P0: Setup - determine VP source, prepare environment"
       labels: [phase, setup]
@@ -42,7 +42,7 @@ phases:
   - id: p2
     name: Evidence
     stage: close
-    skill: kata-mode-close
+    skill: kata-close
     task_config:
       title: "P2: Close - write evidence, commit, report"
       labels: [phase, close]

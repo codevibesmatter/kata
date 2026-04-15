@@ -1,5 +1,5 @@
 // kata setup - Configure kata in a project (pure config, flag-driven)
-// For guided setup, use the /kata-setup skill in Claude Code.
+// For guided setup, use the /kata-config skill in Claude Code.
 // Hook registration uses 'kata hook <name>' commands in .claude/settings.json.
 import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -369,7 +369,7 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
  * Pure configuration — writes kata.yaml, registers hooks, scaffolds content.
  * Always flag-driven; never enters an interactive session.
  *
- * For guided setup, use the /kata-setup skill in Claude Code.
+ * For guided setup, use the /kata-config skill in Claude Code.
  *
  * Installs hooks in PROJECT-LEVEL .claude/settings.json only.
  * Bypasses findProjectDir() since .claude/ may not exist yet.
@@ -425,6 +425,6 @@ Flags:
   --strict      Also register PreToolUse hooks for task enforcement
   --cwd=PATH    Run setup in a different directory
 
-For guided setup, use the /kata-setup skill in Claude Code.
+For guided setup, use the /kata-config skill in Claude Code.
 `)
 }

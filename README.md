@@ -72,7 +72,7 @@ Tell Claude:
 
 > Set up kata for this project
 
-Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml` and `.kata/ceremony.md`, and installs skills to `~/.claude/skills/kata-{name}/` — everything in one command. Templates resolve from the package at runtime (no project copies needed). For a guided walkthrough, use the `/kata-setup` skill in Claude Code — it detects your project state and walks you through setup interactively.
+Claude runs `kata setup --yes`, which registers hooks in `.claude/settings.json`, writes `.kata/kata.yaml` and `.kata/ceremony.md`, and installs skills to `~/.claude/skills/kata-{name}/` — everything in one command. Templates resolve from the package at runtime (no project copies needed). For a guided walkthrough, use the `/kata-config` skill in Claude Code — it detects your project state and walks you through setup interactively.
 
 **3. Enter a mode**
 
@@ -557,7 +557,7 @@ What it creates:
 | `--yes` | Write everything with auto-detected defaults. Required for non-interactive setup. |
 | `--strict` | Also enables strict-mode enforcement in the `PreToolUse` hook (task dependency ordering, git evidence requirements). |
 
-For a guided walkthrough, use the `/kata-setup` skill in Claude Code. It detects your project state and walks you through setup interactively.
+For a guided walkthrough, use the `/kata-config` skill in Claude Code. It detects your project state and walks you through setup interactively.
 
 Files scaffolded:
 
@@ -570,7 +570,7 @@ Files scaffolded:
 | `batteries/interviews/` | `.kata/interviews/` | Interview question configs |
 | `batteries/verification-tools.md` | `.kata/verification-tools.md` | Verification tools reference |
 | `batteries/github/ISSUE_TEMPLATE/` | `.github/ISSUE_TEMPLATE/` | GitHub issue templates |
-| `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by /kata-setup skill) |
+| `batteries/github/labels.json` | `.github/wm-labels.json` | GitHub label definitions (used by /kata-config skill) |
 
 Templates (`batteries/templates/*.md`) are **not** copied to the project — they resolve from the package at runtime. To override a template, manually create `.kata/templates/{name}.md`.
 

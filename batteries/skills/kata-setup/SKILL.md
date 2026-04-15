@@ -1,86 +1,108 @@
 ---
-description: "Set up kata in this project — detects kata source repo, fresh projects, or reconfiguration."
+description: "Universal session setup — env verification, branch creation, issue claiming, plus mode-conditional steps."
+context: inline
 ---
 
-# /kata-setup
+# Mode Setup
 
-Set up kata for this project. Follow the scenario that matches the current directory.
+Run these steps at the start of any kata mode session before beginning work.
 
-## Detect Scenario
+## 1. Discover Mode Context
 
-Check these conditions in order:
+Run `kata status` to discover the current session:
 
-1. **Kata source repo** — `src/index.ts` exists AND `.kata/kata.yaml` does NOT exist
-2. **Existing project** — `.kata/kata.yaml` exists
-3. **Fresh project** — `.kata/kata.yaml` does NOT exist (and not the kata source repo)
+```bash
+kata status
+```
 
----
+Note the following from the output:
+- Current mode name
+- Issue number (if any)
+- Workflow ID
 
-## Scenario 1: Kata Source Repo
+## 2. Environment Verification
 
-You are in the kata-wm source repository itself.
+Run sanity checks before making any changes:
 
-1. Check if `kata` is in PATH: `which kata`
-2. If NOT found, suggest symlinking:
-   ```bash
-   ln -s $(pwd)/kata ~/.local/bin/kata
-   ```
-3. Verify: `kata --version`
-4. Tell the user: kata is ready. Open Claude Code in any project and run `/kata-setup` to configure it.
+```bash
+git status            # Should be clean
+git log --oneline -3  # Confirm you're on the right branch
+```
 
-**Done.** No further setup needed for the source repo.
+If a build command is configured, run it to confirm the project compiles:
 
----
+```bash
+{build_command}
+```
 
-## Scenario 2: Fresh Project Setup
+Document: current branch, any pre-existing issues.
 
-This project has no kata configuration yet.
+## 3. Branch Creation
 
-1. Check `kata` is in PATH: `which kata`
-   - If NOT found: tell the user to install kata first (clone the repo and run `/kata-setup` there).
-2. Run: `kata setup --yes`
-3. Check GitHub CLI: `gh auth status`
-   - If authenticated, offer to create project labels:
-     ```bash
-     gh label create "status:todo" --color "0E8A16" --description "Ready to work on" --force
-     gh label create "status:in-progress" --color "FBCA04" --description "Currently being worked on" --force
-     gh label create "approved" --color "0075CA" --description "Spec approved for implementation" --force
-     gh label create "feature" --color "A2EEEF" --description "New feature or enhancement" --force
-     gh label create "bug" --color "D73A4A" --description "Something isn't working" --force
-     gh label create "chore" --color "BFD4F2" --description "Maintenance and cleanup" --force
-     ```
-4. Ensure CLAUDE.md references `.kata/ceremony.md` for workflow context:
-   - If CLAUDE.md exists, check if it already mentions `ceremony.md`
-   - If not, append this block:
-     ```markdown
+Create a branch for this work:
 
-     ## Kata Workflow Reference
+```bash
+git checkout -b feature/{issue_number}-{slug}
+git push -u origin feature/{issue_number}-{slug}
+```
 
-     Read `.kata/ceremony.md` for shared workflow instructions: commit patterns, PR creation, branch naming, environment checks, and test running.
-     ```
-   - If CLAUDE.md doesn't exist, create it with the block above
-5. Run: `kata doctor`
-6. Print summary of what was created and suggest: "You're ready — enter a mode to start working."
+If already on a feature branch, confirm it is up to date:
 
----
+```bash
+git fetch origin && git status
+```
 
-## Scenario 3: Reconfigure Existing Project
+## 4. GitHub Issue Claiming
 
-This project already has kata configured.
+If a GitHub issue exists, claim it:
 
-1. Read `.kata/kata.yaml` and display a summary of the current configuration:
-   - Modes defined
-   - Test command
-   - Strict hooks (on/off)
-   - Deliverable paths
-2. Ask the user what they want to change (e.g., test command, strict hooks, review settings, paths, add/remove modes).
-3. Apply the requested changes to `.kata/kata.yaml`.
-4. Run: `kata doctor` to verify the configuration is valid.
+```bash
+gh issue edit {issue_number} --remove-label "status:todo" --remove-label "approved" --add-label "status:in-progress"
+gh issue comment {issue_number} --body "Starting work on branch: {branch_name}"
+```
 
----
+## 5. Mode-Conditional Steps
 
-## Rules
+### If in implementation mode
 
-- Do NOT run `kata enter` — this skill runs outside of any mode.
-- Do NOT modify `.claude/settings.json` directly — `kata setup` handles hook registration.
-- Keep responses conversational — no structured output or JSON.
+Read the approved spec in full:
+
+```bash
+ls planning/specs/ | grep "{issue_keyword}"
+```
+
+Understand all behaviors, phases, non-goals, and acceptance criteria before writing any code.
+
+Capture the test baseline:
+
+```bash
+kata test-baseline save
+```
+
+### If in debug mode
+
+No additional setup steps beyond universal. The debug-methodology skill handles the rest.
+
+### If in research mode
+
+Classify the research type: feature research, library eval, brainstorming, or feasibility study.
+
+If the type is obvious from the user message, state it and move on. If unclear, ask the user to clarify.
+
+### If in verify mode
+
+Read verification tools:
+
+```bash
+cat .kata/verification-tools.md 2>/dev/null || echo "No verification tools configured"
+```
+
+If `dev_server_command` is configured, start it and confirm it responds before proceeding.
+
+### If in planning mode
+
+No additional setup steps. Planning's research and interview phases handle discovery.
+
+### If in task mode
+
+No additional setup steps beyond universal.

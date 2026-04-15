@@ -242,27 +242,27 @@ describe('setup --yes', () => {
   })
 })
 
-describe('kata-setup skill', () => {
-  it('batteries includes kata-setup skill', async () => {
+describe('kata-config skill', () => {
+  it('batteries includes kata-config skill', async () => {
     const { getPackageRoot } = await import('../session/lookup.js')
-    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-config', 'SKILL.md')
     expect(existsSync(skillPath)).toBe(true)
   })
 
-  it('kata-setup skill has valid frontmatter with description', async () => {
+  it('kata-config skill has valid frontmatter with description', async () => {
     const { parseYamlFrontmatter } = await import('../yaml/parser.js')
     const { getPackageRoot } = await import('../session/lookup.js')
-    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-config', 'SKILL.md')
     const frontmatter = parseYamlFrontmatter<{ description: string }>(skillPath)
     expect(frontmatter).not.toBeNull()
     expect(frontmatter!.description).toBeDefined()
     expect(typeof frontmatter!.description).toBe('string')
   })
 
-  it('kata-setup skill covers all 3 scenarios', async () => {
+  it('kata-config skill covers all 3 scenarios', async () => {
     const { readFileSync } = await import('node:fs')
     const { getPackageRoot } = await import('../session/lookup.js')
-    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-setup', 'SKILL.md')
+    const skillPath = join(getPackageRoot(), 'batteries', 'skills', 'kata-config', 'SKILL.md')
     const content = readFileSync(skillPath, 'utf-8')
     expect(content).toContain('Kata Source Repo')
     expect(content).toContain('Fresh Project')
@@ -273,8 +273,8 @@ describe('kata-setup skill', () => {
     const tmpDir = makeTmpDir()
     try {
       await captureSetup(['--yes'], tmpDir)
-      // Skills should NOT be in project .claude/skills/ (they go to ~/.claude/skills/kata-{name}/)
-      const skillDest = join(tmpDir, '.claude', 'skills', 'kata-setup', 'SKILL.md')
+      // Skills should NOT be in project .claude/skills/ (they go to ~/.claude/skills/kata-config/)
+      const skillDest = join(tmpDir, '.claude', 'skills', 'kata-config', 'SKILL.md')
       expect(existsSync(skillDest)).toBe(false)
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })

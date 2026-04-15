@@ -8,7 +8,7 @@ phases:
   - id: p0
     name: Setup
     stage: setup
-    skill: kata-mode-setup
+    skill: kata-setup
     task_config:
       title: "P0: Setup - read spec, verify env, create branch, claim issue"
       labels: [phase, setup]
@@ -59,7 +59,7 @@ phases:
   - id: p3
     name: Close
     stage: close
-    skill: kata-mode-close
+    skill: kata-close
     task_config:
       title: "P3: Close - final checks, commit, PR, close issue"
       labels: [phase, close]

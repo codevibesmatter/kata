@@ -263,7 +263,7 @@ Instructions here.
     expect(result.issueNumber).toBe(99)
   })
 
-  it('task mode setup phase references kata-mode-setup skill', async () => {
+  it('task mode setup phase references kata-setup skill', async () => {
     const { stdout, stderr } = await captureEnter([
       'task',
       '--dry-run',
@@ -280,10 +280,10 @@ Instructions here.
     expect(result.success).toBe(true)
     expect(result.mode).toBe('task')
     // The dry-run stderr preview includes native task subjects with skill invocations
-    expect(stderr).toContain('kata-mode-setup')
+    expect(stderr).toContain('kata-setup')
   })
 
-  it('task mode close phase references kata-mode-close skill', async () => {
+  it('task mode close phase references kata-close skill', async () => {
     const { stdout, stderr } = await captureEnter([
       'task',
       '--dry-run',
@@ -298,10 +298,10 @@ Instructions here.
 
     expect(result.success).toBe(true)
     // The dry-run stderr preview includes native task subjects with skill invocations
-    expect(stderr).toContain('kata-mode-close')
+    expect(stderr).toContain('kata-close')
   })
 
-  it('implementation mode setup phase references kata-mode-setup skill', async () => {
+  it('implementation mode setup phase references kata-setup skill', async () => {
     const { stdout, stderr } = await captureEnter([
       'implementation',
       '--dry-run',
@@ -318,6 +318,6 @@ Instructions here.
     expect(result.success).toBe(true)
     expect(result.mode).toBe('implementation')
     // The dry-run stderr preview includes native task subjects with skill invocations
-    expect(stderr).toContain('kata-mode-setup')
+    expect(stderr).toContain('kata-setup')
   })
 })
