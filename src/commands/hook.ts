@@ -513,23 +513,37 @@ function resolveTranscriptPath(sessionId: string): string | undefined {
   }
 }
 
+const AGENT_RECENCY_WINDOW_MS = 120_000 // 2 minutes
+
 /**
  * Check if there are active background agents by scanning the session transcript.
  * An Agent tool_use without a matching tool_result means the agent is still running.
- * Returns true if at least one background agent is active.
+ *
+ * Returns true only when an unmatched Agent tool_use was issued within the recency
+ * window (default 2 minutes). Stale unmatched IDs (from earlier turns where the SDK
+ * didn't emit a tool_result the scanner recognises) are treated as completed/abandoned.
+ * See issue #60.
  */
-export function hasActiveBackgroundAgents(transcriptPath: string | undefined): boolean {
+export function hasActiveBackgroundAgents(
+  transcriptPath: string | undefined,
+  options: { recencyWindowMs?: number; nowMs?: number } = {},
+): boolean {
   if (!transcriptPath) return false
+  const recencyWindowMs = options.recencyWindowMs ?? AGENT_RECENCY_WINDOW_MS
+  const now = options.nowMs ?? Date.now()
   try {
     const content = readFileSync(transcriptPath, 'utf-8')
     const lines = content.split('\n').filter((l) => l.trim())
 
-    // Track Agent tool_use IDs and match against tool_result IDs
-    const agentToolUseIds = new Set<string>()
+    // Track Agent tool_use IDs → timestamp ms; match and remove on tool_result
+    const agentToolUses = new Map<string, number>()
 
     for (const line of lines) {
       try {
         const msg = JSON.parse(line) as Record<string, unknown>
+
+        const parsed = typeof msg.timestamp === 'string' ? Date.parse(msg.timestamp) : NaN
+        const ts = Number.isFinite(parsed) ? parsed : now
 
         if (msg.type === 'assistant') {
           const message = (msg.message as Record<string, unknown>) ?? msg
@@ -540,7 +554,7 @@ export function hasActiveBackgroundAgents(transcriptPath: string | undefined): b
               block.name === 'Agent' &&
               typeof block.id === 'string'
             ) {
-              agentToolUseIds.add(block.id)
+              agentToolUses.set(block.id, ts)
             }
           }
         }
@@ -550,7 +564,7 @@ export function hasActiveBackgroundAgents(transcriptPath: string | undefined): b
           const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
           for (const block of contentBlocks) {
             if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
-              agentToolUseIds.delete(block.tool_use_id)
+              agentToolUses.delete(block.tool_use_id)
             }
           }
         }
@@ -559,7 +573,10 @@ export function hasActiveBackgroundAgents(transcriptPath: string | undefined): b
       }
     }
 
-    return agentToolUseIds.size > 0
+    for (const ts of agentToolUses.values()) {
+      if (now - ts < recencyWindowMs) return true
+    }
+    return false
   } catch {
     // Transcript unreadable — assume no active agents
     return false

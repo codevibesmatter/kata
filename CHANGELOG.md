@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 (2026-04-16)
+
+### Fixes
+
+- **stop hook**: `hasActiveBackgroundAgents` now ignores unmatched `Agent` tool_uses older than 2 minutes. Previously, stale IDs from earlier in the session would poison the Stop hook for the rest of the session, allowing premature exit despite pending tasks, uncommitted changes, or unpushed commits. (#60)
+
 ## 0.4.0 (2026-04-12)
 
 ### Breaking Changes
