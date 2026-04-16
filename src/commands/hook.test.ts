@@ -523,4 +523,93 @@ describe('hasActiveBackgroundAgents', () => {
     const path = writeTranscript([])
     expect(hasActiveBackgroundAgents(path)).toBe(false)
   })
+
+  it('returns false when only unmatched Agents are older than recency window', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T10:00:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] },
+      },
+    ])
+    expect(
+      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:10:00.000Z') }),
+    ).toBe(false)
+  })
+
+  it('returns true for unmatched Agent within recency window', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T10:00:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] },
+      },
+    ])
+    expect(
+      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:00:30.000Z') }),
+    ).toBe(true)
+  })
+
+  it('reproduces issue #60: 3 stale unmatched Agents from >5min ago + recent matched Agent → false', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T02:54:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] },
+      },
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T02:57:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-2' }] },
+      },
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T03:01:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-3' }] },
+      },
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T10:19:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] },
+      },
+      {
+        type: 'user',
+        timestamp: '2026-04-16T10:19:10.000Z',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'recent-1' }] },
+      },
+    ])
+    expect(
+      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:19:17.000Z') }),
+    ).toBe(false)
+  })
+
+  it('returns true when current-turn Agent has stale older Agents alongside it', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T02:54:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] },
+      },
+      {
+        type: 'assistant',
+        timestamp: '2026-04-16T10:19:00.000Z',
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] },
+      },
+    ])
+    expect(
+      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:19:30.000Z') }),
+    ).toBe(true)
+  })
+
+  it('falls back to nowMs when transcript line has no timestamp', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path, { nowMs: 1000, recencyWindowMs: 5000 })).toBe(true)
+  })
 })
