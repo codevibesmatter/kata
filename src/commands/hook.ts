@@ -2,7 +2,7 @@
 // Core of hooks-as-commands architecture: each hook event has a handler function
 // that reads stdin JSON, performs the check, and outputs Claude Code hook JSON.
 import { execSync } from 'node:child_process'
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { getStateFilePath, findProjectDir, getSessionsDir, resolveTemplatePath } from '../session/lookup.js'
@@ -13,6 +13,7 @@ import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import { resolvePlaceholders, type PlaceholderContext } from './enter/placeholder.js'
 import { parseTemplateYaml } from './enter/template.js'
 import type { Gate } from '../validation/schemas.js'
+import { toGitRelative, appendEdit, parseGitStatusPaths, readEditsSet, readBaseline } from '../tracking/edits-log.js'
 
 /**
  * Claude Code hook output format
@@ -828,6 +829,32 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
     }
   }
 
+  // Bash pre-snapshot: capture git status before suspicious commands
+  if (toolName === 'Bash' && sessionId) {
+    const command = (toolInput.command as string) ?? ''
+    // Safe-list checked first — skip snapshot entirely
+    const safeList = /^(git\s|bun\s+test|ls\b|cat\b|echo\b[^>]*$|cd\b|pwd\b|which\b|head\b|tail\b|wc\b|diff\b|grep\b|find\b)/
+    if (!safeList.test(command)) {
+      // Suspicious regex checked second
+      const suspicious = /sed\s.*-i|>\s|>>\s|\btee\b|\bcp\b|\bmv\b|\brm\b|\bchmod\b|\bchown\b|\bpatch\b|\bcurl\b.*-o/
+      if (suspicious.test(command)) {
+        try {
+          const projectDir = findProjectDir()
+          const sessionDir = join(getSessionsDir(projectDir), sessionId)
+          const snapshot = execSync('git status --porcelain 2>/dev/null || true', {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            cwd: projectDir,
+          }).trim()
+          mkdirSync(sessionDir, { recursive: true })
+          writeFileSync(join(sessionDir, 'bash-pre-snapshot.txt'), snapshot)
+        } catch {
+          // Pre-snapshot failure must not block tool execution
+        }
+      }
+    }
+  }
+
   // 3. TaskUpdate(status: "completed") — run deps, gates, evidence in sequence
   if (toolName === 'TaskUpdate') {
     const taskId = (toolInput.taskId as string) ?? ''
@@ -907,20 +934,31 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
       // 3c. Check git evidence (advisory warning, always allow)
       let additionalContext = ''
       try {
-        let cwd: string | undefined
+        let projectDir: string | undefined
         try {
-          cwd = findProjectDir()
+          projectDir = findProjectDir()
         } catch {
           // No .kata/ found
         }
         const gitStatus = execSync('git status --porcelain 2>/dev/null || true', {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
-          ...(cwd ? { cwd } : {}),
+          ...(projectDir ? { cwd: projectDir } : {}),
         }).trim()
 
         if (gitStatus) {
-          const changedFiles = gitStatus.split('\n').filter((l) => !l.startsWith('??'))
+          const evidenceSessionDir = sessionId ? join(getSessionsDir(projectDir ?? process.cwd()), sessionId) : undefined
+          const sessionEdits = evidenceSessionDir ? readEditsSet(evidenceSessionDir) : null
+          const baseline = evidenceSessionDir ? readBaseline(evidenceSessionDir) : null
+
+          const changedFiles = gitStatus.split('\n').filter((l) => {
+            if (l.startsWith('??')) return false
+            if (sessionEdits && baseline) {
+              const file = l.slice(3)
+              return sessionEdits.has(file)
+            }
+            return true
+          })
           if (changedFiles.length > 0) {
             additionalContext =
               `⚠️ You have ${changedFiles.length} uncommitted change(s). ` +
@@ -953,12 +991,71 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
   })
 }
 
+// ── Handler: post-tool-use ──
+// Tracks files modified by Edit, Write, NotebookEdit, and Bash tools
+export async function handlePostToolUse(input: Record<string, unknown>): Promise<void> {
+  const sessionId = input.session_id as string | undefined
+  if (!sessionId) return
+
+  try {
+    const projectDir = findProjectDir()
+    const sessionDir = join(getSessionsDir(projectDir), sessionId)
+
+    // Guard: only track if session exists
+    if (!existsSync(join(sessionDir, 'state.json'))) return
+
+    const toolName = (input.tool_name as string) ?? ''
+    const toolInput = (input.tool_input as Record<string, unknown>) ?? {}
+
+    if (toolName === 'Edit' || toolName === 'Write' || toolName === 'NotebookEdit') {
+      const filePath = toolInput.file_path as string | undefined
+      if (filePath) {
+        const gitRelative = toGitRelative(filePath)
+        appendEdit(sessionDir, { file: gitRelative, tool: toolName, ts: new Date().toISOString() })
+      }
+    } else if (toolName === 'Bash') {
+      // Compare post-execution git status against pre-snapshot
+      const snapshotPath = join(sessionDir, 'bash-pre-snapshot.txt')
+      if (existsSync(snapshotPath)) {
+        try {
+          const preSnapshot = readFileSync(snapshotPath, 'utf-8').trim()
+          const postSnapshot = execSync('git status --porcelain 2>/dev/null || true', {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            cwd: projectDir,
+          }).trim()
+
+          // Find new dirty files
+          const preFiles = new Set(preSnapshot.split('\n').filter(Boolean).flatMap(parseGitStatusPaths))
+          const postLines = postSnapshot.split('\n').filter(Boolean)
+          for (const line of postLines) {
+            const paths = parseGitStatusPaths(line)
+            for (const p of paths) {
+              if (!preFiles.has(p)) {
+                appendEdit(sessionDir, { file: p, tool: 'Bash', ts: new Date().toISOString() })
+              }
+            }
+          }
+
+          // Clean up snapshot file
+          try { unlinkSync(snapshotPath) } catch { /* ignore */ }
+        } catch {
+          // Diff failure — silently ignore
+        }
+      }
+    }
+  } catch {
+    // PostToolUse must never fail — silent no-op
+  }
+}
+
 // ── Hook name -> handler map ──
 const hookHandlers: Record<string, (input: Record<string, unknown>) => Promise<void>> = {
   'session-start': handleSessionStart,
   'user-prompt': handleUserPrompt,
   'pre-tool-use': handlePreToolUse,
   'stop-conditions': handleStopConditions,
+  'post-tool-use': handlePostToolUse,
   // Backwards-compat aliases for transition period
   'mode-gate': handlePreToolUse,
   'task-deps': handlePreToolUse,

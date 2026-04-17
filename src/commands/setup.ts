@@ -149,6 +149,17 @@ export function buildHookEntries(wmBin: string): Record<string, HookEntry[]> {
         ],
       },
     ],
+    // PostToolUse: track file mutations for session-scoped stop conditions
+    PostToolUse: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: `${bin} hook post-tool-use`,
+          },
+        ],
+      },
+    ],
   }
 
   return hooks
@@ -203,7 +214,7 @@ export function mergeHooksIntoSettings(
     // Tolerates both bare `kata hook …` and quoted `"/path/kata" hook …` forms while
     // avoiding false positives from unrelated tools like lefthook or husky.
     const wmHookPattern =
-      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence|pre-tool-use)\b/
+      /\bhook (session-start|user-prompt|stop-conditions|mode-gate|task-deps|task-evidence|pre-tool-use|post-tool-use)\b/
     const nonWmEntries = existing.filter((entry) => {
       return !entry.hooks?.some(
         (h) => typeof h.command === 'string' && wmHookPattern.test(h.command),

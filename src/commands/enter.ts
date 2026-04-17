@@ -1,4 +1,5 @@
 // kata enter - Enter a mode
+import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolve, dirname, join } from 'node:path'
 import jsYaml from 'js-yaml'
@@ -7,6 +8,7 @@ import {
   getStateFilePath,
   findProjectDir,
   getPackageRoot,
+  getSessionsDir,
 } from '../session/lookup.js'
 import { readState, stateExists } from '../state/reader.js'
 import { writeState } from '../state/writer.js'
@@ -123,6 +125,7 @@ import {
 } from './enter/task-factory.js'
 import { parseArgs, createDefaultState } from './enter/cli.js'
 import { createFdNotesFile, createDoctrineNotesFile } from './enter/notes.js'
+import { writeBaseline, parseGitStatusPaths } from '../tracking/edits-log.js'
 
 /**
  * Enter with a custom template (one-off session)
@@ -242,6 +245,22 @@ async function enterWithCustomTemplate(
 
   if (!parsed.dryRun) {
     await writeState(stateFile, finalState)
+
+    // Capture baseline snapshot — record pre-existing dirty files
+    try {
+      const sessionDir = join(getSessionsDir(findProjectDir()), finalState.sessionId!)
+      const status = execSync('git status --porcelain 2>/dev/null || true', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim()
+      const baselineFiles = status
+        .split('\n')
+        .filter(l => l && !l.startsWith('??'))
+        .flatMap(parseGitStatusPaths)
+      writeBaseline(sessionDir, baselineFiles)
+    } catch {
+      // Baseline failure must not block mode entry
+    }
 
     // Create fd-notes.md for feature-documentation mode (interview context persistence)
     if (modeName === 'feature-documentation' || templatePath.includes('feature-documentation')) {
@@ -676,6 +695,22 @@ export async function enter(args: string[]): Promise<void> {
   // Skip state write in dry-run mode
   if (!parsed.dryRun) {
     await writeState(stateFile, finalState)
+
+    // Capture baseline snapshot — record pre-existing dirty files
+    try {
+      const sessionDir = join(getSessionsDir(findProjectDir()), finalState.sessionId!)
+      const status = execSync('git status --porcelain 2>/dev/null || true', {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      }).trim()
+      const baselineFiles = status
+        .split('\n')
+        .filter(l => l && !l.startsWith('??'))
+        .flatMap(parseGitStatusPaths)
+      writeBaseline(sessionDir, baselineFiles)
+    } catch {
+      // Baseline failure must not block mode entry
+    }
   }
 
   // Determine action taken (native tasks always recreate, so always 'started')
