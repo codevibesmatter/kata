@@ -7,3 +7,6 @@ eval-projects/
 .geminiignore
 .kata/sessions/
 .kata/batteries-backup/
+.kata/verification-evidence/
+.claude/sessions/
+eval-transcripts/
