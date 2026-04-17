@@ -513,37 +513,30 @@ function resolveTranscriptPath(sessionId: string): string | undefined {
   }
 }
 
-const AGENT_RECENCY_WINDOW_MS = 120_000 // 2 minutes
-
 /**
  * Check if there are active background agents by scanning the session transcript.
  * An Agent tool_use without a matching tool_result means the agent is still running.
  *
- * Returns true only when an unmatched Agent tool_use was issued within the recency
- * window (default 2 minutes). Stale unmatched IDs (from earlier turns where the SDK
- * didn't emit a tool_result the scanner recognises) are treated as completed/abandoned.
- * See issue #60.
+ * Staleness heuristic: an unmatched Agent tool_use is only considered active if
+ * no subsequent user-prompt turn has occurred after it. Once the user sends a new
+ * message (a `user` entry with a `text` content block, not just tool_results),
+ * any still-unmatched Agent IDs from before that prompt are treated as
+ * stale/abandoned (SDK sessions sometimes omit tool_results). See issue #60.
  */
 export function hasActiveBackgroundAgents(
   transcriptPath: string | undefined,
-  options: { recencyWindowMs?: number; nowMs?: number } = {},
 ): boolean {
   if (!transcriptPath) return false
-  const recencyWindowMs = options.recencyWindowMs ?? AGENT_RECENCY_WINDOW_MS
-  const now = options.nowMs ?? Date.now()
   try {
     const content = readFileSync(transcriptPath, 'utf-8')
     const lines = content.split('\n').filter((l) => l.trim())
 
-    // Track Agent tool_use IDs → timestamp ms; match and remove on tool_result
-    const agentToolUses = new Map<string, number>()
+    // Track unmatched Agent tool_use IDs
+    const agentToolUseIds = new Set<string>()
 
     for (const line of lines) {
       try {
         const msg = JSON.parse(line) as Record<string, unknown>
-
-        const parsed = typeof msg.timestamp === 'string' ? Date.parse(msg.timestamp) : NaN
-        const ts = Number.isFinite(parsed) ? parsed : now
 
         if (msg.type === 'assistant') {
           const message = (msg.message as Record<string, unknown>) ?? msg
@@ -554,7 +547,7 @@ export function hasActiveBackgroundAgents(
               block.name === 'Agent' &&
               typeof block.id === 'string'
             ) {
-              agentToolUses.set(block.id, ts)
+              agentToolUseIds.add(block.id)
             }
           }
         }
@@ -562,10 +555,23 @@ export function hasActiveBackgroundAgents(
         if (msg.type === 'user') {
           const message = (msg.message as Record<string, unknown>) ?? msg
           const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
+
+          let hasToolResult = false
+          let hasUserText = false
           for (const block of contentBlocks) {
             if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
-              agentToolUses.delete(block.tool_use_id)
+              agentToolUseIds.delete(block.tool_use_id)
+              hasToolResult = true
             }
+            if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+              hasUserText = true
+            }
+          }
+
+          // A new user prompt (not just tool_results) means the conversation moved on.
+          // Any still-unmatched Agent IDs from before this point are stale.
+          if (hasUserText && !hasToolResult) {
+            agentToolUseIds.clear()
           }
         }
       } catch {
@@ -573,10 +579,7 @@ export function hasActiveBackgroundAgents(
       }
     }
 
-    for (const ts of agentToolUses.values()) {
-      if (now - ts < recencyWindowMs) return true
-    }
-    return false
+    return agentToolUseIds.size > 0
   } catch {
     // Transcript unreadable — assume no active agents
     return false

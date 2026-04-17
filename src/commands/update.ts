@@ -1,4 +1,6 @@
-// kata update — overwrite project templates, skills, and config with latest package versions
+// kata update — update templates, skills, and batteries content to latest package version
+// kata.yaml is project-owned after initial setup — update only stamps kata_version.
+// Mode config changes are handled via `kata migrate`, not silently overwritten.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import jsYaml from 'js-yaml'
@@ -33,13 +35,13 @@ export async function update(args: string[]): Promise<void> {
   // Clean legacy project-level template/skill copies before scaffolding
   const cleaned = cleanLegacyFiles(projectRoot)
 
-  // Use scaffoldBatteries with update=true to overwrite all files
-  const result = scaffoldBatteries(projectRoot, true)
+  // Scaffold batteries content (skip kata.yaml — it's project-owned)
+  const result = scaffoldBatteries(projectRoot, true, { skipKataYaml: true })
 
   // Install/update user-scoped skills
   const userSkillsResult = installUserSkills({ update: true })
 
-  // Update kata_version in kata.yaml
+  // Stamp kata_version in kata.yaml (preserves all other fields)
   const kataYamlPath = getKataConfigPath(projectRoot)
   if (existsSync(kataYamlPath)) {
     const raw = readFileSync(kataYamlPath, 'utf-8')

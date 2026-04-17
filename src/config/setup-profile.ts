@@ -19,7 +19,6 @@ export interface SetupProfile {
     code_review: boolean
     code_reviewer: string | null
   }
-  strict: boolean
 }
 
 /**
@@ -148,6 +147,5 @@ export function getDefaultProfile(cwd?: string): SetupProfile {
       code_review: false,
       code_reviewer: null,
     },
-    strict: false,
   }
 }

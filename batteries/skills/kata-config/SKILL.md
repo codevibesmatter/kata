@@ -68,14 +68,21 @@ This project has no kata configuration yet.
 
 This project already has kata configured.
 
-1. Read `.kata/kata.yaml` and display a summary of the current configuration:
+1. **Health check** — verify the setup is complete by checking these exist:
+   - `.claude/settings.json` with kata hooks registered
+   - `.kata/ceremony.md`
+   - `.kata/sessions/` directory
+   If ANY are missing, the project is only partially set up. Run `kata setup --yes` to complete setup, then continue with step 2.
+2. Run `kata doctor` — if it reports warnings/errors, run `kata doctor --fix`.
+3. Run `kata update` to ensure templates and skills are current.
+4. Read `.kata/kata.yaml` and display a summary of the current configuration:
    - Modes defined
    - Test command
    - Strict hooks (on/off)
    - Deliverable paths
-2. Ask the user what they want to change (e.g., test command, strict hooks, review settings, paths, add/remove modes).
-3. Apply the requested changes to `.kata/kata.yaml`.
-4. Run: `kata doctor` to verify the configuration is valid.
+5. Ask the user what they want to change (e.g., test command, strict hooks, review settings, paths, add/remove modes).
+6. Apply the requested changes to `.kata/kata.yaml`.
+7. Run: `kata doctor` to verify the final configuration is valid.
 
 ---
 

@@ -260,7 +260,7 @@ Usage:
   kata register-mode <template-path> [options]   Register existing template as mode
   kata suggest <message>                         Detect mode from message, output guidance
   kata doctor [--fix] [--json]                   Diagnose and fix session state
-  kata setup [--yes] [--strict]                   Setup kata in a project
+  kata setup [--yes]                               Setup kata in a project
   kata update                                      Update templates to latest package version
   kata migrate [--dry-run]                         Convert old-format templates to gate/hint format
   kata config [--show]                            Show resolved config with provenance
@@ -286,7 +286,6 @@ Hook Dispatch:
 
 Setup:
   kata setup --yes                Quick setup (config, hooks, templates, skills)
-  kata setup --yes --strict       Setup with PreToolUse gate hooks
   /kata-setup                       Guided setup (interactive, in Claude Code)
   kata update                     Update templates + stamp kata_version
   kata migrate                    Convert old-format templates to new gate/hint format

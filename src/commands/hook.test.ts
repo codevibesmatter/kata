@@ -524,92 +524,61 @@ describe('hasActiveBackgroundAgents', () => {
     expect(hasActiveBackgroundAgents(path)).toBe(false)
   })
 
-  it('returns false when only unmatched Agents are older than recency window', async () => {
-    const { hasActiveBackgroundAgents } = await import('./hook.js')
-    const path = writeTranscript([
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T10:00:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] },
-      },
-    ])
-    expect(
-      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:10:00.000Z') }),
-    ).toBe(false)
-  })
-
-  it('returns true for unmatched Agent within recency window', async () => {
-    const { hasActiveBackgroundAgents } = await import('./hook.js')
-    const path = writeTranscript([
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T10:00:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] },
-      },
-    ])
-    expect(
-      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:00:30.000Z') }),
-    ).toBe(true)
-  })
-
-  it('reproduces issue #60: 3 stale unmatched Agents from >5min ago + recent matched Agent → false', async () => {
-    const { hasActiveBackgroundAgents } = await import('./hook.js')
-    const path = writeTranscript([
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T02:54:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] },
-      },
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T02:57:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-2' }] },
-      },
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T03:01:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-3' }] },
-      },
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T10:19:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] },
-      },
-      {
-        type: 'user',
-        timestamp: '2026-04-16T10:19:10.000Z',
-        message: { content: [{ type: 'tool_result', tool_use_id: 'recent-1' }] },
-      },
-    ])
-    expect(
-      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:19:17.000Z') }),
-    ).toBe(false)
-  })
-
-  it('returns true when current-turn Agent has stale older Agents alongside it', async () => {
-    const { hasActiveBackgroundAgents } = await import('./hook.js')
-    const path = writeTranscript([
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T02:54:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] },
-      },
-      {
-        type: 'assistant',
-        timestamp: '2026-04-16T10:19:00.000Z',
-        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] },
-      },
-    ])
-    expect(
-      hasActiveBackgroundAgents(path, { nowMs: Date.parse('2026-04-16T10:19:30.000Z') }),
-    ).toBe(true)
-  })
-
-  it('falls back to nowMs when transcript line has no timestamp', async () => {
+  it('returns false when unmatched Agents are followed by a new user prompt', async () => {
     const { hasActiveBackgroundAgents } = await import('./hook.js')
     const path = writeTranscript([
       { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+      // User sends a new message (not a tool_result) — agent-1 is now stale
+      { type: 'user', message: { content: [{ type: 'text', text: 'do something else' }] } },
     ])
-    expect(hasActiveBackgroundAgents(path, { nowMs: 1000, recencyWindowMs: 5000 })).toBe(true)
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('returns true for unmatched Agent with no subsequent user prompt', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+      // Only tool_results follow, no new user prompt — agent is still active
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'other-tool' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  it('reproduces issue #60: stale unmatched Agents cleared by user prompt, recent matched Agent → false', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      // Stale agents from earlier conversation
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-2' }] } },
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-3' }] } },
+      // User sent a new prompt — clears all stale agent IDs
+      { type: 'user', message: { content: [{ type: 'text', text: 'continue' }] } },
+      // New agent spawned and completed
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] } },
+      { type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'recent-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('returns true when current-turn Agent is active alongside stale ones cleared by user prompt', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      // Stale agent
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-1' }] } },
+      // User prompt clears stale
+      { type: 'user', message: { content: [{ type: 'text', text: 'now do this' }] } },
+      // New agent still running
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  it('long-running agent stays active without time-based expiry', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    // Agent spawned with no user prompt after — should stay active regardless of time
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
   })
 })

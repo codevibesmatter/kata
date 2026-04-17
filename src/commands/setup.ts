@@ -47,14 +47,12 @@ export function resolveWmBin(override?: string): string {
  */
 function parseArgs(args: string[]): {
   yes: boolean
-  strict: boolean
   batteries: boolean
   cwd: string
   explicitCwd: boolean
   session: string | undefined
 } {
   let yes = false
-  let strict = false
   let batteries = false
   let cwd = process.cwd()
   let explicitCwd = false
@@ -63,8 +61,6 @@ function parseArgs(args: string[]): {
   for (const arg of args) {
     if (arg === '--yes' || arg === '-y') {
       yes = true
-    } else if (arg === '--strict') {
-      strict = true
     } else if (arg === '--batteries' || arg === '-b') {
       batteries = true
       yes = true // --batteries implies --yes (skips interview)
@@ -76,7 +72,7 @@ function parseArgs(args: string[]): {
     }
   }
 
-  return { yes, strict, batteries, cwd, explicitCwd, session }
+  return { yes, batteries, cwd, explicitCwd, session }
 }
 
 /**
@@ -106,7 +102,7 @@ export interface SettingsJson {
  * Registers a single consolidated PreToolUse hook (pre-tool-use) that handles
  * mode-gate, task-deps, gate evaluation, and task-evidence internally.
  */
-export function buildHookEntries(_strict: boolean, wmBin: string): Record<string, HookEntry[]> {
+export function buildHookEntries(wmBin: string): Record<string, HookEntry[]> {
   // Quote the binary path so spaces in the path are handled correctly
   const bin = `"${wmBin}"`
   const hooks: Record<string, HookEntry[]> = {
@@ -359,12 +355,12 @@ function applySetup(cwd: string, profile: SetupProfile, explicitCwd: boolean): v
   }
   const wmBin = resolveWmBin(binaryOverride)
   const settings = readSettings(projectRoot)
-  const wmHooks = buildHookEntries(profile.strict, wmBin)
+  const wmHooks = buildHookEntries(wmBin)
   writeSettings(projectRoot, mergeHooksIntoSettings(settings, wmHooks))
 }
 
 /**
- * kata setup [--yes] [--strict] [--cwd=PATH]
+ * kata setup [--yes] [--cwd=PATH]
  *
  * Pure configuration — writes kata.yaml, registers hooks, scaffolds content.
  * Always flag-driven; never enters an interactive session.
@@ -381,8 +377,6 @@ export async function setup(args: string[]): Promise<void> {
   // into kata.yaml when .claude/ already exists at a higher level.
   const projectRoot = resolveProjectRoot(parsed.cwd, parsed.explicitCwd)
   const profile = getDefaultProfile(projectRoot)
-  profile.strict = parsed.strict
-
   if (parsed.yes) {
     // --yes: write everything with auto-detected defaults
     applySetup(parsed.cwd, profile, parsed.explicitCwd)
@@ -418,11 +412,9 @@ export async function setup(args: string[]): Promise<void> {
 
 Usage:
   kata setup --yes                Quick setup with auto-detected defaults
-  kata setup --yes --strict       Setup + strict PreToolUse task enforcement hooks
 
 Flags:
   --yes         Write config, register hooks, scaffold templates and skills
-  --strict      Also register PreToolUse hooks for task enforcement
   --cwd=PATH    Run setup in a different directory
 
 For guided setup, use the /kata-config skill in Claude Code.

@@ -65,6 +65,7 @@ function checkHooksRegistered(claudeDir: string): {
   const requiredHooks: Record<string, string> = {
     SessionStart: 'hook session-start',
     UserPromptSubmit: 'hook user-prompt',
+    PreToolUse: 'hook pre-tool-use',
     Stop: 'hook stop-conditions',
   }
 

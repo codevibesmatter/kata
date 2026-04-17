@@ -94,16 +94,15 @@ describe('gate placeholder integration', () => {
 describe('buildHookEntries consolidated', () => {
   it('produces single PreToolUse entry', async () => {
     const { buildHookEntries } = await import('./setup.js')
-    const hooks = buildHookEntries(false, '/usr/bin/kata')
+    const hooks = buildHookEntries('/usr/bin/kata')
     expect(hooks.PreToolUse).toHaveLength(1)
     expect(hooks.PreToolUse[0].hooks[0].command).toContain('pre-tool-use')
     expect(hooks.PreToolUse[0].hooks[0].timeout).toBe(30)
   })
 
-  it('strict mode still produces single PreToolUse entry', async () => {
+  it('produces single PreToolUse entry', async () => {
     const { buildHookEntries } = await import('./setup.js')
-    const hooks = buildHookEntries(true, '/usr/bin/kata')
-    // Consolidated: strict no longer adds extra hooks
+    const hooks = buildHookEntries('/usr/bin/kata')
     expect(hooks.PreToolUse).toHaveLength(1)
   })
 })

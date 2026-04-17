@@ -157,7 +157,7 @@ describe('convertTemplate', () => {
 describe('setup registers consolidated PreToolUse hook', () => {
   it('buildHookEntries produces single PreToolUse with pre-tool-use', async () => {
     const { buildHookEntries } = await import('./setup.js')
-    const hooks = buildHookEntries(true, '/usr/bin/kata')
+    const hooks = buildHookEntries('/usr/bin/kata')
     expect(hooks.PreToolUse).toHaveLength(1)
     expect(hooks.PreToolUse[0].hooks[0].command).toContain('pre-tool-use')
   })

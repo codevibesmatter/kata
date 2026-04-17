@@ -81,7 +81,7 @@ function backupFile(filePath: string, backupDir: string, filename: string): void
  * @param projectRoot - Absolute path to the project root
  * @param update - When true, overwrite existing files instead of skipping them
  */
-export function scaffoldBatteries(projectRoot: string, update = false): BatteriesResult {
+export function scaffoldBatteries(projectRoot: string, update = false, options?: { skipKataYaml?: boolean }): BatteriesResult {
   const batteryRoot = join(getPackageRoot(), 'batteries')
 
   // Compute a timestamped backup dir under .kata/ (only used on --update)
@@ -105,18 +105,12 @@ export function scaffoldBatteries(projectRoot: string, update = false): Batterie
   }
 
   // kata.yaml → project config dir
+  // On update, skip kata.yaml here — update.ts handles merging to preserve project settings.
   const kataYamlSrc = join(batteryRoot, 'kata.yaml')
   const kataYamlDest = getKataConfigPath(projectRoot)
-  if (existsSync(kataYamlSrc)) {
+  if (!options?.skipKataYaml && existsSync(kataYamlSrc)) {
     if (existsSync(kataYamlDest)) {
-      if (update) {
-        if (backupRoot) backupFile(kataYamlDest, backupRoot, 'kata.yaml')
-        copyFileSync(kataYamlSrc, kataYamlDest)
-        result.kataConfig.push('kata.yaml')
-        result.updated.push('kata.yaml')
-      } else {
-        result.skipped.push('kata.yaml')
-      }
+      result.skipped.push('kata.yaml')
     } else {
       mkdirSync(dirname(kataYamlDest), { recursive: true })
       copyFileSync(kataYamlSrc, kataYamlDest)

@@ -88,15 +88,15 @@ describe('setup --yes', () => {
     expect(settings.hooks.Stop).toBeDefined()
   })
 
-  it('--strict registers consolidated PreToolUse hook', async () => {
-    await captureSetup(['--yes', '--strict'], tmpDir)
+  it('registers PreToolUse hook by default', async () => {
+    await captureSetup(['--yes'], tmpDir)
 
     const settingsPath = join(tmpDir, '.claude', 'settings.json')
     const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
       hooks: Record<string, unknown[]>
     }
 
-    // Should have PreToolUse hooks — now consolidated into a single entry
+    // PreToolUse is always registered (consolidated into a single entry)
     expect(settings.hooks.PreToolUse).toBeDefined()
     expect(Array.isArray(settings.hooks.PreToolUse)).toBe(true)
     expect(settings.hooks.PreToolUse.length).toBe(1)
