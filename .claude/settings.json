@@ -36,28 +36,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/ubuntu/.local/bin/kata\" hook mode-gate",
-            "timeout": 10
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook pre-tool-use",
+            "timeout": 30
           }
         ]
-      },
+      }
+    ],
+    "PostToolUse": [
       {
-        "matcher": "TaskUpdate",
         "hooks": [
           {
             "type": "command",
-            "command": "\"/home/ubuntu/.local/bin/kata\" hook task-deps",
-            "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "TaskUpdate",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"/home/ubuntu/.local/bin/kata\" hook task-evidence",
-            "timeout": 10
+            "command": "\"/home/ubuntu/.local/bin/kata\" hook post-tool-use"
           }
         ]
       }
