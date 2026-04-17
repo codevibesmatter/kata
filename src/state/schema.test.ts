@@ -7,9 +7,10 @@ describe('STOP_CONDITION_TYPES', () => {
     expect(STOP_CONDITION_TYPES).toContain('tasks_complete')
     expect(STOP_CONDITION_TYPES).toContain('committed')
     expect(STOP_CONDITION_TYPES).toContain('pushed')
-    expect(STOP_CONDITION_TYPES).toContain('verification')
     expect(STOP_CONDITION_TYPES).toContain('tests_pass')
     expect(STOP_CONDITION_TYPES).toContain('feature_tests_added')
+    expect(STOP_CONDITION_TYPES).toContain('spec_valid')
+    expect(STOP_CONDITION_TYPES).toContain('doc_created')
   })
 })
 

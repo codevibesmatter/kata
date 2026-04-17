@@ -153,14 +153,16 @@ describe('loadKataConfig', () => {
     expect(first).toBe(second) // Same object reference
   })
 
-  it('provides default task_rules and empty global_rules', () => {
+  it('provides default task_rules and default global_rules', () => {
     const config = { modes: {} }
     writeFileSync(join(tmpDir, '.kata', 'kata.yaml'), jsYaml.dump(config))
 
     const result = loadKataConfig()
     expect(result.task_rules.length).toBeGreaterThan(0)
     expect(result.task_rules[0]).toContain('TaskCreate')
-    expect(result.global_rules).toEqual([])
+    // global_rules has a default skill-invocation hint (not empty)
+    expect(Array.isArray(result.global_rules)).toBe(true)
+    expect(result.global_rules.some((r: string) => r.includes('Skill'))).toBe(true)
   })
 
   it('allows overriding task_rules and global_rules', () => {

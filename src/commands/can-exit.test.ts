@@ -1,8 +1,31 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import * as os from 'node:os'
 import jsYaml from 'js-yaml'
+
+/**
+ * Create a minimal git repo in the given dir with a committed file and a
+ * dirty working tree on a feature branch. This ensures can-exit's
+ * "on base branch with no diff" short-circuit (skipGitChecks) stays off,
+ * so git-dependent checks (tests_pass, feature_tests_added, committed, pushed)
+ * actually run.
+ */
+function initDirtyGitRepo(dir: string): void {
+  const run = (cmd: string) => execSync(cmd, { cwd: dir, stdio: 'pipe', encoding: 'utf-8' })
+  run('git init -q -b main')
+  run('git config user.email test@test')
+  run('git config user.name test')
+  writeFileSync(join(dir, 'base.txt'), 'base\n')
+  run('git add base.txt')
+  run('git -c commit.gpgsign=false commit -q -m base')
+  // Switch to a feature branch and add a dirty file so there is a diff vs main.
+  run('git checkout -q -b feature/test')
+  writeFileSync(join(dir, 'feature.txt'), 'feature\n')
+  run('git add feature.txt')
+  run('git -c commit.gpgsign=false commit -q -m feature')
+}
 
 function makeTmpDir(): string {
   const dir = join(
@@ -172,7 +195,17 @@ describe('canExit', () => {
       issueNumber: 444,
     })
 
-    const output = await captureCanExit(['--json', `--session=${process.env.CLAUDE_SESSION_ID}`])
+    // can-exit inspects git via process.cwd(); put a dirty feature branch in tmpDir
+    // so skipGitChecks stays off and checkTestsPass actually runs.
+    initDirtyGitRepo(tmpDir)
+    const origCwd = process.cwd()
+    process.chdir(tmpDir)
+    let output: string
+    try {
+      output = await captureCanExit(['--json', `--session=${process.env.CLAUDE_SESSION_ID}`])
+    } finally {
+      process.chdir(origCwd)
+    }
     const result = JSON.parse(output) as { canExit: boolean; reasons: string[] }
 
     const blockedByVerify = result.reasons.some((r) => r.includes('check-phase has not been run'))
@@ -242,7 +275,17 @@ describe('canExit', () => {
       }),
     )
 
-    const output = await captureCanExit(['--json', `--session=${process.env.CLAUDE_SESSION_ID}`])
+    // can-exit inspects git via process.cwd(); put a dirty feature branch in tmpDir
+    // so skipGitChecks stays off and checkTestsPass actually runs.
+    initDirtyGitRepo(tmpDir)
+    const origCwd = process.cwd()
+    process.chdir(tmpDir)
+    let output: string
+    try {
+      output = await captureCanExit(['--json', `--session=${process.env.CLAUDE_SESSION_ID}`])
+    } finally {
+      process.chdir(origCwd)
+    }
     const result = JSON.parse(output) as { canExit: boolean; reasons: string[] }
 
     const blockedByFailed = result.reasons.some((r) => r.includes('failed check-phase'))

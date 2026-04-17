@@ -17,7 +17,7 @@ describe('README structure (VP1: TOC completeness)', () => {
     'Hooks reference',
     'Configuration (kata.yaml)',
     'Custom modes',
-    'Batteries system',
+    'Template system',
     'Architecture',
     'Comparison to similar tools',
     'License',
@@ -60,7 +60,6 @@ describe('README core commands (VP4: command flag coverage)', () => {
     '`kata can-exit`',
     '`kata link`',
     '`kata doctor`',
-    '`kata batteries`',
     '`kata setup`',
   ]
 
