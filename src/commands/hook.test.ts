@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'bun:test'
+
+afterAll(() => { process.exitCode = 0 })
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
@@ -100,13 +102,14 @@ describe('hook dispatch', () => {
     } else {
       delete process.env.CLAUDE_PROJECT_DIR
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   it('unknown hook name sets exit code 1', async () => {
     const { hook } = await import('./hook.js')
     const stderr = await captureStderr(() => hook(['nonexistent-hook']))
     expect(process.exitCode).toBe(1)
+    process.exitCode = 0
     expect(stderr).toContain('Unknown hook')
   })
 
@@ -114,6 +117,7 @@ describe('hook dispatch', () => {
     const { hook } = await import('./hook.js')
     const stderr = await captureStderr(() => hook([]))
     expect(process.exitCode).toBe(1)
+    process.exitCode = 0
     expect(stderr).toContain('Usage: kata hook <name>')
   })
 })

@@ -20,6 +20,7 @@ async function captureCanExit(args: string[]): Promise<string> {
   const { canExit } = await import('./can-exit.js')
   let captured = ''
   const origLog = console.log
+  const origExitCode = process.exitCode
   console.log = (...logArgs: unknown[]) => {
     captured += logArgs.map(String).join(' ')
   }
@@ -27,6 +28,7 @@ async function captureCanExit(args: string[]): Promise<string> {
     await canExit(args)
   } finally {
     console.log = origLog
+    process.exitCode = origExitCode
   }
   return captured
 }
@@ -73,7 +75,7 @@ describe('canExit', () => {
     } else {
       delete process.env.CLAUDE_SESSION_ID
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   function createSessionState(state: Record<string, unknown>): void {

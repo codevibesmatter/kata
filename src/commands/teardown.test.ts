@@ -47,7 +47,7 @@ describe('teardown', () => {
     } else {
       delete process.env.CLAUDE_PROJECT_DIR
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   /**
@@ -215,6 +215,7 @@ describe('teardown', () => {
     const output = await captureTeardown([], tmpDir)
     expect(output).toContain('--yes to confirm')
     expect(process.exitCode).toBe(1)
+    process.exitCode = 0
 
     // Files should still exist
     const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')

@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'bun:test'
+
+afterAll(() => { process.exitCode = 0 })
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as os from 'node:os'
@@ -15,13 +17,15 @@ function makeTmpDir(): string {
 /**
  * Helper: capture console.log output from enter(), also suppressing stderr
  */
-async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: string }> {
+async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number | undefined }> {
   const { enter } = await import('./enter.js')
   let stdout = ''
   let stderr = ''
   const origLog = console.log
   const origError = console.error
   const origStderrWrite = process.stderr.write
+  const origExitCode = process.exitCode
+  process.exitCode = 0
   console.log = (...logArgs: unknown[]) => {
     stdout += logArgs.map(String).join(' ')
   }
@@ -39,7 +43,9 @@ async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: s
     console.error = origError
     process.stderr.write = origStderrWrite
   }
-  return { stdout, stderr }
+  const exitCode = process.exitCode
+  process.exitCode = 0
+  return { stdout, stderr, exitCode }
 }
 
 describe('enter', () => {
@@ -97,12 +103,12 @@ describe('enter', () => {
     } else {
       delete process.env.CLAUDE_SESSION_ID
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   it('prints usage when no mode is provided', async () => {
-    const { stderr } = await captureEnter([])
-    expect(process.exitCode).toBe(1)
+    const { stderr, exitCode } = await captureEnter([])
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('Usage:')
   })
 
@@ -148,25 +154,25 @@ describe('enter', () => {
   })
 
   it('rejects unknown mode', async () => {
-    const { stderr } = await captureEnter([
+    const { stderr, exitCode } = await captureEnter([
       'totally-nonexistent-mode',
       '--skip-cleanup',
       `--session=${process.env.CLAUDE_SESSION_ID}`,
     ])
 
-    expect(process.exitCode).toBe(1)
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('Unknown mode')
   })
 
   it('rejects deprecated mode', async () => {
     // 'flow' is deprecated with redirect_to: freeform
-    const { stderr } = await captureEnter([
+    const { stderr, exitCode } = await captureEnter([
       'flow',
       '--skip-cleanup',
       `--session=${process.env.CLAUDE_SESSION_ID}`,
     ])
 
-    expect(process.exitCode).toBe(1)
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('deprecated')
   })
 
