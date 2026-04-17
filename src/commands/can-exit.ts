@@ -19,7 +19,7 @@ import {
 } from './enter/task-factory.js'
 import { loadKataConfig } from '../config/kata-config.js'
 import { findSpecFile, validateSpec } from './validate-spec.js'
-import { readEditsSet, readBaseline, parseGitStatusPaths } from '../tracking/edits-log.js'
+import { readEditsSet, parseGitStatusPaths } from '../tracking/edits-log.js'
 
 /**
  * Parse command line arguments for can-exit command
@@ -57,7 +57,6 @@ function checkGlobalConditions(checks: Set<string>, sessionDir?: string): { pass
 
       if (gitStatus) {
         const sessionEdits = sessionDir ? readEditsSet(sessionDir) : null
-        const baseline = sessionDir ? readBaseline(sessionDir) : null
         const outOfScopeFiles: string[] = []
 
         const changedFiles = gitStatus.split('\n').filter((line) => {
@@ -68,14 +67,14 @@ function checkGlobalConditions(checks: Set<string>, sessionDir?: string): { pass
           // creating a recursive loop if we count them as uncommitted changes
           if (file.startsWith('.kata/sessions/')) return false
 
-          if (sessionEdits && baseline) {
+          if (sessionEdits) {
             // Session-scoped: only count files this session touched
             if (sessionEdits.has(file)) return true
             // Track out-of-scope files for advisory
             outOfScopeFiles.push(file)
             return false
           }
-          // No session tracking — fall back to global behavior
+          // No session tracking (no edits.jsonl) — fall back to global behavior
           return true
         })
 

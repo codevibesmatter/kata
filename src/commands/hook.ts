@@ -13,7 +13,7 @@ import { isNativeTasksEnabled } from '../utils/tasks-check.js'
 import { resolvePlaceholders, type PlaceholderContext } from './enter/placeholder.js'
 import { parseTemplateYaml } from './enter/template.js'
 import type { Gate } from '../validation/schemas.js'
-import { toGitRelative, appendEdit, parseGitStatusPaths, readEditsSet, readBaseline } from '../tracking/edits-log.js'
+import { toGitRelative, appendEdit, parseGitStatusPaths, readEditsSet } from '../tracking/edits-log.js'
 
 /**
  * Claude Code hook output format
@@ -949,13 +949,12 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
         if (gitStatus) {
           const evidenceSessionDir = sessionId ? join(getSessionsDir(projectDir ?? process.cwd()), sessionId) : undefined
           const sessionEdits = evidenceSessionDir ? readEditsSet(evidenceSessionDir) : null
-          const baseline = evidenceSessionDir ? readBaseline(evidenceSessionDir) : null
 
           const changedFiles = gitStatus.split('\n').filter((l) => {
             if (l.startsWith('??')) return false
-            if (sessionEdits && baseline) {
-              const file = l.slice(3)
-              return sessionEdits.has(file)
+            if (sessionEdits) {
+              const paths = parseGitStatusPaths(l)
+              return paths.some(p => sessionEdits.has(p))
             }
             return true
           })

@@ -128,6 +128,28 @@ import { createFdNotesFile, createDoctrineNotesFile } from './enter/notes.js'
 import { writeBaseline, parseGitStatusPaths } from '../tracking/edits-log.js'
 
 /**
+ * Capture baseline snapshot — record pre-existing dirty files so stop conditions
+ * can distinguish between files that were dirty before the session started and
+ * files the session actually modified.
+ */
+function captureBaseline(sessionId: string): void {
+  try {
+    const sessionDir = join(getSessionsDir(findProjectDir()), sessionId)
+    const status = execSync('git status --porcelain 2>/dev/null || true', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+    const baselineFiles = status
+      .split('\n')
+      .filter(l => l && !l.startsWith('??'))
+      .flatMap(parseGitStatusPaths)
+    writeBaseline(sessionDir, baselineFiles)
+  } catch {
+    // Baseline failure must not block mode entry
+  }
+}
+
+/**
  * Enter with a custom template (one-off session)
  * Allows using any template file without registering in modes.yaml
  */
@@ -246,21 +268,7 @@ async function enterWithCustomTemplate(
   if (!parsed.dryRun) {
     await writeState(stateFile, finalState)
 
-    // Capture baseline snapshot — record pre-existing dirty files
-    try {
-      const sessionDir = join(getSessionsDir(findProjectDir()), finalState.sessionId!)
-      const status = execSync('git status --porcelain 2>/dev/null || true', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim()
-      const baselineFiles = status
-        .split('\n')
-        .filter(l => l && !l.startsWith('??'))
-        .flatMap(parseGitStatusPaths)
-      writeBaseline(sessionDir, baselineFiles)
-    } catch {
-      // Baseline failure must not block mode entry
-    }
+    captureBaseline(finalState.sessionId!)
 
     // Create fd-notes.md for feature-documentation mode (interview context persistence)
     if (modeName === 'feature-documentation' || templatePath.includes('feature-documentation')) {
@@ -696,21 +704,7 @@ export async function enter(args: string[]): Promise<void> {
   if (!parsed.dryRun) {
     await writeState(stateFile, finalState)
 
-    // Capture baseline snapshot — record pre-existing dirty files
-    try {
-      const sessionDir = join(getSessionsDir(findProjectDir()), finalState.sessionId!)
-      const status = execSync('git status --porcelain 2>/dev/null || true', {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim()
-      const baselineFiles = status
-        .split('\n')
-        .filter(l => l && !l.startsWith('??'))
-        .flatMap(parseGitStatusPaths)
-      writeBaseline(sessionDir, baselineFiles)
-    } catch {
-      // Baseline failure must not block mode entry
-    }
+    captureBaseline(finalState.sessionId!)
   }
 
   // Determine action taken (native tasks always recreate, so always 'started')
