@@ -39,6 +39,18 @@ describe('parseGitStatusPaths', () => {
   it('parses rename producing both paths', () => {
     expect(parseGitStatusPaths('R  old.ts -> new.ts')).toEqual(['old.ts', 'new.ts'])
   })
+
+  // Regression: worktree-only modifications emit " M path" (leading space = empty index status).
+  // Callers that stripped the git output with .trim() used to corrupt the first character
+  // of the first dirty file. parseGitStatusPaths itself handles the line correctly;
+  // this test guards the callers' expected input shape.
+  it('parses worktree-only modification (leading space)', () => {
+    expect(parseGitStatusPaths(' M README.md')).toEqual(['README.md'])
+  })
+
+  it('parses worktree-only deletion (leading space)', () => {
+    expect(parseGitStatusPaths(' D gone.ts')).toEqual(['gone.ts'])
+  })
 })
 
 describe('appendEdit + readEditsSet', () => {

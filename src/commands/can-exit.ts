@@ -50,10 +50,13 @@ function checkGlobalConditions(checks: Set<string>, sessionDir?: string): { pass
 
   try {
     if (checks.has('committed')) {
+      // Strip trailing newlines only — `.trim()` would eat the leading space
+      // of the first line's porcelain status (e.g. " M README.md"), corrupting
+      // parseGitStatusPaths which expects status at positions 0-1 and path at position 3+.
       const gitStatus = execSync('git status --porcelain 2>/dev/null || true', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim()
+      }).replace(/\n+$/, '')
 
       if (gitStatus) {
         const sessionEdits = sessionDir ? readEditsSet(sessionDir) : null

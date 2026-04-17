@@ -841,11 +841,13 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
         try {
           const projectDir = findProjectDir()
           const sessionDir = join(getSessionsDir(projectDir), sessionId)
+          // Strip trailing newlines only — `.trim()` would eat the leading space
+          // of the first porcelain line, corrupting diff parsing in PostToolUse.
           const snapshot = execSync('git status --porcelain 2>/dev/null || true', {
             encoding: 'utf-8',
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: projectDir,
-          }).trim()
+          }).replace(/\n+$/, '')
           mkdirSync(sessionDir, { recursive: true })
           writeFileSync(join(sessionDir, 'bash-pre-snapshot.txt'), snapshot)
         } catch {
@@ -940,11 +942,13 @@ export async function handlePreToolUse(input: Record<string, unknown>): Promise<
         } catch {
           // No .kata/ found
         }
+        // Strip trailing newlines only — `.trim()` would eat the leading space
+        // of the first porcelain line (e.g. " M file.ts"), corrupting parseGitStatusPaths.
         const gitStatus = execSync('git status --porcelain 2>/dev/null || true', {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
           ...(projectDir ? { cwd: projectDir } : {}),
-        }).trim()
+        }).replace(/\n+$/, '')
 
         if (gitStatus) {
           const evidenceSessionDir = sessionId ? join(getSessionsDir(projectDir ?? process.cwd()), sessionId) : undefined
@@ -1017,12 +1021,14 @@ export async function handlePostToolUse(input: Record<string, unknown>): Promise
       const snapshotPath = join(sessionDir, 'bash-pre-snapshot.txt')
       if (existsSync(snapshotPath)) {
         try {
-          const preSnapshot = readFileSync(snapshotPath, 'utf-8').trim()
+          // Strip trailing newlines only — `.trim()` would eat the leading space
+          // of the first porcelain line, corrupting parseGitStatusPaths.
+          const preSnapshot = readFileSync(snapshotPath, 'utf-8').replace(/\n+$/, '')
           const postSnapshot = execSync('git status --porcelain 2>/dev/null || true', {
             encoding: 'utf-8',
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: projectDir,
-          }).trim()
+          }).replace(/\n+$/, '')
 
           // Find new dirty files
           const preFiles = new Set(preSnapshot.split('\n').filter(Boolean).flatMap(parseGitStatusPaths))

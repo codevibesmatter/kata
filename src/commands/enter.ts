@@ -135,10 +135,13 @@ import { writeBaseline, parseGitStatusPaths } from '../tracking/edits-log.js'
 function captureBaseline(sessionId: string): void {
   try {
     const sessionDir = join(getSessionsDir(findProjectDir()), sessionId)
+    // Strip trailing newlines only — `.trim()` would eat the leading space
+    // of the first line's porcelain status (e.g. " M README.md"), corrupting
+    // path parsing which expects status at positions 0-1 and path at position 3+.
     const status = execSync('git status --porcelain 2>/dev/null || true', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim()
+    }).replace(/\n+$/, '')
     const baselineFiles = status
       .split('\n')
       .filter(l => l && !l.startsWith('??'))
