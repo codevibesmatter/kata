@@ -65,6 +65,7 @@ function mockContext(overrides: {
   baselineRef?: string | null
   sessionId?: string | null
   transcriptPath?: string | null
+  startSha?: string | null
 }): EvalContext {
   const files = overrides.files ?? {}
   const dirs = overrides.dirs ?? {}
@@ -75,6 +76,7 @@ function mockContext(overrides: {
     baselineRef: overrides.baselineRef ?? null,
     sessionId: overrides.sessionId ?? null,
     transcriptPath: overrides.transcriptPath ?? null,
+    startSha: overrides.startSha ?? null,
     getSessionState() {
       if (overrides.state === null) return null
       return (overrides.state ?? {}) as SessionState
