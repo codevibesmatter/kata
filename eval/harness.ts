@@ -357,9 +357,11 @@ export async function runScenario(
       queryOptions.maxTurns = scenario.maxTurns
     }
 
+    // scenario.prompt is guaranteed non-empty on the single-agent path by the
+    // hasPrompt/hasAgents invariant enforced at the top of runScenario.
     const prompt = isResume
       ? (options.resumeAnswer ?? 'Continue.')
-      : (scenario.prompt ?? '')
+      : (scenario.prompt as string)
 
     // Multi-agent branch: spawn one query() per AgentSpec in parallel.
     if (hasAgents && scenario.agents) {
@@ -371,6 +373,12 @@ export async function runScenario(
         turns: number
         sessionId?: string
       }> = []
+
+      // Multi-agent scenarios do NOT support pause/resume (spec v1). Use a
+      // distinct canUseTool that has no closure over the outer abortController,
+      // sessionId, or pendingQuestion — otherwise a concurrent AskUserQuestion
+      // would clobber shared state and abort the wrong agent.
+      const multiAgentCanUseTool = async () => ({ behavior: 'allow' as const })
 
       const agentPromises = scenario.agents.map((spec, idx) => {
         return (async () => {
@@ -389,7 +397,7 @@ export async function runScenario(
             permissionMode: 'bypassPermissions',
             allowDangerouslySkipPermissions: true,
             settingSources: ['project'],
-            canUseTool,
+            canUseTool: multiAgentCanUseTool,
             env: cleanEnv,
           }
           if (spec.maxTurns !== undefined) {

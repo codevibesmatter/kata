@@ -32,6 +32,10 @@ function makeTmpProject(): string {
   return dir
 }
 
+// Integration test for the full two-agent query() dispatch is deferred
+// to the live eval run (VP1 in spec 64). Unit-testing SDK dispatch
+// requires invasive stubbing; VP1 validates this end-to-end.
+
 describe('runScenario invariants', () => {
   it('throws when both prompt and agents are set', async () => {
     const scenario: EvalScenario = {

@@ -235,7 +235,9 @@ export function assertTwoCommitsSinceStart(): EvalCheckpoint {
 }
 
 /**
- * Glob matcher for ALLOWLIST entries. Supports `*` wildcards only.
+ * Minimal glob matcher for ALLOWLIST patterns.
+ * Supports `*` wildcard only — NOT `?`, `**`, or character classes.
+ * Used exclusively for the file-scoping assertion's allowlist.
  */
 function matchesAllowlist(file: string, patterns: string[]): boolean {
   for (const pattern of patterns) {
@@ -346,10 +348,12 @@ export function assertCommitsScopedToEachSession(): EvalCheckpoint {
         // Drop stale sessions whose start is BEFORE the scenario-start
         if (sessionMs < startMs) continue
 
+        // Do NOT short-circuit on empty edits here — let flow fall into the
+        // candidate-intersection logic below, which produces a diagnostic
+        // naming the session and enumerating candidate SHAs. A per-session
+        // early return would skip that diagnostic AND short-circuit evaluation
+        // of any other surviving sessions.
         const edits = readEditsSet(dir)
-        if (edits.size === 0) {
-          return fail(`Session ${id} has empty edits.jsonl`)
-        }
         surviving.push({ id, edits })
       }
 
