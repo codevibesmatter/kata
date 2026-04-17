@@ -218,11 +218,18 @@ function checkFeatureTestsAdded(sessionDir?: string): { passed: boolean; newTest
       .split('\n')
       .filter((f) => f && patterns.some((ext) => f.endsWith(ext)))
 
-    // Filter to session-owned files if tracking is available
+    // Filter to session-owned files if tracking is available.
+    // If filtering produces an empty set (tracking may not cover the full session),
+    // fall back to the unfiltered list — better to over-check than miss real tests.
     let filteredFiles = changedFiles
     if (sessionDir) {
       const sessionEdits = readEditsSet(sessionDir)
-      filteredFiles = changedFiles.filter(f => sessionEdits.has(f))
+      if (sessionEdits.size > 0) {
+        const scoped = changedFiles.filter(f => sessionEdits.has(f))
+        if (scoped.length > 0) {
+          filteredFiles = scoped
+        }
+      }
     }
 
     if (filteredFiles.length === 0) {
