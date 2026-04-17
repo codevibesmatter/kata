@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'bun:test'
+
+afterAll(() => { process.exitCode = 0 })
+import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import * as os from 'node:os'
 
@@ -15,13 +18,15 @@ function makeTmpDir(): string {
 /**
  * Helper: capture console.log output from enter(), also suppressing stderr
  */
-async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: string }> {
+async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number | undefined }> {
   const { enter } = await import('./enter.js')
   let stdout = ''
   let stderr = ''
   const origLog = console.log
   const origError = console.error
   const origStderrWrite = process.stderr.write
+  const origExitCode = process.exitCode
+  process.exitCode = 0
   console.log = (...logArgs: unknown[]) => {
     stdout += logArgs.map(String).join(' ')
   }
@@ -39,7 +44,9 @@ async function captureEnter(args: string[]): Promise<{ stdout: string; stderr: s
     console.error = origError
     process.stderr.write = origStderrWrite
   }
-  return { stdout, stderr }
+  const exitCode = process.exitCode
+  process.exitCode = 0
+  return { stdout, stderr, exitCode }
 }
 
 describe('enter', () => {
@@ -49,13 +56,16 @@ describe('enter', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir()
-    mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
     // Write kata.yaml so loadKataConfig() finds it (no longer reads wm.yaml/modes.yaml)
     // Include modes needed by tests (freeform, research, flow-deprecated)
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
+        'project:',
+        '  build_command: "echo build"',
+        '  test_command: "echo test"',
+        '  typecheck_command: "echo typecheck"',
         'spec_path: planning/specs',
         'research_path: planning/research',
         'modes:',
@@ -68,6 +78,9 @@ describe('enter', () => {
         '    stop_conditions: [tasks_complete, committed]',
         '  implementation:',
         '    template: implementation.md',
+        '    stop_conditions: [tasks_complete, committed]',
+        '  task:',
+        '    template: task.md',
         '    stop_conditions: [tasks_complete, committed]',
         '  flow:',
         '    deprecated: true',
@@ -91,12 +104,12 @@ describe('enter', () => {
     } else {
       delete process.env.CLAUDE_SESSION_ID
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   it('prints usage when no mode is provided', async () => {
-    const { stderr } = await captureEnter([])
-    expect(process.exitCode).toBe(1)
+    const { stderr, exitCode } = await captureEnter([])
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('Usage:')
   })
 
@@ -142,25 +155,25 @@ describe('enter', () => {
   })
 
   it('rejects unknown mode', async () => {
-    const { stderr } = await captureEnter([
+    const { stderr, exitCode } = await captureEnter([
       'totally-nonexistent-mode',
       '--skip-cleanup',
       `--session=${process.env.CLAUDE_SESSION_ID}`,
     ])
 
-    expect(process.exitCode).toBe(1)
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('Unknown mode')
   })
 
   it('rejects deprecated mode', async () => {
     // 'flow' is deprecated with redirect_to: freeform
-    const { stderr } = await captureEnter([
+    const { stderr, exitCode } = await captureEnter([
       'flow',
       '--skip-cleanup',
       `--session=${process.env.CLAUDE_SESSION_ID}`,
     ])
 
-    expect(process.exitCode).toBe(1)
+    expect(exitCode).toBe(1)
     expect(stderr).toContain('deprecated')
   })
 
@@ -195,10 +208,12 @@ name: "Custom Template"
 phases:
   - id: p0
     name: "Step 1"
+    stage: setup
     task_config:
       title: "Do step 1"
   - id: p1
     name: "Step 2"
+    stage: work
     task_config:
       title: "Do step 2"
 ---
@@ -217,13 +232,13 @@ Instructions here.
 
     const result = JSON.parse(stdout) as {
       success: boolean
-      customTemplate: string
+      template: string
       phases: string[]
       dryRun: boolean
     }
 
     expect(result.success).toBe(true)
-    expect(result.customTemplate).toBe(templatePath)
+    expect(result.template).toBe(templatePath)
     expect(result.phases).toEqual(['p0', 'p1'])
     expect(result.dryRun).toBe(true)
   })
@@ -231,7 +246,7 @@ Instructions here.
   it('spec_path from kata.yaml is respected', async () => {
     // Write kata.yaml with custom spec_path, including the freeform mode needed by the test
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
         'spec_path: custom/specs',
         'research_path: planning/research',
@@ -319,5 +334,45 @@ Instructions here.
     expect(result.mode).toBe('implementation')
     // The dry-run stderr preview includes native task subjects with skill invocations
     expect(stderr).toContain('kata-setup')
+  })
+
+  // Regression for porcelain-leading-space bug: a worktree-only modification
+  // emits " M path" (leading space = empty index status). captureBaseline used
+  // to `.trim()` the full status, eating that leading space and causing
+  // parseGitStatusPaths to return "ath" instead of "path".
+  it('baseline.json records correct path for worktree-only modifications', async () => {
+    // Build a real git repo inside tmpDir so kata enter's captureBaseline
+    // sees genuine porcelain output (with a leading-space status line).
+    // Note: captureBaseline runs execSync without an explicit cwd, so we
+    // chdir into tmpDir for the duration of this test.
+    const exec = (cmd: string) => execSync(cmd, { cwd: tmpDir, stdio: 'pipe', encoding: 'utf-8' })
+    exec('git init -q')
+    exec('git config user.email test@test')
+    exec('git config user.name test')
+    writeFileSync(join(tmpDir, 'README.md'), 'original\n')
+    exec('git add README.md')
+    exec('git -c commit.gpgsign=false commit -q -m init')
+    // Worktree-only modification — emits " M README.md" in porcelain.
+    writeFileSync(join(tmpDir, 'README.md'), 'modified\n')
+
+    const sessionId = process.env.CLAUDE_SESSION_ID!
+    const origCwd = process.cwd()
+    process.chdir(tmpDir)
+    try {
+      await captureEnter([
+        'task',
+        '--skip-cleanup',
+        `--session=${sessionId}`,
+      ])
+    } finally {
+      process.chdir(origCwd)
+    }
+
+    const baselinePath = join(tmpDir, '.kata', 'sessions', sessionId, 'baseline.json')
+    expect(existsSync(baselinePath)).toBe(true)
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8')) as { files: string[] }
+    // The key assertion: path is "README.md", NOT "EADME.md".
+    expect(baseline.files).toContain('README.md')
+    expect(baseline.files).not.toContain('EADME.md')
   })
 })

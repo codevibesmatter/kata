@@ -8,6 +8,7 @@ workflow_prefix: "SH"
 phases:
   - id: p0
     name: Write
+    stage: work
     task_config:
       title: "P0: Write a trivial file"
       labels: [phase, phase-0]
@@ -36,6 +37,7 @@ phases:
 
   - id: p1
     name: Commit
+    stage: work
     task_config:
       title: "P1: Commit the file"
       labels: [phase, phase-1]
@@ -59,6 +61,7 @@ phases:
 
   - id: p2
     name: Push
+    stage: work
     task_config:
       title: "P2: Push to remote"
       labels: [phase, phase-2]
@@ -80,6 +83,7 @@ phases:
 
   - id: p3
     name: Cleanup
+    stage: close
     task_config:
       title: "P3: Revert and clean up"
       labels: [phase, phase-3]

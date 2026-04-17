@@ -255,9 +255,14 @@ describe('stage field on phaseSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('rejects expansion on non-work phase', () => {
-    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage: 'setup', expansion: 'agent' })
+  it('rejects spec expansion on non-work phase', () => {
+    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage: 'setup', expansion: 'spec', subphase_pattern: [] })
     expect(result.success).toBe(false)
+  })
+
+  it('allows agent expansion on setup phase', () => {
+    const result = phaseSchema.safeParse({ id: 'p0', name: 'Test', stage: 'setup', expansion: 'agent' })
+    expect(result.success).toBe(true)
   })
 
   it('accepts expansion on work phase', () => {

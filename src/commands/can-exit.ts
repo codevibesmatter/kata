@@ -2,7 +2,7 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getCurrentSessionId, findProjectDir, getStateFilePath, getVerificationDir } from '../session/lookup.js'
+import { getCurrentSessionId, findProjectDir, getStateFilePath, getVerificationDir, getSessionsDir } from '../session/lookup.js'
 import { readState } from '../state/reader.js'
 import {
   type StopGuidance,
@@ -19,6 +19,7 @@ import {
 } from './enter/task-factory.js'
 import { loadKataConfig } from '../config/kata-config.js'
 import { findSpecFile, validateSpec } from './validate-spec.js'
+import { readEditsSet, parseGitStatusPaths } from '../tracking/edits-log.js'
 
 /**
  * Parse command line arguments for can-exit command
@@ -43,27 +44,52 @@ function parseArgs(args: string[]): {
 /**
  * Check git conditions (committed, pushed) based on which checks are active
  */
-function checkGlobalConditions(checks: Set<string>): { passed: boolean; reasons: string[] } {
+function checkGlobalConditions(checks: Set<string>, sessionDir?: string): { passed: boolean; reasons: string[]; advisories: string[] } {
   const reasons: string[] = []
+  const advisories: string[] = []
 
   try {
     if (checks.has('committed')) {
+      // Strip trailing newlines only — `.trim()` would eat the leading space
+      // of the first line's porcelain status (e.g. " M README.md"), corrupting
+      // parseGitStatusPaths which expects status at positions 0-1 and path at position 3+.
       const gitStatus = execSync('git status --porcelain 2>/dev/null || true', {
         encoding: 'utf-8',
         stdio: ['pipe', 'pipe', 'pipe'],
-      }).trim()
+      }).replace(/\n+$/, '')
 
       if (gitStatus) {
+        const sessionEdits = sessionDir ? readEditsSet(sessionDir) : null
+        const outOfScopeFiles: string[] = []
+
         const changedFiles = gitStatus.split('\n').filter((line) => {
           if (line.startsWith('??')) return false
+          const paths = parseGitStatusPaths(line)
+          const file = paths[0] // primary path
           // Exclude kata session logs — the stop hook writes these on every invocation,
           // creating a recursive loop if we count them as uncommitted changes
-          const file = line.slice(3)
           if (file.startsWith('.kata/sessions/')) return false
+
+          if (sessionEdits) {
+            // Session-scoped: only count files this session touched
+            if (sessionEdits.has(file)) return true
+            // Track out-of-scope files for advisory
+            outOfScopeFiles.push(file)
+            return false
+          }
+          // No session tracking (no edits.jsonl) — fall back to global behavior
           return true
         })
+
         if (changedFiles.length > 0) {
           reasons.push('Uncommitted changes in tracked files')
+        }
+
+        // Advisory for out-of-scope dirty files
+        if (outOfScopeFiles.length > 0) {
+          const shown = outOfScopeFiles.slice(0, 5)
+          const suffix = outOfScopeFiles.length > 5 ? `, ... and ${outOfScopeFiles.length - 5} more` : ''
+          advisories.push(`Note: ${outOfScopeFiles.length} file(s) outside this session's scope have uncommitted changes: ${shown.join(', ')}${suffix}`)
         }
       }
     }
@@ -85,6 +111,7 @@ function checkGlobalConditions(checks: Set<string>): { passed: boolean; reasons:
   return {
     passed: reasons.length === 0,
     reasons,
+    advisories,
   }
 }
 
@@ -178,7 +205,7 @@ function checkTestsPass(issueNumber: number, nonCodePaths: string[]): { passed: 
  * Check that at least one new test function was added in this session vs diff_base.
  * Reads project.diff_base and project.test_file_pattern from wm.yaml.
  */
-function checkFeatureTestsAdded(): { passed: boolean; newTestCount?: number } {
+function checkFeatureTestsAdded(sessionDir?: string): { passed: boolean; newTestCount?: number } {
   try {
     const cfg = loadKataConfig()
     const diffBase = cfg.project?.diff_base ?? 'origin/main'
@@ -194,13 +221,27 @@ function checkFeatureTestsAdded(): { passed: boolean; newTestCount?: number } {
       .split('\n')
       .filter((f) => f && patterns.some((ext) => f.endsWith(ext)))
 
-    if (changedFiles.length === 0) {
+    // Filter to session-owned files if tracking is available.
+    // If filtering produces an empty set (tracking may not cover the full session),
+    // fall back to the unfiltered list — better to over-check than miss real tests.
+    let filteredFiles = changedFiles
+    if (sessionDir) {
+      const sessionEdits = readEditsSet(sessionDir)
+      if (sessionEdits.size > 0) {
+        const scoped = changedFiles.filter(f => sessionEdits.has(f))
+        if (scoped.length > 0) {
+          filteredFiles = scoped
+        }
+      }
+    }
+
+    if (filteredFiles.length === 0) {
       return { passed: false, newTestCount: 0 }
     }
 
     // Count new test function declarations added
     const diffOutput = execSync(
-      `git diff "${diffBase}" -- ${changedFiles.map((f) => `"${f}"`).join(' ')} 2>/dev/null || true`,
+      `git diff "${diffBase}" -- ${filteredFiles.map((f) => `"${f}"`).join(' ')} 2>/dev/null || true`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
     )
 
@@ -324,14 +365,25 @@ function validateCanExit(
 ): {
   canExit: boolean
   reasons: string[]
+  advisories: string[]
   hasOpenTasks: boolean
   usingTasks: boolean
 } {
   const reasons: string[] = []
+  let allAdvisories: string[] = []
+
+  const sessionDir = (() => {
+    try {
+      const projectDir = findProjectDir()
+      return join(getSessionsDir(projectDir), sessionId)
+    } catch {
+      return undefined
+    }
+  })()
 
   // No stop conditions = can always exit
   if (stopConditions.length === 0) {
-    return { canExit: true, reasons: [], hasOpenTasks: false, usingTasks: false }
+    return { canExit: true, reasons: [], advisories: [], hasOpenTasks: false, usingTasks: false }
   }
 
   // Build effective checks set (filter stage-scoped conditions whose stage isn't complete)
@@ -399,7 +451,7 @@ function validateCanExit(
 
     // ── feature_tests_added ──
     if (checks.has('feature_tests_added')) {
-      const featureTestsCheck = checkFeatureTestsAdded()
+      const featureTestsCheck = checkFeatureTestsAdded(sessionDir)
       if (!featureTestsCheck.passed) {
         reasons.push(
           'At least one new test function required (it/test/describe). See: arXiv 2402.13521',
@@ -426,8 +478,9 @@ function validateCanExit(
     // ── committed + pushed (check after task/verification checks) ──
     if (reasons.length === 0) {
       if (checks.has('committed') || checks.has('pushed')) {
-        const globalCheck = checkGlobalConditions(checks)
+        const globalCheck = checkGlobalConditions(checks, sessionDir)
         reasons.push(...globalCheck.reasons)
+        allAdvisories = globalCheck.advisories
       }
     }
   }
@@ -435,6 +488,7 @@ function validateCanExit(
   return {
     canExit: reasons.length === 0,
     reasons,
+    advisories: allAdvisories,
     hasOpenTasks,
     usingTasks,
   }
@@ -548,6 +602,7 @@ export async function canExit(args: string[]): Promise<void> {
   const {
     canExit: canExitNow,
     reasons,
+    advisories,
     hasOpenTasks,
     usingTasks,
   } = validateCanExit(workflowId, sessionId, stopConditions, issueNumber, phasesByStage, deliverablePath)
@@ -569,6 +624,7 @@ export async function canExit(args: string[]): Promise<void> {
         {
           canExit: canExitNow,
           reasons,
+          advisories,
           guidance,
           workflowId,
           sessionType,
@@ -600,6 +656,10 @@ export async function canExit(args: string[]): Promise<void> {
           getNextStepMessage({ id: guidance.nextPhase.beadId, title: guidance.nextPhase.title }),
         )
       }
+    }
+    for (const advisory of advisories) {
+      // biome-ignore lint/suspicious/noConsole: intentional CLI output
+      console.log(`  ℹ️  ${advisory}`)
     }
   }
 

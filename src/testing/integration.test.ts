@@ -94,7 +94,7 @@ describe('integration: full hook dispatch simulation', () => {
     } else {
       delete process.env.CLAUDE_SESSION_ID
     }
-    process.exitCode = undefined
+    process.exitCode = 0
   })
 
   it('session-start -> user-prompt -> stop-conditions lifecycle', async () => {
