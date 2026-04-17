@@ -37,7 +37,23 @@ If a build command is configured, run it to confirm the project compiles:
 
 Document: current branch, any pre-existing issues.
 
-## 3. Branch Creation
+## 3. Pull Latest
+
+Pull the latest changes from the remote so work starts from an up-to-date base:
+
+```bash
+git pull --ff-only origin main 2>/dev/null || git pull --ff-only 2>/dev/null || true
+```
+
+If on a feature branch, pull its tracking branch instead:
+
+```bash
+git pull --ff-only
+```
+
+If the pull fails (e.g. diverged history), note it and continue — do not force-pull or reset.
+
+## 4. Branch Creation
 
 Create a branch for this work:
 
@@ -52,7 +68,7 @@ If already on a feature branch, confirm it is up to date:
 git fetch origin && git status
 ```
 
-## 4. GitHub Issue Claiming
+## 5. GitHub Issue Claiming
 
 If a GitHub issue exists, claim it:
 
@@ -61,7 +77,7 @@ gh issue edit {issue_number} --remove-label "status:todo" --remove-label "approv
 gh issue comment {issue_number} --body "Starting work on branch: {branch_name}"
 ```
 
-## 5. Mode-Conditional Steps
+## 6. Mode-Conditional Steps
 
 ### If in implementation mode
 
