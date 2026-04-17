@@ -36,12 +36,11 @@ describe('suggest', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir()
-    mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
     // Write kata.yaml so loadKataConfig() finds it (no longer reads wm.yaml/modes.yaml)
     // Include modes with intent_keywords so mode detection tests work
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
         'spec_path: planning/specs',
         'research_path: planning/research',
@@ -123,7 +122,7 @@ describe('suggest', () => {
 
   it('uses research_path from KataConfig for search commands', async () => {
     // Write custom kata.yaml with custom research_path
-    const kataYamlPath = join(tmpDir, '.claude', 'workflows', 'kata.yaml')
+    const kataYamlPath = join(tmpDir, '.kata', 'kata.yaml')
     writeFileSync(kataYamlPath, 'research_path: custom/research\nspec_path: custom/specs\n')
 
     const output = await captureSuggest(['find', 'research', 'about', 'api'])

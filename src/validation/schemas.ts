@@ -127,6 +127,7 @@ export const subphasePatternSchema = z.object({
   agent: agentStepConfigSchema.optional(),
   gate: gateSchema.optional(),
   hints: z.array(hintSchema).optional(),
+  skill: z.string().optional(),
 })
 
 // ── Agent protocol schema (for expansion: 'agent' phases) ──
@@ -151,8 +152,8 @@ export const phaseSchema = z.object({
   steps: z.array(phaseStepSchema).optional(), // Individual trackable units within phase (e.g., interview rounds)
   subphase_pattern: z.array(subphasePatternSchema).optional(), // Inline array only (string references removed)
 }).refine(
-  (p) => !p.expansion || p.stage === 'work',
-  { message: 'expansion is only allowed on work-stage phases' }
+  (p) => p.expansion !== 'spec' || p.stage === 'work',
+  { message: 'expansion: spec is only allowed on work-stage phases' }
 )
 
 /**

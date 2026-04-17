@@ -38,13 +38,12 @@ describe('canExit', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir()
-    mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
     // Write baseline kata.yaml so loadKataConfig() finds it (no longer reads wm.yaml/modes.yaml)
     // Include implementation + freeform modes with the stop_conditions used by test scenarios.
     // Individual tests that need specific review config overwrite this file before calling canExit.
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
         'spec_path: planning/specs',
         'research_path: planning/research',
@@ -79,7 +78,7 @@ describe('canExit', () => {
 
   function createSessionState(state: Record<string, unknown>): void {
     const sessionId = process.env.CLAUDE_SESSION_ID!
-    const sessionDir = join(tmpDir, '.claude', 'sessions', sessionId)
+    const sessionDir = join(tmpDir, '.kata', 'sessions', sessionId)
     mkdirSync(sessionDir, { recursive: true })
     writeFileSync(
       join(sessionDir, 'state.json'),
@@ -124,7 +123,7 @@ describe('canExit', () => {
     // Regression: "on base branch / no diff" used to short-circuit ALL checks including
     // tasks_complete, allowing exit at session start before any work was done.
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       jsYaml.dump({
         modes: {
           research: { template: 'research.md', stop_conditions: ['tasks_complete', 'committed'] },
@@ -157,7 +156,7 @@ describe('canExit', () => {
 
   it('checkTestsPass: blocks when no phase evidence files exist', async () => {
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       jsYaml.dump({
         modes: {
           implementation: { template: 'implementation.md', stop_conditions: ['tasks_complete', 'committed', 'pushed', 'tests_pass', 'feature_tests_added'] },
@@ -180,7 +179,7 @@ describe('canExit', () => {
 
   it('checkTestsPass: passes when phase evidence file exists with overallPassed true', async () => {
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       jsYaml.dump({
         modes: {
           implementation: { template: 'implementation.md', stop_conditions: ['tasks_complete', 'committed', 'pushed', 'tests_pass', 'feature_tests_added'] },
@@ -194,7 +193,7 @@ describe('canExit', () => {
       issueNumber: 333,
     })
 
-    const evidenceDir = join(tmpDir, '.claude', 'verification-evidence')
+    const evidenceDir = join(tmpDir, '.kata', 'verification-evidence')
     mkdirSync(evidenceDir, { recursive: true })
     writeFileSync(
       join(evidenceDir, 'phase-p1-333.json'),
@@ -215,7 +214,7 @@ describe('canExit', () => {
 
   it('checkTestsPass: blocks when phase evidence overallPassed is false', async () => {
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       jsYaml.dump({
         modes: {
           implementation: { template: 'implementation.md', stop_conditions: ['tasks_complete', 'committed', 'pushed', 'tests_pass', 'feature_tests_added'] },
@@ -229,7 +228,7 @@ describe('canExit', () => {
       issueNumber: 222,
     })
 
-    const evidenceDir = join(tmpDir, '.claude', 'verification-evidence')
+    const evidenceDir = join(tmpDir, '.kata', 'verification-evidence')
     mkdirSync(evidenceDir, { recursive: true })
     writeFileSync(
       join(evidenceDir, 'phase-p1-222.json'),

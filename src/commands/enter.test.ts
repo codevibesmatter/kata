@@ -49,13 +49,16 @@ describe('enter', () => {
 
   beforeEach(() => {
     tmpDir = makeTmpDir()
-    mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
-    mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
     // Write kata.yaml so loadKataConfig() finds it (no longer reads wm.yaml/modes.yaml)
     // Include modes needed by tests (freeform, research, flow-deprecated)
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
+        'project:',
+        '  build_command: "echo build"',
+        '  test_command: "echo test"',
+        '  typecheck_command: "echo typecheck"',
         'spec_path: planning/specs',
         'research_path: planning/research',
         'modes:',
@@ -68,6 +71,9 @@ describe('enter', () => {
         '    stop_conditions: [tasks_complete, committed]',
         '  implementation:',
         '    template: implementation.md',
+        '    stop_conditions: [tasks_complete, committed]',
+        '  task:',
+        '    template: task.md',
         '    stop_conditions: [tasks_complete, committed]',
         '  flow:',
         '    deprecated: true',
@@ -195,10 +201,12 @@ name: "Custom Template"
 phases:
   - id: p0
     name: "Step 1"
+    stage: setup
     task_config:
       title: "Do step 1"
   - id: p1
     name: "Step 2"
+    stage: work
     task_config:
       title: "Do step 2"
 ---
@@ -217,13 +225,13 @@ Instructions here.
 
     const result = JSON.parse(stdout) as {
       success: boolean
-      customTemplate: string
+      template: string
       phases: string[]
       dryRun: boolean
     }
 
     expect(result.success).toBe(true)
-    expect(result.customTemplate).toBe(templatePath)
+    expect(result.template).toBe(templatePath)
     expect(result.phases).toEqual(['p0', 'p1'])
     expect(result.dryRun).toBe(true)
   })
@@ -231,7 +239,7 @@ Instructions here.
   it('spec_path from kata.yaml is respected', async () => {
     // Write kata.yaml with custom spec_path, including the freeform mode needed by the test
     writeFileSync(
-      join(tmpDir, '.claude', 'workflows', 'kata.yaml'),
+      join(tmpDir, '.kata', 'kata.yaml'),
       [
         'spec_path: custom/specs',
         'research_path: planning/research',
