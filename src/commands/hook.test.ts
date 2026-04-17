@@ -51,7 +51,7 @@ function writeSessionState(
   sessionId: string,
   overrides: Record<string, unknown> = {},
 ): void {
-  const sessionDir = join(tmpDir, '.claude', 'sessions', sessionId)
+  const sessionDir = join(tmpDir, '.kata', 'sessions', sessionId)
   mkdirSync(sessionDir, { recursive: true })
   writeFileSync(
     join(sessionDir, 'state.json'),
@@ -72,7 +72,7 @@ function writeSessionState(
 
 /** Parse hook log entries from hooks.log.jsonl */
 function readHookLog(tmpDir: string, sessionId: string): Array<Record<string, unknown>> {
-  const logPath = join(tmpDir, '.claude', 'sessions', sessionId, 'hooks.log.jsonl')
+  const logPath = join(tmpDir, '.kata', 'sessions', sessionId, 'hooks.log.jsonl')
   if (!existsSync(logPath)) return []
   return readFileSync(logPath, 'utf-8')
     .trim()
@@ -89,6 +89,7 @@ describe('hook dispatch', () => {
     tmpDir = makeTmpDir()
     mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
     mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
@@ -126,6 +127,7 @@ describe('handleModeGate', () => {
     tmpDir = makeTmpDir()
     mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
     mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
@@ -299,6 +301,7 @@ describe('handleTaskEvidence', () => {
     tmpDir = makeTmpDir()
     mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
     mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
@@ -341,6 +344,7 @@ describe('handleTaskDeps', () => {
     tmpDir = makeTmpDir()
     mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
     mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
@@ -399,6 +403,7 @@ describe('logHook', () => {
     tmpDir = makeTmpDir()
     mkdirSync(join(tmpDir, '.claude', 'sessions'), { recursive: true })
     mkdirSync(join(tmpDir, '.claude', 'workflows'), { recursive: true })
+    mkdirSync(join(tmpDir, '.kata'), { recursive: true })
     process.env.CLAUDE_PROJECT_DIR = tmpDir
   })
 
