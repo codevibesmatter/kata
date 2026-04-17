@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'bun:test'
 
 afterAll(() => { process.exitCode = 0 })
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import * as os from 'node:os'
 
@@ -333,5 +334,45 @@ Instructions here.
     expect(result.mode).toBe('implementation')
     // The dry-run stderr preview includes native task subjects with skill invocations
     expect(stderr).toContain('kata-setup')
+  })
+
+  // Regression for porcelain-leading-space bug: a worktree-only modification
+  // emits " M path" (leading space = empty index status). captureBaseline used
+  // to `.trim()` the full status, eating that leading space and causing
+  // parseGitStatusPaths to return "ath" instead of "path".
+  it('baseline.json records correct path for worktree-only modifications', async () => {
+    // Build a real git repo inside tmpDir so kata enter's captureBaseline
+    // sees genuine porcelain output (with a leading-space status line).
+    // Note: captureBaseline runs execSync without an explicit cwd, so we
+    // chdir into tmpDir for the duration of this test.
+    const exec = (cmd: string) => execSync(cmd, { cwd: tmpDir, stdio: 'pipe', encoding: 'utf-8' })
+    exec('git init -q')
+    exec('git config user.email test@test')
+    exec('git config user.name test')
+    writeFileSync(join(tmpDir, 'README.md'), 'original\n')
+    exec('git add README.md')
+    exec('git -c commit.gpgsign=false commit -q -m init')
+    // Worktree-only modification — emits " M README.md" in porcelain.
+    writeFileSync(join(tmpDir, 'README.md'), 'modified\n')
+
+    const sessionId = process.env.CLAUDE_SESSION_ID!
+    const origCwd = process.cwd()
+    process.chdir(tmpDir)
+    try {
+      await captureEnter([
+        'task',
+        '--skip-cleanup',
+        `--session=${sessionId}`,
+      ])
+    } finally {
+      process.chdir(origCwd)
+    }
+
+    const baselinePath = join(tmpDir, '.kata', 'sessions', sessionId, 'baseline.json')
+    expect(existsSync(baselinePath)).toBe(true)
+    const baseline = JSON.parse(readFileSync(baselinePath, 'utf-8')) as { files: string[] }
+    // The key assertion: path is "README.md", NOT "EADME.md".
+    expect(baseline.files).toContain('README.md')
+    expect(baseline.files).not.toContain('EADME.md')
   })
 })

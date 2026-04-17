@@ -406,11 +406,13 @@ export async function handleTaskEvidence(_input: Record<string, unknown>): Promi
     } catch {
       // No .claude/ found — fall back to hook runner's cwd
     }
+    // Strip trailing newlines only — consistent with other porcelain call sites
+    // so that the leading space of " M path" status lines is preserved.
     const gitStatus = execSync('git status --porcelain 2>/dev/null || true', {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       ...(cwd ? { cwd } : {}),
-    }).trim()
+    }).replace(/\n+$/, '')
 
     if (gitStatus) {
       // There are uncommitted changes — remind agent to commit before marking done
