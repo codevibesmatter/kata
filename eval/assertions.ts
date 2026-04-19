@@ -6,9 +6,10 @@
  * definitions in scenario files.
  */
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { readNativeTaskFiles } from '../src/commands/enter/task-factory.js'
+import { readEditsSet } from '../src/tracking/edits-log.js'
 import type { EvalCheckpoint, EvalContext } from './harness.js'
 import { judgeTranscript } from './judge.js'
 
@@ -198,6 +199,216 @@ export function assertChangesPushed(): EvalCheckpoint {
       if (status.includes('ahead')) {
         return fail(`Unpushed commits: ${status.split('\n')[0]}`)
       }
+      return pass()
+    },
+  }
+}
+
+// ─── Multi-Session Commit Scoping Assertions ─────────────────────────────────
+
+/**
+ * Assert that exactly 2 non-merge commits have been made since ctx.startSha.
+ * Used by the two-agent tracker scenario to confirm each agent produced
+ * exactly one commit.
+ */
+export function assertTwoCommitsSinceStart(): EvalCheckpoint {
+  return {
+    name: 'git: exactly 2 non-merge commits since scenario start',
+    assert(ctx: EvalContext) {
+      if (!ctx.startSha) {
+        return fail('No startSha set — this assertion requires the scenario-start SHA')
+      }
+      const countRaw = ctx.run(`git rev-list --count --no-merges ${ctx.startSha}..HEAD`)
+      const count = parseInt((countRaw ?? '').trim(), 10)
+      if (count !== 2) {
+        const subjects = ctx
+          .run(`git log --oneline --no-merges ${ctx.startSha}..HEAD`)
+          ?.trim() ?? ''
+        return fail(
+          `Expected 2 non-merge commits since ${ctx.startSha.slice(0, 8)}, got ${isNaN(count) ? 0 : count}.\n` +
+          `Recent commits:\n${subjects || '(none)'}`,
+        )
+      }
+      return pass()
+    },
+  }
+}
+
+/**
+ * Minimal glob matcher for ALLOWLIST patterns.
+ * Supports `*` wildcard only — NOT `?`, `**`, or character classes.
+ * Used exclusively for the file-scoping assertion's allowlist.
+ */
+function matchesAllowlist(file: string, patterns: string[]): boolean {
+  for (const pattern of patterns) {
+    if (pattern.includes('*')) {
+      const rx = new RegExp(
+        '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$',
+      )
+      if (rx.test(file)) return true
+    } else if (file === pattern) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Files permitted in a session's commit that aren't in the session's edits.jsonl.
+ * Glob syntax: `*` matches any substring.
+ */
+const COMMIT_SCOPE_ALLOWLIST = ['bun.lockb', 'bun.lock', 'package-lock.json', '*.tsbuildinfo']
+
+/**
+ * Assert that each active session's commit contains only files belonging to
+ * that session's edits.jsonl (∪ framework allowlist).
+ *
+ * Algorithm:
+ *   1. For each session dir under .kata/sessions/, read state.json; keep those
+ *      whose startedAt (fallback: modeState[currentMode].enteredAt) is ≥
+ *      the committer timestamp of ctx.startSha.
+ *   2. For each surviving session S, read E_S = readEditsSet(sessionDir).
+ *   3. Enumerate candidate SHAs via `git rev-list --no-merges startSha..HEAD`.
+ *      For each SHA, compute F = files changed via `git show --name-only`.
+ *   4. Require that exactly one commit's file-set intersects E_S.
+ *   5. Require F ⊆ E_S ∪ ALLOWLIST for that commit.
+ */
+export function assertCommitsScopedToEachSession(): EvalCheckpoint {
+  return {
+    name: 'each session commit is scoped to its own edits.jsonl',
+    assert(ctx: EvalContext) {
+      if (!ctx.startSha) {
+        return fail('No startSha set — this assertion requires the scenario-start SHA')
+      }
+
+      // Scenario-start committer timestamp (ISO)
+      const startIso = ctx.run(`git show -s --format=%cI ${ctx.startSha}`)?.trim()
+      if (!startIso) {
+        return fail(`Could not resolve committer timestamp for startSha ${ctx.startSha.slice(0, 8)}`)
+      }
+      const startMs = Date.parse(startIso)
+      if (isNaN(startMs)) {
+        return fail(`Could not parse scenario-start timestamp: '${startIso}'`)
+      }
+
+      // Enumerate session directories
+      const sessionsRoot = join(ctx.projectDir, '.kata', 'sessions')
+      if (!existsSync(sessionsRoot)) {
+        return fail(`No .kata/sessions directory at ${sessionsRoot}`)
+      }
+      let sessionEntries: string[]
+      try {
+        sessionEntries = readdirSync(sessionsRoot)
+      } catch (err) {
+        return fail(`Cannot read ${sessionsRoot}: ${err instanceof Error ? err.message : String(err)}`)
+      }
+
+      interface SurvivingSession {
+        id: string
+        edits: Set<string>
+      }
+      const surviving: SurvivingSession[] = []
+
+      for (const id of sessionEntries) {
+        const dir = join(sessionsRoot, id)
+        let isDir = false
+        try {
+          isDir = statSync(dir).isDirectory()
+        } catch {
+          continue
+        }
+        if (!isDir) continue
+
+        const statePath = join(dir, 'state.json')
+        if (!existsSync(statePath)) continue
+        let state: Record<string, unknown>
+        try {
+          state = JSON.parse(readFileSync(statePath, 'utf-8'))
+        } catch {
+          continue
+        }
+
+        // Determine session start time: prefer top-level startedAt,
+        // fall back to modeState[currentMode]?.enteredAt
+        let sessionStartIso: string | undefined = typeof state.startedAt === 'string'
+          ? (state.startedAt as string)
+          : undefined
+        if (!sessionStartIso) {
+          const currentMode = typeof state.currentMode === 'string'
+            ? (state.currentMode as string)
+            : undefined
+          const modeState = state.modeState as Record<string, { enteredAt?: string }> | undefined
+          if (currentMode && modeState?.[currentMode]?.enteredAt) {
+            sessionStartIso = modeState[currentMode].enteredAt
+          }
+        }
+        if (!sessionStartIso) continue
+        const sessionMs = Date.parse(sessionStartIso)
+        if (isNaN(sessionMs)) continue
+        // Drop stale sessions whose start is BEFORE the scenario-start
+        if (sessionMs < startMs) continue
+
+        // Do NOT short-circuit on empty edits here — let flow fall into the
+        // candidate-intersection logic below, which produces a diagnostic
+        // naming the session and enumerating candidate SHAs. A per-session
+        // early return would skip that diagnostic AND short-circuit evaluation
+        // of any other surviving sessions.
+        const edits = readEditsSet(dir)
+        surviving.push({ id, edits })
+      }
+
+      if (surviving.length === 0) {
+        return fail('No active sessions survived scenario-start timestamp filter')
+      }
+
+      // Enumerate candidate commit SHAs (non-merges since startSha)
+      const revRaw = ctx.run(`git rev-list --no-merges ${ctx.startSha}..HEAD`) ?? ''
+      const candidates = revRaw.split('\n').map((s) => s.trim()).filter(Boolean)
+      if (candidates.length === 0) {
+        return fail(
+          `No candidate commits since ${ctx.startSha.slice(0, 8)} — ` +
+          `expected at least one per surviving session (${surviving.length})`,
+        )
+      }
+
+      // Pre-compute file-set per candidate SHA
+      const filesBySha = new Map<string, string[]>()
+      for (const sha of candidates) {
+        const raw = ctx.run(`git show --name-only --format= ${sha}`) ?? ''
+        const files = raw.split('\n').map((s) => s.trim()).filter(Boolean)
+        filesBySha.set(sha, files)
+      }
+
+      // Match each session to exactly one commit
+      for (const session of surviving) {
+        const matched: string[] = []
+        for (const sha of candidates) {
+          const files = filesBySha.get(sha) ?? []
+          const intersects = files.some((f) => session.edits.has(f))
+          if (intersects) matched.push(sha)
+        }
+        if (matched.length !== 1) {
+          const candidateLines = candidates
+            .map((sha) => `  ${sha.slice(0, 8)}: [${(filesBySha.get(sha) ?? []).join(', ')}]`)
+            .join('\n')
+          return fail(
+            `Session ${session.id} matched ${matched.length} commit(s); expected 1.\n` +
+            `Session edits: [${[...session.edits].join(', ')}]\n` +
+            `Candidate commits:\n${candidateLines}`,
+          )
+        }
+        const sha = matched[0]
+        const files = filesBySha.get(sha) ?? []
+        const foreign = files.filter(
+          (f) => !session.edits.has(f) && !matchesAllowlist(f, COMMIT_SCOPE_ALLOWLIST),
+        )
+        if (foreign.length > 0) {
+          return fail(
+            `Session ${session.id} commit ${sha.slice(0, 8)}: foreign path(s): ${foreign.join(', ')}`,
+          )
+        }
+      }
+
       return pass()
     },
   }

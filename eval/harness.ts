@@ -49,11 +49,25 @@ export interface EvalCheckpoint {
   assert: (ctx: EvalContext) => string | null | Promise<string | null>
 }
 
+export interface AgentSpec {
+  prompt: string
+  maxTurns?: number
+  sessionIdHint?: string  // optional label used only for transcript filenames
+}
+
 export interface EvalScenario {
   id: string
   name: string
-  /** User prompt sent to Claude */
-  prompt: string
+  /**
+   * User prompt sent to Claude (single-agent scenarios).
+   * Mutually exclusive with `agents` — exactly one must be set.
+   */
+  prompt?: string
+  /**
+   * Multi-agent scenario — spawns one query() per AgentSpec in parallel.
+   * Mutually exclusive with `prompt` — exactly one must be set.
+   */
+  agents?: AgentSpec[]
   checkpoints: EvalCheckpoint[]
   /** Max agent turns — omit to use the SDK default (no limit) */
   maxTurns?: number
@@ -91,7 +105,9 @@ export interface EvalContext {
   sessionId: string | null
   /** Path to the JSONL transcript file (null when --no-transcript) */
   transcriptPath: string | null
-  getSessionState(): SessionState | null
+  /** Git HEAD SHA captured after fixtureSetup and before any agent spawns */
+  startSha: string | null
+  getSessionState(sessionId?: string): SessionState | null
   run(cmd: string): string
   fileExists(relativePath: string): boolean
   readFile(relativePath: string): string
@@ -155,6 +171,13 @@ export async function runScenario(
   options: HarnessOptions = {},
 ): Promise<EvalResult> {
   const startMs = Date.now()
+
+  // Enforce mutual exclusivity of prompt vs agents
+  const hasPrompt = typeof scenario.prompt === 'string' && scenario.prompt.length > 0
+  const hasAgents = Array.isArray(scenario.agents) && scenario.agents.length > 0
+  if (hasPrompt === hasAgents) {
+    throw new Error('EvalScenario must define exactly one of prompt or agents')
+  }
 
   // Resolve project directory
   let projectDir: string
@@ -223,6 +246,19 @@ export async function runScenario(
       cwd: projectDir,
       stdio: ['pipe', 'pipe', 'pipe'],
     })
+  }
+
+  // Capture scenario start SHA before any agent spawns.
+  // For projectDir path this is effectively the same as baselineRef.
+  let scenarioStartSha: string | null = null
+  try {
+    scenarioStartSha = execSync('git rev-parse HEAD', {
+      cwd: projectDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+  } catch {
+    scenarioStartSha = null
   }
 
   const result: EvalResult = {
@@ -321,10 +357,126 @@ export async function runScenario(
       queryOptions.maxTurns = scenario.maxTurns
     }
 
+    // scenario.prompt is guaranteed non-empty on the single-agent path by the
+    // hasPrompt/hasAgents invariant enforced at the top of runScenario.
     const prompt = isResume
       ? (options.resumeAnswer ?? 'Continue.')
-      : scenario.prompt
+      : (scenario.prompt as string)
 
+    // Multi-agent branch: spawn one query() per AgentSpec in parallel.
+    if (hasAgents && scenario.agents) {
+      const transcriptDir = options.transcriptPath ? dirname(options.transcriptPath) : null
+      const agentSummaries: Array<{
+        index: number
+        status: 'fulfilled' | 'rejected'
+        reason?: string
+        turns: number
+        sessionId?: string
+      }> = []
+
+      // Multi-agent scenarios do NOT support pause/resume (spec v1). Use a
+      // distinct canUseTool that has no closure over the outer abortController,
+      // sessionId, or pendingQuestion — otherwise a concurrent AskUserQuestion
+      // would clobber shared state and abort the wrong agent.
+      const multiAgentCanUseTool = async () => ({ behavior: 'allow' as const })
+
+      const agentPromises = scenario.agents.map((spec, idx) => {
+        return (async () => {
+          const agentAbort = new AbortController()
+          const perAgentTranscript = transcriptDir
+            ? join(transcriptDir, `agent-${idx}.jsonl`)
+            : null
+          if (perAgentTranscript) {
+            mkdirSync(dirname(perAgentTranscript), { recursive: true })
+          }
+
+          const agentQueryOptions: Record<string, unknown> = {
+            abortController: agentAbort,
+            cwd: projectDir,
+            allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'Task', 'AskUserQuestion'],
+            permissionMode: 'bypassPermissions',
+            allowDangerouslySkipPermissions: true,
+            settingSources: ['project'],
+            canUseTool: multiAgentCanUseTool,
+            env: cleanEnv,
+          }
+          if (spec.maxTurns !== undefined) {
+            agentQueryOptions.maxTurns = spec.maxTurns
+          }
+
+          let turns = 0
+          let agentSessionId: string | undefined
+
+          for await (const message of query({ prompt: spec.prompt, options: agentQueryOptions })) {
+            if (
+              (message as { type: string; subtype?: string; session_id?: string }).type === 'system' &&
+              (message as { subtype?: string }).subtype === 'init'
+            ) {
+              agentSessionId = (message as { session_id: string }).session_id
+            }
+
+            if (perAgentTranscript) {
+              appendFileSync(
+                perAgentTranscript,
+                JSON.stringify({ ts: new Date().toISOString(), ...message }) + '\n',
+              )
+            }
+
+            if (message.type === 'assistant') {
+              turns++
+              if (options.verbose) {
+                emitAssistantMessage(turns, message)
+              }
+            } else if (message.type === 'user') {
+              if (options.verbose) {
+                emitToolResults(message)
+              }
+            }
+          }
+
+          return { turns, sessionId: agentSessionId }
+        })()
+      })
+
+      const settled = await Promise.allSettled(agentPromises)
+      for (let i = 0; i < settled.length; i++) {
+        const s = settled[i]
+        if (s.status === 'fulfilled') {
+          agentSummaries.push({
+            index: i,
+            status: 'fulfilled',
+            turns: s.value.turns,
+            sessionId: s.value.sessionId,
+          })
+          if (options.verbose) {
+            process.stdout.write(
+              `[agent-${i}] fulfilled · ${s.value.turns} turns · session=${s.value.sessionId ?? 'unknown'}\n`,
+            )
+          }
+        } else {
+          const reason = s.reason instanceof Error ? s.reason.message : String(s.reason)
+          agentSummaries.push({
+            index: i,
+            status: 'rejected',
+            reason,
+            turns: 0,
+          })
+          if (options.verbose) {
+            process.stdout.write(`[agent-${i}] rejected · ${reason}\n`)
+          }
+        }
+      }
+
+      // Set result.sessionId to the first agent's sessionId (or leave undefined if both failed).
+      const firstFulfilled = agentSummaries.find((a) => a.status === 'fulfilled' && a.sessionId)
+      if (firstFulfilled?.sessionId) {
+        sessionId = firstFulfilled.sessionId
+        result.sessionId = sessionId
+      }
+      result.turns = agentSummaries.reduce((s, a) => s + a.turns, 0)
+
+      // Fall through to checkpoint evaluation below
+    } else {
     // The for-await loop may end normally (agent finished) or via abort (AskUserQuestion
     // triggered the safety-net abort controller). Catch abort errors gracefully.
     try {
@@ -381,6 +533,7 @@ export async function runScenario(
         process.stdout.write('[abort] Query aborted (AskUserQuestion safety net)\n')
       }
     }
+    } // end single-agent else branch
 
     // If session was paused for a question, finalize and attach it to the result.
     // Patch sessionId if it wasn't available when canUseTool fired (race with init).
@@ -404,7 +557,7 @@ export async function runScenario(
     }
 
     // Always run checkpoints — even when paused, state may already be written
-    const ctx: EvalContext = buildContext(projectDir, baselineRef, sessionId ?? null, options.transcriptPath ?? null)
+    const ctx: EvalContext = buildContext(projectDir, baselineRef, sessionId ?? null, options.transcriptPath ?? null, scenarioStartSha)
     for (const checkpoint of scenario.checkpoints) {
       const error = await checkpoint.assert(ctx)
       result.assertions.push({
@@ -514,20 +667,34 @@ function formatToolInput(name: string, input: unknown): string {
 
 // ─── Context builder ──────────────────────────────────────────────────────────
 
-function buildContext(
+export function buildContext(
   projectDir: string,
   baselineRef: string | null = null,
   sessionId: string | null = null,
   transcriptPath: string | null = null,
+  startSha: string | null = null,
 ): EvalContext {
   return {
     projectDir,
     baselineRef,
     sessionId,
     transcriptPath,
-    getSessionState(): SessionState | null {
+    startSha,
+    getSessionState(explicitSessionId?: string): SessionState | null {
       const sessionsDir = join(projectDir, '.kata', 'sessions')
       if (!existsSync(sessionsDir)) return null
+
+      // If a specific sessionId is provided, read that session's state directly.
+      if (explicitSessionId) {
+        const statePath = join(sessionsDir, explicitSessionId, 'state.json')
+        if (!existsSync(statePath)) return null
+        try {
+          return JSON.parse(readFileSync(statePath, 'utf-8')) as SessionState
+        } catch {
+          return null
+        }
+      }
+
       const candidates: Array<{ id: string; path: string }> = []
       try {
         for (const id of readdirSync(sessionsDir)) {

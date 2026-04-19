@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect, afterAll } from 'bun:test'
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { join } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
 import type { EvalContext } from './harness.js'
@@ -52,6 +53,8 @@ import {
   assertSkillReadOrder,
   assertSkillNotRead,
   skillActivationPresets,
+  assertTwoCommitsSinceStart,
+  assertCommitsScopedToEachSession,
 } from './assertions.js'
 import type { SessionState } from '../src/state/schema.js'
 
@@ -65,6 +68,7 @@ function mockContext(overrides: {
   baselineRef?: string | null
   sessionId?: string | null
   transcriptPath?: string | null
+  startSha?: string | null
 }): EvalContext {
   const files = overrides.files ?? {}
   const dirs = overrides.dirs ?? {}
@@ -75,6 +79,7 @@ function mockContext(overrides: {
     baselineRef: overrides.baselineRef ?? null,
     sessionId: overrides.sessionId ?? null,
     transcriptPath: overrides.transcriptPath ?? null,
+    startSha: overrides.startSha ?? null,
     getSessionState() {
       if (overrides.state === null) return null
       return (overrides.state ?? {}) as SessionState
@@ -943,5 +948,338 @@ describe('skillActivationPresets', () => {
       'skill read: tdd',
       'skill read order: quick-planning -> tdd',
     ])
+  })
+})
+
+// ─── Multi-Session Commit Scoping Assertions ────────────────────────────────
+
+const TRACKER_TMP_DIRS: string[] = []
+
+/**
+ * Build a real-dir-backed EvalContext that shells out to git via execSync.
+ * Mirrors the style used by baselineRef-backed assertions elsewhere in the
+ * codebase and avoids reinventing fixture infrastructure.
+ */
+function realCtx(projectDir: string, startSha: string | null): EvalContext {
+  return {
+    projectDir,
+    baselineRef: null,
+    sessionId: null,
+    transcriptPath: null,
+    startSha,
+    getSessionState() {
+      return null
+    },
+    run(cmd: string) {
+      try {
+        return execSync(cmd, {
+          cwd: projectDir,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      } catch {
+        return ''
+      }
+    },
+    fileExists(rel: string) {
+      try {
+        return execSync(`test -e ${JSON.stringify(join(projectDir, rel))} && echo 1 || echo 0`, {
+          encoding: 'utf-8',
+        }).trim() === '1'
+      } catch {
+        return false
+      }
+    },
+    readFile(rel: string) {
+      try {
+        return execSync(`cat ${JSON.stringify(join(projectDir, rel))}`, { encoding: 'utf-8' })
+      } catch {
+        return ''
+      }
+    },
+    listDir() {
+      return []
+    },
+  }
+}
+
+function initGitRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'kata-assert-'))
+  TRACKER_TMP_DIRS.push(dir)
+  execSync('git init -b main', { cwd: dir, stdio: 'pipe' })
+  execSync('git config user.email "test@t.t"', { cwd: dir, stdio: 'pipe' })
+  execSync('git config user.name "t"', { cwd: dir, stdio: 'pipe' })
+  execSync('git config commit.gpgsign false', { cwd: dir, stdio: 'pipe' })
+  execSync('git commit --allow-empty -m "init"', { cwd: dir, stdio: 'pipe' })
+  return dir
+}
+
+function getHeadSha(dir: string): string {
+  return execSync('git rev-parse HEAD', { cwd: dir, encoding: 'utf-8' }).trim()
+}
+
+function writeAndCommit(dir: string, relPath: string, content: string, msg: string): string {
+  const abs = join(dir, relPath)
+  mkdirSync(join(abs, '..'), { recursive: true })
+  writeFileSync(abs, content)
+  execSync(`git add ${JSON.stringify(relPath)}`, { cwd: dir, stdio: 'pipe' })
+  execSync(`git commit -m ${JSON.stringify(msg)}`, { cwd: dir, stdio: 'pipe' })
+  return getHeadSha(dir)
+}
+
+/**
+ * Write a .kata/sessions/<id>/ directory with state.json + edits.jsonl.
+ */
+function writeSessionDir(
+  projectDir: string,
+  id: string,
+  startedAt: string,
+  editFiles: string[],
+  currentMode: string = 'task',
+): void {
+  const sessionDir = join(projectDir, '.kata', 'sessions', id)
+  mkdirSync(sessionDir, { recursive: true })
+  const state = {
+    sessionId: id,
+    currentMode,
+    startedAt,
+    modeState: { [currentMode]: { enteredAt: startedAt } },
+    modeHistory: [{ mode: currentMode, enteredAt: startedAt }],
+  }
+  writeFileSync(join(sessionDir, 'state.json'), JSON.stringify(state, null, 2))
+  const editsLines = editFiles
+    .map((f) => JSON.stringify({ file: f, tool: 'Write', ts: startedAt }))
+    .join('\n')
+  writeFileSync(join(sessionDir, 'edits.jsonl'), editsLines + (editsLines ? '\n' : ''))
+}
+
+afterAll(() => {
+  for (const d of TRACKER_TMP_DIRS) {
+    rmSync(d, { recursive: true, force: true })
+  }
+})
+
+describe('assertTwoCommitsSinceStart', () => {
+  it('fails when startSha is null', async () => {
+    const dir = initGitRepo()
+    const ctx = realCtx(dir, null)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toContain('No startSha set')
+  })
+
+  it('fails when zero commits since start', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    const ctx = realCtx(dir, start)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toContain('Expected 2 non-merge commits')
+    expect(result).toContain('got 0')
+  })
+
+  it('fails when only one commit since start', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'a.txt', 'a', 'add a')
+    const ctx = realCtx(dir, start)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toContain('got 1')
+  })
+
+  it('passes when exactly two non-merge commits since start (tc2)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'a.txt', 'a', 'add a')
+    writeAndCommit(dir, 'b.txt', 'b', 'add b')
+    const ctx = realCtx(dir, start)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails when three commits since start (tc2)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'a.txt', 'a', 'add a')
+    writeAndCommit(dir, 'b.txt', 'b', 'add b')
+    writeAndCommit(dir, 'c.txt', 'c', 'add c')
+    const ctx = realCtx(dir, start)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toContain('got 3')
+  })
+
+  it('passes with two feature commits + one merge commit (tc5)', async () => {
+    // Create main with starter commit, branch A adds a.txt, branch B adds b.txt,
+    // then merge B into A to produce a merge commit on top.
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    // Commit 1 on main
+    writeAndCommit(dir, 'a.txt', 'a', 'add a')
+    // Create side branch from start, commit b.txt
+    execSync(`git checkout -b side ${start}`, { cwd: dir, stdio: 'pipe' })
+    writeAndCommit(dir, 'b.txt', 'b', 'add b')
+    // Back to main, merge side with a merge commit (no ff)
+    execSync('git checkout main', { cwd: dir, stdio: 'pipe' })
+    execSync('git merge --no-ff side -m "merge side"', { cwd: dir, stdio: 'pipe' })
+    const ctx = realCtx(dir, start)
+    const result = await assertTwoCommitsSinceStart().assert(ctx)
+    expect(result).toBeNull()
+  })
+})
+
+describe('assertCommitsScopedToEachSession', () => {
+  it('fails when startSha is null', async () => {
+    const dir = initGitRepo()
+    const ctx = realCtx(dir, null)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toContain('No startSha set')
+  })
+
+  it('passes with two sessions and two disjoint commits (tc1)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'src/foo.ts', 'export const foo = 42', 'add foo')
+    writeAndCommit(dir, 'src/bar.ts', 'export const bar = "hi"', 'add bar')
+
+    // Both sessions started AFTER the scenario start timestamp
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const startMs = Date.parse(startIso)
+    const afterIso = new Date(startMs + 60_000).toISOString()
+
+    writeSessionDir(dir, 'sess-a', afterIso, ['src/foo.ts'])
+    writeSessionDir(dir, 'sess-b', afterIso, ['src/bar.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('fails with diagnostic naming foreign path (tc7)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    // Commit touches both foo.ts (tracked) AND naughty.ts (NOT in edits)
+    const fooAbs = join(dir, 'src/foo.ts')
+    const naughtyAbs = join(dir, 'src/naughty.ts')
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(fooAbs, 'export const foo = 42')
+    writeFileSync(naughtyAbs, 'export const naughty = true')
+    execSync('git add src/foo.ts src/naughty.ts', { cwd: dir, stdio: 'pipe' })
+    execSync('git commit -m "leaked naughty"', { cwd: dir, stdio: 'pipe' })
+    // second commit for other session
+    writeAndCommit(dir, 'src/bar.ts', 'b', 'add bar')
+
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const afterIso = new Date(Date.parse(startIso) + 60_000).toISOString()
+
+    writeSessionDir(dir, 'sess-a', afterIso, ['src/foo.ts'])
+    writeSessionDir(dir, 'sess-b', afterIso, ['src/bar.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toContain('foreign path')
+    expect(result).toContain('src/naughty.ts')
+    expect(result).toContain('sess-a')
+  })
+
+  it('fails when a session edits-set intersects zero commits (tc3a)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'src/foo.ts', 'foo', 'add foo')
+    writeAndCommit(dir, 'src/bar.ts', 'bar', 'add bar')
+
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const afterIso = new Date(Date.parse(startIso) + 60_000).toISOString()
+
+    // sess-c edits a file that nobody committed
+    writeSessionDir(dir, 'sess-c', afterIso, ['src/orphan.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toContain('matched 0 commit')
+    expect(result).toContain('sess-c')
+    expect(result).toContain('Candidate commits')
+    expect(result).toContain('src/foo.ts')
+    expect(result).toContain('src/bar.ts')
+  })
+
+  it('fails when a session edits-set intersects multiple commits (tc3b)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    // Two commits both touch shared.ts
+    writeAndCommit(dir, 'shared.ts', 'v1', 'first')
+    writeAndCommit(dir, 'shared.ts', 'v2', 'second')
+
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const afterIso = new Date(Date.parse(startIso) + 60_000).toISOString()
+
+    writeSessionDir(dir, 'sess-multi', afterIso, ['shared.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toContain('matched 2 commit')
+    expect(result).toContain('sess-multi')
+  })
+
+  it('allows *.tsbuildinfo via ALLOWLIST glob (tc4)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    // Commit contains both the tracked file AND a *.tsbuildinfo file
+    mkdirSync(join(dir, 'src'), { recursive: true })
+    writeFileSync(join(dir, 'src/api.ts'), 'export const api = true')
+    writeFileSync(join(dir, 'src/api.tsbuildinfo'), '{"buildInfo":true}')
+    execSync('git add src/api.ts src/api.tsbuildinfo', { cwd: dir, stdio: 'pipe' })
+    execSync('git commit -m "api + buildinfo"', { cwd: dir, stdio: 'pipe' })
+    // Second commit so that assertTwoCommitsSinceStart invariant would also hold
+    writeAndCommit(dir, 'src/other.ts', 'o', 'other')
+
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const afterIso = new Date(Date.parse(startIso) + 60_000).toISOString()
+
+    // edits.jsonl only lists api.ts — tsbuildinfo is permitted via glob
+    writeSessionDir(dir, 'sess-api', afterIso, ['src/api.ts'])
+    writeSessionDir(dir, 'sess-other', afterIso, ['src/other.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toBeNull()
+  })
+
+  it('drops stale session whose startedAt is before scenario start (tc6)', async () => {
+    const dir = initGitRepo()
+    const start = getHeadSha(dir)
+    writeAndCommit(dir, 'src/foo.ts', 'foo', 'add foo')
+    writeAndCommit(dir, 'src/bar.ts', 'bar', 'add bar')
+
+    const startIso = execSync(`git show -s --format=%cI ${start}`, {
+      cwd: dir,
+      encoding: 'utf-8',
+    }).trim()
+    const startMs = Date.parse(startIso)
+    const afterIso = new Date(startMs + 60_000).toISOString()
+    const staleIso = new Date(startMs - 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days before
+
+    writeSessionDir(dir, 'sess-a', afterIso, ['src/foo.ts'])
+    writeSessionDir(dir, 'sess-b', afterIso, ['src/bar.ts'])
+    // Stale session with old startedAt — references a file that doesn't exist in any commit.
+    // If the filter didn't drop it, the assertion would fail because its edits-set
+    // intersects zero commits. If it is dropped correctly, the assertion passes.
+    writeSessionDir(dir, 'sess-stale', staleIso, ['src/ancient.ts'])
+
+    const ctx = realCtx(dir, start)
+    const result = await assertCommitsScopedToEachSession().assert(ctx)
+    expect(result).toBeNull()
   })
 })
