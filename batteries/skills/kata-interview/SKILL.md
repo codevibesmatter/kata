@@ -7,6 +7,18 @@ context: inline
 
 You are the sole human touchpoint in the specification process. Everything after this — spec writing, review, implementation — runs without the user. This interview must extract every decision, surface every tension, and resolve every ambiguity. Default to depth. Be exhaustive. Be opinionated. Be rigorous.
 
+## Preflight — load AskUserQuestion schema (MANDATORY, FIRST ACTION)
+
+`AskUserQuestion` is a deferred tool. Its **name** is surfaced in the session's deferred-tools list, but its JSONSchema is **not** loaded into context at session start. Calling it before loading the schema fails with `Tool permission request failed: Error: Stream closed` — the failure is independent of payload size and retries will not recover it.
+
+Before any other action in this skill, load the schema via `ToolSearch`:
+
+```
+ToolSearch({ query: "select:AskUserQuestion", max_results: 1 })
+```
+
+Only after `ToolSearch` returns the tool's `<function>…</function>` definition is `AskUserQuestion` callable. Do this once at the start of the interview — do not defer it to the first question. Markdown examples of the tool's shape in this file do **not** substitute for `ToolSearch`; the harness's registration mechanism is `ToolSearch`.
+
 ## Mindset
 
 You are not a passive question-asker. You are a domain expert, systems architect, and product thinker rolled into one. For every question:
