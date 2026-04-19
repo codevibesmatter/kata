@@ -84,7 +84,27 @@ gh issue comment {issue_number} --body "{comment_body}"
 
 Commit and push only. Tests are not required for research mode — skip step 2.
 
-No PR creation, no issue update.
+No PR creation.
+
+Create a GitHub issue to capture the research findings and any follow-up work:
+
+```bash
+gh issue create \
+  --title "{research_title}" \
+  --body "## Summary
+{research_summary}
+
+## Findings
+{key_findings}
+
+## Follow-up
+{followup_items}
+
+Research doc: {research_doc_path}" \
+  --label research
+```
+
+Use the research document's title and top-level summary for `{research_title}` and `{research_summary}`. Link the created issue number back in the commit message or as a follow-up comment if needed.
 
 ### If in planning mode
 
