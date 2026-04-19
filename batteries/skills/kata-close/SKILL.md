@@ -84,7 +84,34 @@ gh issue comment {issue_number} --body "{comment_body}"
 
 Commit and push only. Tests are not required for research mode — skip step 2.
 
-No PR creation, no issue update.
+No PR creation.
+
+Create a GitHub issue to capture the research findings and any follow-up work:
+
+```bash
+gh issue create \
+  --title "{research_title}" \
+  --body "## Summary
+{research_summary}
+
+## Findings
+{key_findings}
+
+## Follow-up
+{followup_items}
+
+Research doc: {research_doc_path}"
+```
+
+Use the research document's title and top-level summary for `{research_title}` and `{research_summary}`. Link the created issue number back in the commit message or as a follow-up comment if needed.
+
+Labels are not applied automatically — `gh issue create --label <name>` fails when the label doesn't exist in the target repo. If the project has a `research` (or similar) label and you want to apply it, verify it exists first:
+
+```bash
+gh label list --search research --json name --jq '.[].name'
+```
+
+Only add `--label <name>` to the create command above if the label is present. Otherwise, add labels after the fact with `gh issue edit <number> --add-label <name>` once the repo has them.
 
 ### If in planning mode
 
