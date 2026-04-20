@@ -1,7 +1,7 @@
 project:
   name: kata-wm
-  build_command: "bun run typecheck"
-  test_command: "bun test src/commands/ src/validation/ src/session/ src/yaml/ src/utils/"
+  build_command: bun run typecheck
+  test_command: bun test src/commands/ src/validation/ src/session/ src/yaml/ src/utils/
 spec_path: planning/specs
 research_path: planning/research
 session_retention_days: 7
@@ -172,4 +172,4 @@ modes:
     workflow_prefix: DB
     aliases:
       - investigate
-kata_version: 0.5.0
+kata_version: 0.5.1

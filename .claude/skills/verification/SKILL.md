@@ -83,15 +83,70 @@ For each VP step:
 
 ## Repair-Reverify Loop (P2)
 
-If any VP step fails in P1:
+Every non-pass result (`fail`, `skip`, `partial`) is **triaged first**, then
+repaired according to its class. No VP step may terminate as non-pass because
+of tooling, infra, fixtures, or missing setup — those are tasks you must
+complete, not blockers.
 
-1. **Diagnose** — read the error, identify the root cause in implementation code
-2. **Fix** — make the minimal code change to address the root cause
+### Triage classes
+
+| Class | Meaning | Attempt limit |
+|-------|---------|---------------|
+| `code-defect` | Implementation is wrong | **3 attempts**, then permanent `fail` allowed |
+| `infra-gap` | Tooling / services / fixtures missing | **Unlimited** — must be closed, never terminal |
+| `misread-vp` | Step was misunderstood or run incorrectly | Re-run correctly, no limit |
+
+Classify before fixing. Use a review agent (see REVIEW Protocol) to confirm the
+class when uncertain.
+
+### Code-defect loop
+
+1. **Diagnose** — identify the root cause in implementation code
+2. **Fix** — make the minimal code change
 3. **Re-run** — re-execute the failed VP step exactly as originally specified
-4. **Max 3 cycles** — if still failing after 3 repair attempts, record as permanently failed
+4. **Max 3 cycles** — only after 3 genuine code-defect attempts on the same
+   step may you record permanent `fail`
 
-**Critical:** Fix the implementation, never the VP steps. VP steps encode what the feature
-is supposed to do — they are correct by definition in this mode.
+### Infra-gap loop (no attempt limit)
+
+Missing tooling or setup is **never** a reason to mark a step failed, skipped,
+or partial. When infra is the blocker you MUST:
+
+- Install missing packages (`npm`, `pip`, `cargo`, apt, brew)
+- Start required services (dev server, db, queue, proxy, container)
+- Write scripts, fixtures, seed data as needed
+- Use WebSearch + WebFetch to look up install instructions and API usage
+- Use `chrome-devtools-axi` for real browser verification
+- Spawn sub-agents to build infra in parallel
+
+Do not return to the orchestrator with an unresolved infra-gap. Close it,
+then re-run the step. These attempts do **not** count against the 3-attempt
+code-defect limit.
+
+### Forbidden terminations
+
+A VP step may NOT end as `fail`, `skip`, or `partial` for any of these reasons:
+
+- "Test runner not installed"
+- "Dev server not running"
+- "No browser available"
+- "No fixtures / seed data"
+- "Service dependency is down"
+- "I don't have network access" (verify with `curl` before claiming this)
+- "I don't know how to verify this"
+
+The only valid permanent `fail` is a confirmed `code-defect` that survived
+3 genuine fix attempts.
+
+### E2E mandate
+
+Every VP step describing user-observable behavior must be exercised e2e — real
+HTTP calls, real UI interaction, real CLI invocation. Unit-test-only passes do
+not satisfy e2e steps. The stop conditions below are not met until the
+real-user path has been executed.
+
+**Critical:** Fix the implementation, never the VP steps. VP steps encode what
+the feature is supposed to do — they are correct by definition in this mode.
 
 ## REVIEW Protocol (P2-Review)
 
@@ -119,7 +174,10 @@ specifically targets hasty-fix failure modes rather than general code style.
 
 ## Stop Conditions
 
-- All VP steps executed and recorded
-- Fix loop complete (all passing or max cycles reached)
+- All VP steps **executed** (no `skip`, no `partial` permitted)
+- Every non-pass triaged via review agent into `code-defect` / `infra-gap` / `misread-vp`
+- All `infra-gap` items resolved (not deferred, not waived)
+- All e2e steps exercised as a real user would
+- Code-defect loop complete — every step is either `pass` or reached the 3-attempt limit with reviewer-confirmed classification
 - VP evidence file committed and pushed
-- Results reported with pass/fail verdict
+- Results reported with pass/fail verdict per step
