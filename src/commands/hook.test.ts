@@ -591,3 +591,91 @@ describe('hasActiveBackgroundAgents', () => {
     expect(hasActiveBackgroundAgents(path)).toBe(true)
   })
 })
+
+describe('handleStopConditions run-end artifact', () => {
+  let tmpDir: string
+  const sessionId = '00000000-0000-0000-0000-000000000099'
+  const origEnv = process.env.CLAUDE_PROJECT_DIR
+
+  beforeEach(() => {
+    tmpDir = makeTmpDir()
+    mkdirSync(join(tmpDir, '.kata', 'sessions'), { recursive: true })
+    // Empty modes → mode lookup returns undefined → stop_conditions defaults to []
+    // → handleStopConditions hits the "no stop conditions for mode" branch.
+    writeFileSync(
+      join(tmpDir, '.kata', 'kata.yaml'),
+      'spec_path: planning/specs\nresearch_path: planning/research\nmodes: {}\n',
+    )
+    process.env.CLAUDE_PROJECT_DIR = tmpDir
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+    if (origEnv !== undefined) {
+      process.env.CLAUDE_PROJECT_DIR = origEnv
+    } else {
+      delete process.env.CLAUDE_PROJECT_DIR
+    }
+  })
+
+  it('writes run-end.json when no stop conditions for mode', async () => {
+    writeSessionState(tmpDir, sessionId, {
+      currentMode: 'task',
+      sessionType: 'task',
+      workflowId: 'TK-test-0001',
+      completedPhases: ['p0', 'p1'],
+    })
+    const { handleStopConditions } = await import('./hook.js')
+
+    await captureStdout(() => handleStopConditions({ session_id: sessionId }))
+
+    const artifactPath = join(tmpDir, '.kata', 'sessions', sessionId, 'run-end.json')
+    expect(existsSync(artifactPath)).toBe(true)
+    const artifact = JSON.parse(readFileSync(artifactPath, 'utf-8'))
+    expect(artifact.sessionId).toBe(sessionId)
+    expect(artifact.workflowId).toBe('TK-test-0001')
+    expect(artifact.mode).toBe('task')
+    expect(artifact.note).toBe('no stop conditions for mode')
+    expect(artifact.stopConditions).toEqual([])
+    expect(artifact.completedPhases).toEqual(['p0', 'p1'])
+    expect(typeof artifact.ts).toBe('string')
+  })
+
+  it('does not write run-end.json when no session state exists', async () => {
+    const { handleStopConditions } = await import('./hook.js')
+
+    await captureStdout(() =>
+      handleStopConditions({ session_id: 'nonexistent-session-id' }),
+    )
+
+    const artifactPath = join(
+      tmpDir,
+      '.kata',
+      'sessions',
+      'nonexistent-session-id',
+      'run-end.json',
+    )
+    expect(existsSync(artifactPath)).toBe(false)
+  })
+
+  it('overwrites run-end.json on each successful stop event', async () => {
+    writeSessionState(tmpDir, sessionId, {
+      currentMode: 'task',
+      sessionType: 'task',
+      workflowId: 'TK-test-0001',
+    })
+    const { handleStopConditions } = await import('./hook.js')
+
+    await captureStdout(() => handleStopConditions({ session_id: sessionId }))
+    const artifactPath = join(tmpDir, '.kata', 'sessions', sessionId, 'run-end.json')
+    const firstTs = JSON.parse(readFileSync(artifactPath, 'utf-8')).ts as string
+
+    // Wait a tick so the timestamp differs deterministically
+    await new Promise((r) => setTimeout(r, 5))
+    await captureStdout(() => handleStopConditions({ session_id: sessionId }))
+    const secondTs = JSON.parse(readFileSync(artifactPath, 'utf-8')).ts as string
+
+    expect(secondTs).not.toBe(firstTs)
+    expect(new Date(secondTs).getTime()).toBeGreaterThan(new Date(firstTs).getTime())
+  })
+})

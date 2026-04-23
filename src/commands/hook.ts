@@ -490,6 +490,87 @@ function logStopHook(
 }
 
 /**
+ * Write a `run-end.json` artifact in the session folder when a Stop event
+ * results in a successful can-exit decision (i.e. the run is cleanly ending).
+ *
+ * Overwrites on each successful stop event so the file always reflects the
+ * latest clean exit snapshot. Downstream tooling (evals, audits, post-run
+ * checks) can detect a successful run end by the presence + freshness of
+ * this artifact, without having to grep through hooks.log.jsonl.
+ *
+ * Skipped for the "background agents active" deferral branch since that is
+ * a permissive override, not a true clean exit.
+ *
+ * Best-effort: any failure (git unavailable, fs error, etc.) is swallowed
+ * so the hook itself never fails on artifact write.
+ */
+function writeRunEndArtifact(
+  sessionId: string,
+  state: SessionState,
+  payload: {
+    note: string
+    stopConditions: Array<string | { condition: string; stage?: string }>
+    advisories?: string[]
+  },
+): void {
+  try {
+    const projectDir = findProjectDir()
+    const sessionsDir = getSessionsDir(projectDir)
+    const sessionDir = join(sessionsDir, sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+
+    // Capture branch + HEAD commit (best-effort; missing values left undefined)
+    let branch: string | undefined
+    let commit: string | undefined
+    try {
+      branch =
+        execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: projectDir,
+        }).trim() || undefined
+    } catch {
+      /* ignore */
+    }
+    try {
+      commit =
+        execSync('git rev-parse HEAD 2>/dev/null', {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: projectDir,
+        }).trim() || undefined
+    } catch {
+      /* ignore */
+    }
+
+    // Normalize stop conditions to plain string list (drop optional stage scoping)
+    const stopConditions = payload.stopConditions.map((c) =>
+      typeof c === 'string' ? c : c.condition,
+    )
+
+    const artifact = {
+      ts: new Date().toISOString(),
+      sessionId,
+      workflowId: state.workflowId,
+      mode: state.currentMode || state.sessionType,
+      issueNumber: state.issueNumber ?? null,
+      branch,
+      commit,
+      completedPhases: state.completedPhases ?? [],
+      stopConditions,
+      advisories: payload.advisories ?? [],
+      note: payload.note,
+    }
+    writeFileSync(
+      join(sessionDir, 'run-end.json'),
+      `${JSON.stringify(artifact, null, 2)}\n`,
+    )
+  } catch {
+    // Best-effort — never fail the hook
+  }
+}
+
+/**
  * Resolve the transcript path for a session.
  * Claude Code stores transcripts at ~/.claude/projects/<encoded-dir>/<session-id>.jsonl
  * where <encoded-dir> is the project path with / replaced by -.
@@ -612,6 +693,10 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
   if (stopConditions.length === 0) {
     logHook(sessionId, { hook: 'stop-conditions', decision: 'allow', note: 'no stop conditions for mode' })
     logStopHook(sessionId, 'allow', [], 'no stop conditions for mode')
+    writeRunEndArtifact(sessionId, state, {
+      note: 'no stop conditions for mode',
+      stopConditions: [],
+    })
     return
   }
 
@@ -625,6 +710,7 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
     const result = JSON.parse(exitOutput) as {
       canExit: boolean
       reasons: string[]
+      advisories?: string[]
       guidance?: { nextStepMessage?: string; escapeHatch?: string }
     }
     if (!result.canExit) {
@@ -659,6 +745,11 @@ export async function handleStopConditions(input: Record<string, unknown>): Prom
     } else {
       logHook(sessionId, { hook: 'stop-conditions', decision: 'allow', note: 'all conditions met' })
       logStopHook(sessionId, 'allow', [], 'all conditions met')
+      writeRunEndArtifact(sessionId, state, {
+        note: 'all conditions met',
+        stopConditions,
+        advisories: result.advisories,
+      })
     }
     // canExit === true: output nothing (allows stop)
   } catch {
