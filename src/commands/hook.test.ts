@@ -582,13 +582,104 @@ describe('hasActiveBackgroundAgents', () => {
     expect(hasActiveBackgroundAgents(path)).toBe(true)
   })
 
-  it('long-running agent stays active without time-based expiry', async () => {
+  it('untimestamped long-running agent stays active (recency filter cannot apply)', async () => {
     const { hasActiveBackgroundAgents } = await import('./hook.js')
-    // Agent spawned with no user prompt after — should stay active regardless of time
+    // Agent spawned with no user prompt after and no timestamp — recency filter can't decide → stays active
     const path = writeTranscript([
       { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'agent-1' }] } },
     ])
     expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  // ── Issue #68: SDK session transcript compatibility ──
+
+  it('reproduces issue #68: string-form user prompt clears stale SDK Agent IDs', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    // SDK sessions emit typed user prompts as bare strings, not array-of-blocks.
+    // Before fix: for...of over the string iterated characters, hasUserText stayed false,
+    // stale IDs persisted forever.
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Agent', id: 'stale-sdk-1' }] } },
+      // SDK-shape user prompt: content is a bare string
+      { type: 'user', message: { role: 'user', content: 'next task please' } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('recognizes "Task" tool_use as a subagent call (older CC versions)', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    // Claude Code ≤2.1.50 and harness allowedTools use "Task" as the subagent tool name
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Task', id: 'task-1' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(true)
+  })
+
+  it('clears stale "Task"-named calls via user-prompt staleness heuristic', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const path = writeTranscript([
+      { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Task', id: 'stale-task-1' }] } },
+      { type: 'user', message: { content: [{ type: 'text', text: 'continue' }] } },
+    ])
+    expect(hasActiveBackgroundAgents(path)).toBe(false)
+  })
+
+  it('recency filter: Agent older than 120s is abandoned even with no user prompt', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const now = Date.parse('2026-04-23T20:00:00.000Z')
+    const oldTs = new Date(now - 200_000).toISOString() // 200s ago, past the 120s window
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: oldTs,
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'old-agent' }] },
+      },
+    ])
+    expect(hasActiveBackgroundAgents(path, now)).toBe(false)
+  })
+
+  it('recency filter: Agent within 120s window is still active', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const now = Date.parse('2026-04-23T20:00:00.000Z')
+    const recentTs = new Date(now - 30_000).toISOString() // 30s ago, within window
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: recentTs,
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'recent-agent' }] },
+      },
+    ])
+    expect(hasActiveBackgroundAgents(path, now)).toBe(true)
+  })
+
+  it('recency filter: boundary — exactly at window is still active', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const now = Date.parse('2026-04-23T20:00:00.000Z')
+    const boundaryTs = new Date(now - 120_000).toISOString() // exactly 120s ago
+    const path = writeTranscript([
+      {
+        type: 'assistant',
+        timestamp: boundaryTs,
+        message: { content: [{ type: 'tool_use', name: 'Agent', id: 'boundary-agent' }] },
+      },
+    ])
+    // strictly greater-than window → at boundary, still active
+    expect(hasActiveBackgroundAgents(path, now)).toBe(true)
+  })
+
+  it('SDK full scenario: stale agents from hours ago + string user prompt → guard returns false', async () => {
+    const { hasActiveBackgroundAgents } = await import('./hook.js')
+    const now = Date.parse('2026-04-23T20:00:00.000Z')
+    const longAgo = new Date(now - 7 * 3600 * 1000).toISOString()
+    // Mirrors the issue #60 duraclaw evidence: stale unmatched Agents from 7h ago,
+    // followed by SDK string-form user prompts
+    const path = writeTranscript([
+      { type: 'assistant', timestamp: longAgo, message: { content: [{ type: 'tool_use', name: 'Agent', id: 's1' }] } },
+      { type: 'assistant', timestamp: longAgo, message: { content: [{ type: 'tool_use', name: 'Agent', id: 's2' }] } },
+      { type: 'assistant', timestamp: longAgo, message: { content: [{ type: 'tool_use', name: 'Agent', id: 's3' }] } },
+      { type: 'user', message: { role: 'user', content: 'keep going' } },
+    ])
+    expect(hasActiveBackgroundAgents(path, now)).toBe(false)
   })
 })
 

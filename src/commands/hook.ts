@@ -598,25 +598,66 @@ function resolveTranscriptPath(sessionId: string): string | undefined {
 }
 
 /**
+ * Default recency window for background-agent detection. An unmatched Agent
+ * tool_use whose transcript timestamp is older than this is treated as
+ * abandoned, not active. Required for SDK-driven sessions that sometimes
+ * never emit a matching tool_result (issue #60, #68).
+ */
+const AGENT_ACTIVE_WINDOW_MS = 120_000
+
+/**
+ * Normalize a transcript `message.content` field into an array of content
+ * blocks. Claude Code (CLI) stores typed user prompts as
+ * `[{type:'text', text:'...'}]`, but SDK sessions (`entrypoint: "sdk-ts"`)
+ * store them as a bare string. Without this normalization, `for...of` over
+ * a string iterates characters and the text-block detection silently
+ * fails — see issue #68.
+ */
+function normalizeContentBlocks(raw: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(raw)) {
+    return raw as Array<Record<string, unknown>>
+  }
+  if (typeof raw === 'string' && raw.trim()) {
+    return [{ type: 'text', text: raw }]
+  }
+  return []
+}
+
+/**
  * Check if there are active background agents by scanning the session transcript.
  * An Agent tool_use without a matching tool_result means the agent is still running.
  *
- * Staleness heuristic: an unmatched Agent tool_use is only considered active if
- * no subsequent user-prompt turn has occurred after it. Once the user sends a new
- * message (a `user` entry with a `text` content block, not just tool_results),
- * any still-unmatched Agent IDs from before that prompt are treated as
- * stale/abandoned (SDK sessions sometimes omit tool_results). See issue #60.
+ * Two layered heuristics decide whether an unmatched Agent ID is still active:
+ *
+ * 1. **User-prompt staleness clear** (issue #60): when the user sends a new
+ *    prompt (a `user` entry carrying text content, not just tool_results),
+ *    all still-unmatched Agent IDs from before that prompt are abandoned.
+ *    Handles both array-of-blocks and SDK string-form content (issue #68).
+ *
+ * 2. **Recency window** (issue #68): an unmatched Agent whose tool_use
+ *    timestamp is older than `AGENT_ACTIVE_WINDOW_MS` is treated as
+ *    abandoned. Required for SDK orchestrators that never emit another
+ *    user prompt, so the staleness clear alone can't fire.
+ *
+ * Also recognizes `"name":"Task"` in addition to `"name":"Agent"` — older
+ * Claude Code versions (≤2.1.50) and SDK tool-allowlists name the subagent
+ * tool `Task`.
+ *
+ * @param transcriptPath  path to the session transcript `.jsonl` file
+ * @param now             current time in ms (override for tests)
  */
 export function hasActiveBackgroundAgents(
   transcriptPath: string | undefined,
+  now: number = Date.now(),
 ): boolean {
   if (!transcriptPath) return false
   try {
     const content = readFileSync(transcriptPath, 'utf-8')
     const lines = content.split('\n').filter((l) => l.trim())
 
-    // Track unmatched Agent tool_use IDs
-    const agentToolUseIds = new Set<string>()
+    // Track unmatched Agent tool_use IDs along with their transcript timestamps.
+    // Missing timestamp → undefined (no recency filter applies to that entry).
+    const agentToolUseIds = new Map<string, number | undefined>()
 
     for (const line of lines) {
       try {
@@ -624,21 +665,25 @@ export function hasActiveBackgroundAgents(
 
         if (msg.type === 'assistant') {
           const message = (msg.message as Record<string, unknown>) ?? msg
-          const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
+          const contentBlocks = normalizeContentBlocks(message.content)
+          const tsRaw = msg.timestamp
+          const ts =
+            typeof tsRaw === 'string' ? Date.parse(tsRaw) : undefined
+          const tsValid = typeof ts === 'number' && !Number.isNaN(ts) ? ts : undefined
           for (const block of contentBlocks) {
             if (
               block.type === 'tool_use' &&
-              block.name === 'Agent' &&
+              (block.name === 'Agent' || block.name === 'Task') &&
               typeof block.id === 'string'
             ) {
-              agentToolUseIds.add(block.id)
+              agentToolUseIds.set(block.id, tsValid)
             }
           }
         }
 
         if (msg.type === 'user') {
           const message = (msg.message as Record<string, unknown>) ?? msg
-          const contentBlocks = (message.content as Array<Record<string, unknown>>) ?? []
+          const contentBlocks = normalizeContentBlocks(message.content)
 
           let hasToolResult = false
           let hasUserText = false
@@ -660,6 +705,15 @@ export function hasActiveBackgroundAgents(
         }
       } catch {
         // Skip unparseable lines
+      }
+    }
+
+    // Recency filter: an unmatched Agent older than the window is abandoned.
+    // Entries without a timestamp fall back to "assume fresh" — the
+    // user-prompt staleness clear is the only guard for them.
+    for (const [id, ts] of agentToolUseIds) {
+      if (typeof ts === 'number' && now - ts > AGENT_ACTIVE_WINDOW_MS) {
+        agentToolUseIds.delete(id)
       }
     }
 
